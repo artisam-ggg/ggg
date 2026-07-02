@@ -44,30 +44,40 @@ export default function LoginPage() {
         return;
       }
 
-      router.push("/tournaments");
+      try {
+        const meRes = await fetch("/api/auth/me");
+        const me = (await meRes.json()) as { ok: boolean; data?: { role: string } };
+        const destination = me.ok && me.data?.role === "ADMIN" ? "/admin" : "/tournaments";
+        router.push(destination);
+      } catch {
+        setAuthError("Could not determine your role. Please try again.");
+      }
     } finally {
       setPending(false);
     }
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="kinetic-glass w-full max-w-sm rounded-xl p-8">
+    <main className="flex min-h-screen w-full items-center justify-center bg-background px-4">
+      {/* FIX: Swapped 'max-w-sm' to 'max-w-[384px]' to avoid the Tailwind v4 token clash.
+        You can also safely use your beautiful custom '.kinetic-glass' class here again!
+      */}
+      <div className="kinetic-glass block w-full max-w-[384px] rounded-xl p-8 shadow-2xl">
         <h1 className="text-2xl font-extrabold tracking-tight text-on-surface">Sign in</h1>
         <p className="label-caps mt-1 text-on-surface-variant">Good Game Guild</p>
 
-        <form noValidate onSubmit={handleSubmit} className="mt-8 flex flex-col gap-6">
+        <form noValidate onSubmit={handleSubmit} className="mt-8 flex flex-col gap-6 w-full">
           {authError && (
             <p
               id="auth-error"
               role="alert"
-              className="rounded-lg bg-error-container px-4 py-3 text-sm text-on-error-container"
+              className="rounded-lg bg-error-container px-4 py-3 text-sm text-on-error-container w-full"
             >
               {authError}
             </p>
           )}
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5 w-full">
             <label htmlFor="username" className="label-caps text-on-surface-variant">
               Username
             </label>
@@ -80,7 +90,7 @@ export default function LoginPage() {
               onChange={(e) => setUsername(e.target.value)}
               aria-describedby={fieldErrors.username ? "username-error" : undefined}
               aria-invalid={!!fieldErrors.username}
-              className="data-mono rounded-lg border border-surface-variant bg-surface-container px-4 py-2.5 text-on-surface placeholder-on-surface-variant outline-none transition focus:border-electric-violet-strong focus:ring-2 focus:ring-electric-violet-strong focus:scale-[1.01]"
+              className="data-mono w-full rounded-lg border border-surface-variant bg-surface-container px-4 py-2.5 text-on-surface placeholder-on-surface-variant outline-none transition focus:border-primary focus:ring-2 focus:ring-primary focus:scale-[1.01]"
               placeholder="your_handle"
             />
             {fieldErrors.username && (
@@ -90,7 +100,7 @@ export default function LoginPage() {
             )}
           </div>
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5 w-full">
             <label htmlFor="password" className="label-caps text-on-surface-variant">
               Password
             </label>
@@ -103,7 +113,7 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               aria-describedby={fieldErrors.password ? "password-error" : undefined}
               aria-invalid={!!fieldErrors.password}
-              className="data-mono rounded-lg border border-surface-variant bg-surface-container px-4 py-2.5 text-on-surface placeholder-on-surface-variant outline-none transition focus:border-electric-violet-strong focus:ring-2 focus:ring-electric-violet-strong focus:scale-[1.01]"
+              className="data-mono w-full rounded-lg border border-surface-variant bg-surface-container px-4 py-2.5 text-on-surface placeholder-on-surface-variant outline-none transition focus:border-primary focus:ring-2 focus:ring-primary focus:scale-[1.01]"
               placeholder="••••••••••"
             />
             {fieldErrors.password && (
@@ -116,17 +126,17 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={pending}
-            className="label-caps mt-2 rounded-lg bg-electric-violet-strong px-6 py-3 text-on-primary transition hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-acid-yellow disabled:cursor-not-allowed disabled:opacity-60"
+            className="label-caps w-full mt-2 rounded-lg bg-primary px-6 py-3 text-on-primary font-bold transition hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-acid-yellow disabled:cursor-not-allowed disabled:opacity-60"
           >
             {pending ? "Signing in…" : "Sign in"}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-on-surface-variant">
+        <p className="mt-6 text-center text-sm text-on-surface-variant w-full">
           No account?{" "}
           <Link
             href="/register"
-            className="text-electric-violet hover:text-electric-violet-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-acid-yellow"
+            className="text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-acid-yellow"
           >
             Register
           </Link>

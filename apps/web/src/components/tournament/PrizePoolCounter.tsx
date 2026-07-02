@@ -22,38 +22,58 @@ export function PrizePoolCounter({
   asset,
   participantCount,
   entryFee,
+  initialParticipants = [], // new prop
 }: {
   tournamentId: string;
   initialPool: string;
   asset: "XLM" | "USDC";
   participantCount: number;
   entryFee: string;
+  initialParticipants?: string[]; // addresses already counted
 }) {
   const { events } = useTournamentEvents(tournamentId);
 
+  // Build a Set of initial participant addresses for quick lookup
+  const initialSet = useMemo(() => new Set(initialParticipants), [initialParticipants]);
+
   // Pool + count are derived state — computed during render, not stored.
-  // `bumps` counts pool-increasing events so its change can retrigger the pop.
   const { pool, count, bumps } = useMemo(() => {
     let p = BigInt(initialPool);
     let c = participantCount;
     let b = 0;
+
+    // Track addresses already counted from the stream
+    const countedInStream = new Set<string>();
+
     for (const ev of events) {
       if (ev.type !== "REGISTERED") continue;
+
+      // Cast player to string (it's a Stellar address)
+      const playerAddr = ev.data.player as string | undefined;
+      if (!playerAddr) continue;
+
+      // Skip if already counted initially or in the stream
+      if (initialSet.has(playerAddr) || countedInStream.has(playerAddr)) {
+        continue;
+      }
+
+      // New player → increment count
+      countedInStream.add(playerAddr);
       c += 1;
+
       const after = ev.data.poolAfter;
       const next = typeof after === "string" ? BigInt(after) : p + BigInt(entryFee);
       if (next > p) b += 1;
       p = next;
     }
+
     return { pool: p, count: c, bumps: b };
-  }, [events, initialPool, participantCount, entryFee]);
+  }, [events, initialPool, participantCount, entryFee, initialSet]);
 
   return (
     <div className="high-contrast-card acid-glow rounded-none p-8">
       <p className="label-caps text-on-surface-variant">Prize pool</p>
       <p className="mt-2 flex items-end gap-3">
-        {/* aria-live="polite" so screen readers announce updates. The key bumps
-            on each increase, remounting the span to replay the pop animation. */}
         <span
           key={bumps}
           data-testid="pool-amount"

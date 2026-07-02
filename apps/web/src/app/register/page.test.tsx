@@ -215,10 +215,8 @@ describe("/register page", () => {
     expect(screen.getByRole("button", { name: /create account/i })).toHaveClass("label-caps");
   });
 
-  it("submit button has electric-violet-strong background class", () => {
+  it("submit button has bg-primary class", () => {
     render(<RegisterPage />);
-    expect(screen.getByRole("button", { name: /create account/i }).className).toMatch(
-      /electric-violet-strong/,
-    );
+    expect(screen.getByRole("button", { name: /create account/i })).toHaveClass("bg-primary");
   });
 });

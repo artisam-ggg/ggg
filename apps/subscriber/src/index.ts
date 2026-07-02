@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { prisma } from "./db";
 import { pollTournament } from "./poller";
 import { env } from "./env";
@@ -30,10 +31,15 @@ export async function tick(): Promise<void> {
     },
     select: { id: true, contractId: true },
   });
+
+  console.log(`[subscriber] found ${tournaments.length} tournaments to poll`);
+
   for (const t of tournaments) {
     if (!t.contractId) continue;
     try {
+      console.log(`[subscriber] polling tournament ${t.id} (${t.contractId})`);
       await pollTournament({ id: t.id, contractId: t.contractId });
+      console.log(`[subscriber] finished polling tournament ${t.id}`);
     } catch (err) {
       console.error(`[subscriber] poll failed for ${t.id}`, err);
     }

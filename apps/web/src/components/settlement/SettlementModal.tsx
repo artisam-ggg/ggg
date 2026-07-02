@@ -1,5 +1,7 @@
 "use client";
 
+import { AlertTriangle } from "lucide-react";
+
 type ModalPhase = "signing" | "submitting" | "error";
 
 interface SettlementModalProps {
@@ -34,11 +36,7 @@ export function SettlementModal({ open, phase, errorMessage }: SettlementModalPr
         />
       )}
 
-      {isError && (
-        <span className="material-symbols-outlined fill text-5xl text-error" aria-hidden="true">
-          error
-        </span>
-      )}
+      {isError && <AlertTriangle className="h-12 w-12 text-error shrink-0" aria-hidden="true" />}
 
       <p
         className={["label-caps mt-6 italic", isError ? "text-error" : "text-acid-yellow"].join(

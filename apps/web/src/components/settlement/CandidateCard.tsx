@@ -1,5 +1,7 @@
 "use client";
 
+import { UserCircle } from "lucide-react";
+
 interface CandidateCardProps {
   addr: string;
   used: boolean;
@@ -22,9 +24,9 @@ export function CandidateCard({ addr, used, onAssign }: CandidateCardProps) {
       ].join(" ")}
     >
       <div className="flex items-center gap-3">
-        <span className="material-symbols-outlined text-on-surface-variant" aria-hidden="true">
-          account_circle
-        </span>
+        {/* Rendered clean inline SVG primitive directly */}
+        <UserCircle className="h-5 w-5 text-on-surface-variant shrink-0" aria-hidden="true" />
+
         <span className="data-mono text-on-surface">
           {addr.slice(0, 6)}…{addr.slice(-6)}
         </span>

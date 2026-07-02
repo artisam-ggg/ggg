@@ -19,6 +19,18 @@ export class AuthError extends Error {
   }
 }
 
+// Rank-based role hierarchy. Higher numbers grant more access.
+export const ROLE_RANK: Record<AppRole, number> = {
+  ADMIN: 2,
+  ORGANIZER: 1,
+};
+
+// Returns true when `userRole` is at least `requiredRole`.
+// ADMIN satisfies ORGANIZER; ORGANIZER does not satisfy ADMIN.
+export function hasRole(userRole: AppRole, requiredRole: AppRole): boolean {
+  return ROLE_RANK[userRole] >= ROLE_RANK[requiredRole];
+}
+
 // Source of truth for "who is logged in" in handlers/server components.
 // Verifies the cookie session AND that the sessionId is still in Redis.
 export async function getCurrentUser(): Promise<SessionUser | null> {
@@ -30,10 +42,11 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
 
 // Defense-in-depth authz (do NOT rely on proxy.ts alone). Redirects to /login
 // when unauthenticated; throws AuthError(403) when the role is insufficient.
+// Admins satisfy ORGANIZER requirements because of ROLE_RANK.
 export async function requireUser(role?: AppRole): Promise<SessionUser> {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (role && user.role !== role) {
+  if (role && !hasRole(user.role, role)) {
     throw new AuthError("Forbidden", 403);
   }
   return user;

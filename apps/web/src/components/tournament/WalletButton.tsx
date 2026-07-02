@@ -1,5 +1,7 @@
 "use client";
+
 import { useState } from "react";
+import { Wallet } from "lucide-react";
 import { ensureWallet } from "@/lib/wallet";
 
 interface WalletButtonProps {
@@ -18,9 +20,7 @@ export function WalletButton({ expectedPassphrase, onConnected }: WalletButtonPr
         className="data-mono inline-flex items-center gap-2 rounded-full border-2 border-acid-yellow px-3 py-1 text-acid-yellow"
         aria-label={`Wallet ${address}`}
       >
-        <span className="material-symbols-outlined text-base" aria-hidden="true">
-          account_balance_wallet
-        </span>
+        <Wallet className="h-4 w-4 shrink-0 text-acid-yellow" aria-hidden="true" />
         {address.slice(0, 6)}…{address.slice(-5)}
       </span>
     );

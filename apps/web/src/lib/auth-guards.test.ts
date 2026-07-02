@@ -11,7 +11,7 @@ vi.mock("next/navigation", () => ({
 import { auth } from "@/lib/auth";
 import { isSessionValid } from "@/lib/session-store";
 import { redirect } from "next/navigation";
-import { getCurrentUser, requireUser, AuthError } from "./auth-guards";
+import { getCurrentUser, requireUser, AuthError, hasRole, ROLE_RANK } from "./auth-guards";
 
 const authMock = auth as unknown as ReturnType<typeof vi.fn>;
 const isSessionValidMock = isSessionValid as unknown as ReturnType<typeof vi.fn>;
@@ -46,6 +46,28 @@ describe("getCurrentUser", () => {
   });
 });
 
+describe("hasRole", () => {
+  it("ADMIN satisfies ORGANIZER", () => {
+    expect(hasRole("ADMIN", "ORGANIZER")).toBe(true);
+  });
+
+  it("ADMIN satisfies ADMIN", () => {
+    expect(hasRole("ADMIN", "ADMIN")).toBe(true);
+  });
+
+  it("ORGANIZER satisfies ORGANIZER", () => {
+    expect(hasRole("ORGANIZER", "ORGANIZER")).toBe(true);
+  });
+
+  it("ORGANIZER does not satisfy ADMIN", () => {
+    expect(hasRole("ORGANIZER", "ADMIN")).toBe(false);
+  });
+
+  it("ranks are ordered correctly", () => {
+    expect(ROLE_RANK.ADMIN).toBeGreaterThan(ROLE_RANK.ORGANIZER);
+  });
+});
+
 describe("requireUser", () => {
   it("redirects to /login when unauthenticated", async () => {
     authMock.mockResolvedValue(null);
@@ -62,5 +84,17 @@ describe("requireUser", () => {
     authMock.mockResolvedValue(session("ADMIN"));
     isSessionValidMock.mockResolvedValue(true);
     expect(await requireUser("ADMIN")).toEqual({ id: "u1", username: "org", role: "ADMIN" });
+  });
+
+  it("allows ADMIN to access ORGANIZER-scoped resources", async () => {
+    authMock.mockResolvedValue(session("ADMIN"));
+    isSessionValidMock.mockResolvedValue(true);
+    expect(await requireUser("ORGANIZER")).toEqual({ id: "u1", username: "org", role: "ADMIN" });
+  });
+
+  it("still rejects ORGANIZER for ADMIN-scoped resources", async () => {
+    authMock.mockResolvedValue(session("ORGANIZER"));
+    isSessionValidMock.mockResolvedValue(true);
+    await expect(requireUser("ADMIN")).rejects.toThrow(AuthError);
   });
 });

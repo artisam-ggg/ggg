@@ -1,5 +1,7 @@
 "use client";
 
+import { CheckCircle2, AlertTriangle } from "lucide-react";
+
 type Phase = "idle" | "signing" | "submitting" | "initializing" | "success" | "error";
 
 interface SubmitStateModalProps {
@@ -48,21 +50,12 @@ export function SubmitStateModal({ open, phase, message, onClose }: SubmitStateM
         />
       )}
 
-      {/* Success icon */}
       {phase === "success" && (
-        <span
-          className="material-symbols-outlined fill text-5xl text-acid-yellow"
-          aria-hidden="true"
-        >
-          check_circle
-        </span>
+        <CheckCircle2 className="h-12 w-12 text-acid-yellow shrink-0" aria-hidden="true" />
       )}
 
-      {/* Error icon */}
       {phase === "error" && (
-        <span className="material-symbols-outlined fill text-5xl text-error" aria-hidden="true">
-          error
-        </span>
+        <AlertTriangle className="h-12 w-12 text-error shrink-0" aria-hidden="true" />
       )}
 
       <p

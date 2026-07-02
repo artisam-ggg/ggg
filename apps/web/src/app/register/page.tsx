@@ -72,23 +72,23 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="kinetic-glass w-full max-w-sm rounded-xl p-8">
+    <main className="flex min-h-screen w-full items-center justify-center bg-background px-4">
+      <div className="kinetic-glass block w-full max-w-[384px] rounded-xl p-8 shadow-2xl">
         <h1 className="text-2xl font-extrabold tracking-tight text-on-surface">Create account</h1>
         <p className="label-caps mt-1 text-on-surface-variant">Good Game Guild</p>
 
-        <form noValidate onSubmit={handleSubmit} className="mt-8 flex flex-col gap-6">
+        <form noValidate onSubmit={handleSubmit} className="mt-8 flex flex-col gap-6 w-full">
           {formError && (
             <p
               id="form-error"
               role="alert"
-              className="rounded-lg bg-error-container px-4 py-3 text-sm text-on-error-container"
+              className="rounded-lg bg-error-container px-4 py-3 text-sm text-on-error-container w-full"
             >
               {formError}
             </p>
           )}
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5 w-full">
             <label htmlFor="username" className="label-caps text-on-surface-variant">
               Username
             </label>
@@ -101,7 +101,7 @@ export default function RegisterPage() {
               onChange={(e) => setUsername(e.target.value)}
               aria-describedby={fieldErrors.username ? "username-error" : undefined}
               aria-invalid={!!fieldErrors.username}
-              className="data-mono rounded-lg border border-surface-variant bg-surface-container px-4 py-2.5 text-on-surface placeholder-on-surface-variant outline-none transition focus:border-electric-violet-strong focus:ring-2 focus:ring-electric-violet-strong focus:scale-[1.01]"
+              className="data-mono w-full rounded-lg border border-surface-variant bg-surface-container px-4 py-2.5 text-on-surface placeholder-on-surface-variant outline-none transition focus:border-primary focus:ring-2 focus:ring-primary focus:scale-[1.01]"
               placeholder="your_handle"
             />
             {fieldErrors.username && (
@@ -111,7 +111,7 @@ export default function RegisterPage() {
             )}
           </div>
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5 w-full">
             <label htmlFor="password" className="label-caps text-on-surface-variant">
               Password
             </label>
@@ -124,7 +124,7 @@ export default function RegisterPage() {
               onChange={(e) => setPassword(e.target.value)}
               aria-describedby={fieldErrors.password ? "password-error" : undefined}
               aria-invalid={!!fieldErrors.password}
-              className="data-mono rounded-lg border border-surface-variant bg-surface-container px-4 py-2.5 text-on-surface placeholder-on-surface-variant outline-none transition focus:border-electric-violet-strong focus:ring-2 focus:ring-electric-violet-strong focus:scale-[1.01]"
+              className="data-mono w-full rounded-lg border border-surface-variant bg-surface-container px-4 py-2.5 text-on-surface placeholder-on-surface-variant outline-none transition focus:border-primary focus:ring-2 focus:ring-primary focus:scale-[1.01]"
               placeholder="••••••••••"
             />
             {fieldErrors.password && (
@@ -137,17 +137,17 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={pending}
-            className="label-caps mt-2 rounded-lg bg-electric-violet-strong px-6 py-3 text-on-primary transition hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-acid-yellow disabled:cursor-not-allowed disabled:opacity-60"
+            className="label-caps w-full mt-2 rounded-lg bg-primary px-6 py-3 text-on-primary font-bold transition hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-acid-yellow disabled:cursor-not-allowed disabled:opacity-60"
           >
             {pending ? "Creating account…" : "Create account"}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-on-surface-variant">
+        <p className="mt-6 text-center text-sm text-on-surface-variant w-full">
           Already have an account?{" "}
           <Link
             href="/login"
-            className="text-electric-violet hover:text-electric-violet-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-acid-yellow"
+            className="text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-acid-yellow"
           >
             Sign in
           </Link>

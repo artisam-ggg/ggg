@@ -31,6 +31,10 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+vi.mock("@/components/ui/LogoutButton", () => ({
+  LogoutButton: () => <button data-testid="logout-button">Logout</button>,
+}));
+
 import TournamentsPage from "./page";
 
 const FAKE_USER = { id: "user_1", username: "alice", role: "ORGANIZER" as const };
