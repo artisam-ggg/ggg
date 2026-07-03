@@ -12,6 +12,7 @@ import { RefereePanel } from "@/components/tournament/RefereePanel";
 import { WinnersPanel } from "@/components/tournament/WinnersPanel";
 import { RefundList } from "@/components/tournament/RefundList";
 import { CancelButton } from "@/components/tournament/CancelButton";
+import { BackButton } from "@/components/ui/BackButton";
 
 export default async function TournamentDetailPage({
   params,
@@ -38,6 +39,10 @@ export default async function TournamentDetailPage({
       aria-label={`${t.name} tournament detail`}
       className="mx-auto max-w-(--spacing-container-max) px-4 py-12 md:px-(--spacing-margin-desktop)"
     >
+      <div className="mb-6">
+        <BackButton />
+      </div>
+
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="label-caps text-on-surface-variant">{t.gameTitle}</p>

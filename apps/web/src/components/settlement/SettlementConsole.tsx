@@ -1,11 +1,14 @@
 "use client";
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+
 import { CandidateCard } from "./CandidateCard";
 import { PodiumSlot } from "./PodiumSlot";
 import { SettlementModal } from "./SettlementModal";
 import { WalletButton } from "@/components/tournament/WalletButton";
 import { signAndSubmit } from "@/lib/wallet";
+import { BackButton } from "@/components/ui/BackButton";
 
 type Phase = "idle" | "submitting" | "signing" | "error";
 
@@ -26,7 +29,6 @@ export function SettlementConsole({
 }: SettlementConsoleProps) {
   const router = useRouter();
   const [wallet, setWallet] = useState<string | null>(null);
-  // [1st, 2nd, 3rd] — null means unassigned
   const [slots, setSlots] = useState<[string | null, string | null, string | null]>([
     null,
     null,
@@ -37,7 +39,6 @@ export function SettlementConsole({
 
   const assignedSet = new Set(slots.filter((s): s is string => s !== null));
 
-  /** Assign addr to rank (1-indexed). Removes addr from any other slot first (de-dupe). */
   function assign(rank: 1 | 2 | 3, addr: string) {
     setSlots((prev) => {
       const next = prev.map((s) => (s === addr ? null : s)) as [
@@ -50,7 +51,6 @@ export function SettlementConsole({
     });
   }
 
-  /** Clear a specific rank slot */
   function clear(rank: 1 | 2 | 3) {
     setSlots((prev) => {
       const next = [...prev] as [string | null, string | null, string | null];
@@ -108,7 +108,6 @@ export function SettlementConsole({
 
   return (
     <>
-      {/* Live region for a11y announcements */}
       <div aria-live="polite" aria-atomic="true" className="sr-only">
         {slots[0] && `1st place: ${slots[0].slice(0, 6)}…${slots[0].slice(-6)}`}
         {slots[1] && ` | 2nd place: ${slots[1].slice(0, 6)}…${slots[1].slice(-6)}`}
@@ -121,6 +120,11 @@ export function SettlementConsole({
           className="brutalist-border rounded-none p-8 lg:col-span-8"
           aria-label="Settlement console"
         >
+          {/* 👇 Added BackButton */}
+          <div className="mb-6">
+            <BackButton />
+          </div>
+
           <h1 className="text-[32px] font-bold italic -tracking-[0.02em] text-on-surface">
             Referee Settlement Console
           </h1>

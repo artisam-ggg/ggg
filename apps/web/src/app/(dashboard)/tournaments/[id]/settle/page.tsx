@@ -3,6 +3,7 @@ import { env } from "@/lib/env";
 import { requireUser } from "@/lib/auth-guards";
 import { getTournamentDetail } from "@/server/services/tournaments";
 import { SettlementConsole } from "@/components/settlement/SettlementConsole";
+import { BackButton } from "@/components/ui/BackButton";
 
 interface SettlePageProps {
   params: Promise<{ id: string }>;
@@ -20,6 +21,9 @@ export default async function SettlePage({ params }: SettlePageProps) {
 
   return (
     <main className="mx-auto max-w-(--spacing-container-max) px-4 py-12 md:px-(--spacing-margin-desktop)">
+      <div className="mb-6">
+        <BackButton />
+      </div>
       <SettlementConsole
         tournamentId={t.id}
         refereeAddr={t.refereeAddr}
