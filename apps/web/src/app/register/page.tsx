@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -13,14 +13,6 @@ export default function RegisterPage() {
   const [fieldErrors, setFieldErrors] = useState<{ username?: string; password?: string }>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [csrfToken, setCsrfToken] = useState("");
-
-  useEffect(() => {
-    fetch("/api/auth/csrf")
-      .then((res) => res.json())
-      .then((data) => setCsrfToken(data.csrfToken))
-      .catch(() => console.error("Failed to fetch CSRF token"));
-  }, []);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -48,12 +40,16 @@ export default function RegisterPage() {
         body: JSON.stringify({
           username: parsed.data.username,
           password: parsed.data.password,
-          csrfToken,
         }),
       });
 
+      if (!res) {
+        setFormError("Could not create account. Please try a different username.");
+        return;
+      }
+
       const json = res.ok
-        ? ((await res.json()) as { ok: boolean; error?: string })
+        ? ((await res.json().catch(() => ({ ok: false }))) as { ok?: boolean; error?: string })
         : { ok: false as const };
 
       if (!json.ok) {
