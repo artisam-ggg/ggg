@@ -35,10 +35,19 @@ export async function POST(req: Request): Promise<Response> {
 
   // 3. Rate-limit per-IP AND per-username.
   const ip = clientIp(req);
-  const byIp = await rateLimit(`register:ip:${ip}`, { limit: 5, windowSec: 3600 });
-  const byUser = await rateLimit(`register:user:${username}`, { limit: 3, windowSec: 3600 });
-  if (!byIp.ok || !byUser.ok)
+  let byIp: { ok: boolean; remaining: number } | undefined;
+  let byUser: { ok: boolean; remaining: number } | undefined;
+
+  try {
+    byIp = await rateLimit(`register:ip:${ip}`, { limit: 5, windowSec: 3600 });
+    byUser = await rateLimit(`register:user:${username}`, { limit: 3, windowSec: 3600 });
+  } catch (error) {
+    console.error("register rate-limit failed", error);
+  }
+
+  if (byIp && byUser && (!byIp.ok || !byUser.ok)) {
     return err("TOO_MANY_REQUESTS", "Too many attempts. Try again later.", 429);
+  }
 
   // 4. Create the ORGANIZER. Rely on the unique constraint for dedupe → generic error.
   try {
