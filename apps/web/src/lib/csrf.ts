@@ -35,7 +35,8 @@ function hostsMatch(left: string | null | undefined, right: string | null | unde
 export function assertSameOrigin(req: Request): void {
   const appHost = normalizeHost(env.APP_URL);
   const origin = req.headers.get("origin");
-  const host = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim() || req.headers.get("host");
+  const host =
+    req.headers.get("x-forwarded-host")?.split(",")[0]?.trim() || req.headers.get("host");
 
   if (origin) {
     try {
