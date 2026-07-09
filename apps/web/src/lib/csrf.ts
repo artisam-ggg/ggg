@@ -8,17 +8,22 @@ export class CsrfError extends Error {
 }
 
 function normalizeHost(value: string): { hostname: string; port: string } {
-  const trimmed = value.trim().toLowerCase();
-  if (!trimmed) return { hostname: "", port: "" };
-
   try {
+    const trimmed = value.trim().toLowerCase();
+    if (!trimmed) return { hostname: "", port: "" };
+
     const parsed = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
     const defaultPort =
       parsed.protocol === "https:" ? "443" : parsed.protocol === "http:" ? "80" : "";
     return { hostname: parsed.hostname, port: parsed.port || defaultPort };
   } catch {
-    const [hostname, maybePort] = trimmed.split(":");
-    return { hostname: hostname || trimmed, port: maybePort || "" };
+    try {
+      const trimmed = value.trim().toLowerCase();
+      const [hostname, maybePort] = trimmed.split(":");
+      return { hostname: hostname || trimmed, port: maybePort || "" };
+    } catch {
+      return { hostname: "", port: "" };
+    }
   }
 }
 
@@ -27,6 +32,14 @@ function hostsMatch(left: string | null | undefined, right: string | null | unde
   const lhs = normalizeHost(left);
   const rhs = normalizeHost(right);
   return lhs.hostname === rhs.hostname && lhs.port === rhs.port;
+}
+
+function getAllowedOrigins(): string[] {
+  const raw = env.ALLOWED_ORIGINS ?? "";
+  return raw
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 }
 
 // Same-site defense for cookie-authenticated mutations (SPEC §6 / AGENT §7).
@@ -42,6 +55,9 @@ export function assertSameOrigin(req: Request): void {
     try {
       const originHost = new URL(origin).host;
       if (hostsMatch(originHost, `${appHost.hostname}:${appHost.port}`)) return;
+      for (const allowed of getAllowedOrigins()) {
+        if (hostsMatch(originHost, allowed)) return;
+      }
       if (hostsMatch(originHost, host)) return;
     } catch {
       throw new CsrfError();

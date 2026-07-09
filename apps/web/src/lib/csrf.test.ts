@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 
-vi.mock("@/lib/env", () => ({ env: { APP_URL: "https://app.ggg.gg" } }));
+vi.mock("@/lib/env", () => ({
+  env: { APP_URL: "https://app.ggg.gg", ALLOWED_ORIGINS: "https://app.ggg.quest" },
+}));
 
 import { assertSameOrigin, CsrfError } from "./csrf";
 
@@ -29,6 +31,10 @@ describe("assertSameOrigin", () => {
     expect(() =>
       assertSameOrigin(req({ origin: "https://app.ggg.quest", host: "app.ggg.quest" })),
     ).not.toThrow();
+  });
+
+  it("accepts a configured allowed origin", () => {
+    expect(() => assertSameOrigin(req({ origin: "https://app.ggg.quest" }))).not.toThrow();
   });
 
   it("throws CsrfError on a cross-origin request", () => {
