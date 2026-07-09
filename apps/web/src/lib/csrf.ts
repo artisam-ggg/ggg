@@ -13,7 +13,8 @@ function normalizeHost(value: string): { hostname: string; port: string } {
 
   try {
     const parsed = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
-    const defaultPort = parsed.protocol === "https:" ? "443" : parsed.protocol === "http:" ? "80" : "";
+    const defaultPort =
+      parsed.protocol === "https:" ? "443" : parsed.protocol === "http:" ? "80" : "";
     return { hostname: parsed.hostname, port: parsed.port || defaultPort };
   } catch {
     const [hostname, maybePort] = trimmed.split(":");
@@ -44,7 +45,8 @@ export function assertSameOrigin(req: Request): void {
     throw new CsrfError();
   }
 
-  const host = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim() || req.headers.get("host");
+  const host =
+    req.headers.get("x-forwarded-host")?.split(",")[0]?.trim() || req.headers.get("host");
   if (hostsMatch(host, `${appHost.hostname}:${appHost.port}`)) return;
 
   throw new CsrfError();
