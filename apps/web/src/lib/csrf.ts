@@ -7,24 +7,40 @@ export class CsrfError extends Error {
   }
 }
 
+function normalizeHost(value: string): string {
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return "";
+
+  try {
+    return new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`).host.toLowerCase();
+  } catch {
+    return trimmed.replace(/:\d+$/, "");
+  }
+}
+
+function hostsMatch(left: string | null | undefined, right: string | null | undefined): boolean {
+  if (!left || !right) return false;
+  return normalizeHost(left) === normalizeHost(right);
+}
+
 // Same-site defense for cookie-authenticated mutations (SPEC §6 / AGENT §7).
 // SameSite=Lax already blocks cross-site cookie sends on most flows; this is
 // the origin/host belt-and-braces check. Throws CsrfError on mismatch.
 export function assertSameOrigin(req: Request): void {
-  const appHost = new URL(env.APP_URL).host;
+  const appHost = normalizeHost(env.APP_URL);
   const origin = req.headers.get("origin");
 
   if (origin) {
     try {
-      if (new URL(origin).host === appHost) return;
+      if (hostsMatch(new URL(origin).host, appHost)) return;
     } catch {
       throw new CsrfError();
     }
     throw new CsrfError();
   }
 
-  const host = req.headers.get("host");
-  if (host && host === appHost) return;
+  const host = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim() || req.headers.get("host");
+  if (hostsMatch(host, appHost)) return;
 
   throw new CsrfError();
 }

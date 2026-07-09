@@ -17,6 +17,10 @@ describe("assertSameOrigin", () => {
     expect(() => assertSameOrigin(req({ host: "app.ggg.gg" }))).not.toThrow();
   });
 
+  it("accepts a forwarded host header from a proxy", () => {
+    expect(() => assertSameOrigin(req({ "x-forwarded-host": "app.ggg.gg" }))).not.toThrow();
+  });
+
   it("throws CsrfError on a cross-origin request", () => {
     expect(() => assertSameOrigin(req({ origin: "https://evil.example" }))).toThrow(CsrfError);
   });
