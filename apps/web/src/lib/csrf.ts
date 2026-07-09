@@ -7,20 +7,25 @@ export class CsrfError extends Error {
   }
 }
 
-function normalizeHost(value: string): string {
+function normalizeHost(value: string): { hostname: string; port: string } {
   const trimmed = value.trim().toLowerCase();
-  if (!trimmed) return "";
+  if (!trimmed) return { hostname: "", port: "" };
 
   try {
-    return new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`).host.toLowerCase();
+    const parsed = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
+    const defaultPort = parsed.protocol === "https:" ? "443" : parsed.protocol === "http:" ? "80" : "";
+    return { hostname: parsed.hostname, port: parsed.port || defaultPort };
   } catch {
-    return trimmed.replace(/:\d+$/, "");
+    const [hostname, maybePort] = trimmed.split(":");
+    return { hostname: hostname || trimmed, port: maybePort || "" };
   }
 }
 
 function hostsMatch(left: string | null | undefined, right: string | null | undefined): boolean {
   if (!left || !right) return false;
-  return normalizeHost(left) === normalizeHost(right);
+  const lhs = normalizeHost(left);
+  const rhs = normalizeHost(right);
+  return lhs.hostname === rhs.hostname && lhs.port === rhs.port;
 }
 
 // Same-site defense for cookie-authenticated mutations (SPEC §6 / AGENT §7).
@@ -32,7 +37,7 @@ export function assertSameOrigin(req: Request): void {
 
   if (origin) {
     try {
-      if (hostsMatch(new URL(origin).host, appHost)) return;
+      if (hostsMatch(new URL(origin).host, `${appHost.hostname}:${appHost.port}`)) return;
     } catch {
       throw new CsrfError();
     }
@@ -40,7 +45,7 @@ export function assertSameOrigin(req: Request): void {
   }
 
   const host = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim() || req.headers.get("host");
-  if (hostsMatch(host, appHost)) return;
+  if (hostsMatch(host, `${appHost.hostname}:${appHost.port}`)) return;
 
   throw new CsrfError();
 }
