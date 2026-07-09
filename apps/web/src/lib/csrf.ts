@@ -35,18 +35,20 @@ function hostsMatch(left: string | null | undefined, right: string | null | unde
 export function assertSameOrigin(req: Request): void {
   const appHost = normalizeHost(env.APP_URL);
   const origin = req.headers.get("origin");
+  const host =
+    req.headers.get("x-forwarded-host")?.split(",")[0]?.trim() || req.headers.get("host");
 
   if (origin) {
     try {
-      if (hostsMatch(new URL(origin).host, `${appHost.hostname}:${appHost.port}`)) return;
+      const originHost = new URL(origin).host;
+      if (hostsMatch(originHost, `${appHost.hostname}:${appHost.port}`)) return;
+      if (hostsMatch(originHost, host)) return;
     } catch {
       throw new CsrfError();
     }
     throw new CsrfError();
   }
 
-  const host =
-    req.headers.get("x-forwarded-host")?.split(",")[0]?.trim() || req.headers.get("host");
   if (hostsMatch(host, `${appHost.hostname}:${appHost.port}`)) return;
 
   throw new CsrfError();

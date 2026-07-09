@@ -25,6 +25,12 @@ describe("assertSameOrigin", () => {
     expect(() => assertSameOrigin(req({ "x-forwarded-host": "app.ggg.gg:443" }))).not.toThrow();
   });
 
+  it("accepts a browser request when Origin and Host match even if APP_URL differs", () => {
+    expect(() =>
+      assertSameOrigin(req({ origin: "https://app.ggg.quest", host: "app.ggg.quest" })),
+    ).not.toThrow();
+  });
+
   it("throws CsrfError on a cross-origin request", () => {
     expect(() => assertSameOrigin(req({ origin: "https://evil.example" }))).toThrow(CsrfError);
   });
