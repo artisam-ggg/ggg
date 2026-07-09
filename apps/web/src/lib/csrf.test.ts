@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 
-vi.mock("@/lib/env", () => ({ env: { APP_URL: "https://app.ggg.gg", ALLOWED_ORIGINS: "https://app.ggg.quest" } }));
+vi.mock("@/lib/env", () => ({
+  env: { APP_URL: "https://app.ggg.gg", ALLOWED_ORIGINS: "https://app.ggg.quest" },
+}));
 
 import { assertSameOrigin, CsrfError } from "./csrf";
 
