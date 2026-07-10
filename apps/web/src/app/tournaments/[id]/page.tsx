@@ -14,6 +14,8 @@ import { RefundList } from "@/components/tournament/RefundList";
 import { CancelButton } from "@/components/tournament/CancelButton";
 import { BackButton } from "@/components/ui/BackButton";
 
+export const revalidate = 0;
+
 export default async function TournamentDetailPage({
   params,
 }: {
