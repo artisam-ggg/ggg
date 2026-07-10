@@ -1,8 +1,10 @@
 # GGG — Good Game Guild
 
-> Trustless tournament prize-escrow on Stellar Soroban — the contract holds the money, not a custodian.
+> Trustless tournament prize-escrow and match-settlement protocol on Stellar Soroban.
 
-GGG lets a tournament **organiser** spin up an on-chain prize pool, lets **players** join by paying a crypto entry fee straight into a Soroban smart contract, and lets a **referee** submit final rankings — after which the contract itself pays the winners a configurable split (default 60/30/10). The hero flow: create a tournament → a QR code appears → wallets scan and fund the pool live → the referee settles → three payout transactions land on the Stellar explorer, all in under two minutes.
+GGG solves a problem every paid competitive-gaming event has: someone has to hold the prize pool between "entry fees collected" and "winners paid," and that custodian — an organiser, a Discord admin, a third-party platform — can skim funds, delay payouts, or vanish with the pot. GGG removes the custodian entirely. An **organiser** deploys a dedicated Soroban smart contract per tournament with an entry fee (XLM or USDC) and a payout split (default 60/30/10); **players** join by paying the fee straight into the contract from their own wallet, no account required; a **referee** submits the final standings; and the contract itself — not any person or platform — pays the winners in a single on-chain transaction. Every registration, payout, and refund is a public, independently verifiable Stellar transaction.
+
+For the Stellar ecosystem, GGG is a concrete, non-financial-services use case for Soroban: it turns a real-world trust problem (escrow for competitive gaming, a market of millions of grassroots and community tournaments with no affordable neutral third party) into recurring on-chain transaction volume — contract deployments, entry-fee payments, and multi-payout settlements — while giving both XLM and Circle's USDC-on-Stellar a natural, repeatable consumer flow beyond payments or DeFi. It also doubles as a reference implementation of the "client signs, server never holds keys" pattern (Freighter + unsigned-XDR building) that other consumer-facing Soroban apps can copy.
 
 ---
 
@@ -10,8 +12,8 @@ GGG lets a tournament **organiser** spin up an on-chain prize pool, lets **playe
 
 | | |
 |---|---|
-| **Version** | `0.0.0` (root/workspace manifests) · contract crate `ggg-escrow` `0.1.0` |
-| **Status** | Code-complete across build phases 0–6; verified locally on Stellar **Testnet**. Live deploy pending. [inferred from `docs/features.md`, `docs/definition-of-done.md`] |
+| **Version** | `0.0.0` (workspace manifests) · contract crate `ggg-escrow` `0.1.0` |
+| **Status** | All 7 build phases (0–6) shipped; **zero open issues** as of this writing. Verified locally against Stellar **Testnet** — all 6 SPEC §15 acceptance criteria pass. **No live public deployment yet** — Railway configs are committed but not confirmed running. [inferred: see Deployment] |
 | **Default network** | Stellar Testnet (`STELLAR_NETWORK=testnet`) |
 | **Uploaded escrow WASM hash** | `c6952e467e6a5a7c7599db3276fb98fcb7e97d2fb438670c649e8340830cd818` (committed in `apps/web/.env.example`) |
 | **License** | `[PLACEHOLDER: no LICENSE file found in repo — add one]` |
@@ -26,14 +28,14 @@ Every paid tournament has a pot of money, and today **someone has to hold it** �
 - Players must trust a stranger to pay out correctly, in full, and on time.
 - Grassroots and community tournaments have **no affordable, neutral escrow**.
 
-GGG removes the custodian: **no party holds the funds — the contract does.** Money leaves the escrow **only** via winner payout or refund; there is no withdraw function.
+GGG removes the custodian: **no party holds the funds — the contract does.** Money leaves the escrow **only** via winner payout or refund; there is no withdraw function ([`contracts/escrow/src/lib.rs`](./contracts/escrow/src/lib.rs)).
 
 ---
 
 ## Vision / Purpose
 
 - **Long-term:** a game-agnostic, trustless prize-escrow and match-settlement protocol for competitive gaming — "any game title," per [`SPEC.md`](./SPEC.md) §1.
-- **Why built:** a hackathon-style, spec-driven build ([`SPEC.md`](./SPEC.md) is the authoritative build spec; [`docs/`](./docs) tracks a phased 0–6 roadmap). [inferred: hackathon framing — see [PITCH_DECK.md](./PITCH_DECK.md)]
+- **Why built:** a hackathon-style, spec-driven build ([`SPEC.md`](./SPEC.md) is the authoritative build spec; [`docs/`](./docs) tracks the phased 0–6 roadmap, all of which is now closed).
 - **Design principle:** the server never holds a private key. It only builds, simulates, submits, and reads transactions; signing happens client-side in the user's wallet ([`SPEC.md`](./SPEC.md) §7).
 
 ---
@@ -41,8 +43,9 @@ GGG removes the custodian: **no party holds the funds — the contract does.** M
 ## Target Users
 
 - **Tournament organisers** — need neutral escrow without becoming (or paying for) a custodian.
-- **Players / competitors** — want provable, on-chain payouts and no app account required to join ([`SPEC.md`](./SPEC.md) §1 actors).
+- **Players / competitors** — want provable, on-chain payouts and no app account required to join.
 - **Referees** — submit final rankings; their authority is enforced on-chain by wallet address.
+- **Platform admins** — oversee users and tournaments across the whole platform (role hierarchy: `ADMIN` outranks `ORGANIZER`).
 - **Gaming guilds / communities / LAN & arcade events** — run frequent paid brackets that can't justify a custodial platform. [inferred]
 
 ---
@@ -52,12 +55,14 @@ GGG removes the custodian: **no party holds the funds — the contract does.** M
 **Tournaments**
 - Create a tournament with entry fee, asset (XLM or USDC), referee address, and a 1st/2nd/3rd split stored as basis points that must sum to 10000.
 - Public tournament detail page: live prize-pool counter, participant list, winners panel with explorer links.
-- Organiser dashboard (list with status chips), referee **settlement console**, and an **admin** dashboard.
+- Organiser dashboard (list with status chips), referee **settlement console**, admin dashboard.
+- Consistent back-navigation (`BackButton`) across tournament, settlement, and admin detail pages.
 
 **On-chain money rails (Soroban)**
 - One WASM escrow contract deployed per tournament; entry fees pulled into escrow on join.
 - Referee-signed finalisation pays the configured split in a single transaction, with rounding dust deterministically assigned to 1st place.
 - Organiser-signed cancellation refunds every registered player before finalisation.
+- Tournament creation is a **two-transaction flow**: the organiser signs a `deploy`, then a second `initialize` transaction that sets the entry fee, referee, and split (see [Known deviations from SPEC.md](#known-deviations-from-specmd) below).
 
 **Wallet + funding**
 - Client-side signing via **Freighter** (`@stellar/freighter-api`); server never sees a key.
@@ -65,6 +70,11 @@ GGG removes the custodian: **no party holds the funds — the contract does.** M
 
 **Live state**
 - Background **event subscriber** polls Soroban RPC events + reconciles Horizon payments, then pushes updates over **Server-Sent Events (SSE)** — pool and participants update without a refresh.
+
+**Admin (beyond original SPEC.md scope)**
+- Full user management: list, view detail, change role, reset password, delete (self-delete/self-demote blocked).
+- Full tournament oversight: list all tournaments platform-wide, view/edit metadata, force-cancel.
+- Role hierarchy (`ADMIN` can access everything an `ORGANIZER` can; on-chain signing still requires the actual organiser/referee wallet).
 
 **Platform / security**
 - Username+password auth: `argon2` hashing, session cookie, revocable Redis session store, CSRF (same-origin) checks, and Redis-backed rate limiting.
@@ -78,12 +88,12 @@ GGG removes the custodian: **no party holds the funds — the contract does.** M
 ```mermaid
 flowchart TD
     subgraph Client["Browser"]
-        UI["React 19 / Next.js UI<br/>QR, live pool, settlement console"]
+        UI["React 19 / Next.js UI<br/>QR, live pool, settlement console, admin"]
         FR["Freighter wallet<br/>(client-side signing)"]
     end
 
     subgraph Web["apps/web — Next.js 16 (Railway)"]
-        RH["Route Handlers /api/*<br/>auth · tournaments · uploads · SSE"]
+        RH["Route Handlers /api/*<br/>auth · tournaments · admin · uploads · SSE"]
         TX["Stellar tx-builder<br/>@stellar/stellar-sdk 15"]
         MW["Middleware<br/>auth · CSRF · security headers"]
     end
@@ -128,6 +138,8 @@ flowchart TD
 
 ### 1. Hero flow — create tournament (organiser)
 
+Tournament creation is a **two-transaction** flow: the generated Soroban binding's `deploy()` cannot pass `initialize` arguments in the same call (Soroban contracts expose `initialize` as a regular function, not a constructor), so the organiser signs deploy first, then a second `initialize` transaction actually sets the entry fee, referee, and split. See [`apps/web/src/lib/stellar/builders.ts`](./apps/web/src/lib/stellar/builders.ts) (`buildDeployInitializeTx`) and [`apps/web/src/server/services/tournaments.ts`](./apps/web/src/server/services/tournaments.ts).
+
 ```mermaid
 sequenceDiagram
     actor Org as Organiser
@@ -141,13 +153,19 @@ sequenceDiagram
     Org->>UI: Fill /tournaments/new
     UI->>API: POST /api/tournaments
     API->>DB: Create tournament (status DRAFT)
-    API-->>UI: { tournamentId, unsignedXdr, network }
-    UI->>FR: signTransaction(xdr)
+    API-->>UI: { tournamentId, unsignedXdr (deploy), network }
+    UI->>FR: signTransaction(deployXdr)
     FR-->>UI: signedXdr
-    UI->>SUB: POST /api/tournaments/[id]/submit (intent=deploy)
+    UI->>SUB: POST /submit (intent=deploy)
     SUB->>RPC: submit + poll getTransaction
-    RPC-->>SUB: contractId (deployed + initialized)
+    RPC-->>SUB: contractId (deployed, not yet initialized)
     SUB->>DB: Persist contractId, status ACTIVE
+    SUB-->>UI: { initializeXdr }
+    UI->>FR: signTransaction(initializeXdr)
+    FR-->>UI: signedXdr
+    UI->>SUB: POST /submit (intent=initialize)
+    SUB->>RPC: submit + poll getTransaction
+    RPC-->>SUB: initialize confirmed (entry fee, referee, split set)
     SUB-->>UI: ok → QR + payment URI shown
 ```
 
@@ -214,11 +232,20 @@ Contract crates found in the repo:
 
 | Crate | Path | Purpose (inferred from source) |
 |---|---|---|
-| `ggg-escrow` | [`contracts/escrow`](./contracts/escrow) | Per-tournament prize escrow: `initialize`, `join_tournament`, `finalize_results`, `cancel_tournament`, and read-only `get_pool` / `get_reward` / `is_finished`. Emits `registered` / `finalized` / `cancelled` events. Built with `soroban-sdk` 26. |
+| `ggg-escrow` | [`contracts/escrow`](./contracts/escrow) | Per-tournament prize escrow: `initialize`, `join_tournament`, `finalize_results`, `cancel_tournament`, and read-only `get_pool` / `get_reward` / `is_finished`. Emits `registered` / `finalized` / `cancelled` events. Built with `soroban-sdk` 26. 28 unit tests. |
 
 <!-- PLACEHOLDER: Soroban smart contracts — document each contract's purpose, public functions, parameters, and deployment/upload process here. -->
 
 > Reference for filling in the placeholder: function signatures, storage model, events, and security invariants are specified in [`SPEC.md`](./SPEC.md) §4; the source of truth is `contracts/escrow/src/lib.rs` with 28 tests in `contracts/escrow/src/test.rs`.
+
+---
+
+## Known deviations from SPEC.md
+
+- **Two-signature tournament creation**, not one. [`SPEC.md`](./SPEC.md) §6 describes `POST /api/tournaments` as building "the deploy + initialize transaction" as a single unit. The shipped implementation cannot do this atomically — see the TODO in [`apps/web/src/lib/stellar/builders.ts`](./apps/web/src/lib/stellar/builders.ts) — so it is two organiser-signed transactions (`deploy`, then `initialize`) instead of one. Functionally complete; the wallet just prompts twice.
+- **Admin scope grew beyond SPEC.md.** §5 originally described `/admin` as "user management, platform overview." The shipped admin surface also includes full tournament oversight (list/detail/edit/force-cancel) and a role hierarchy (`ADMIN` ⊇ `ORGANIZER`) — a superset of spec, not a gap.
+- **USDC is fully wired but environment-gated.** Asset selector, SAC resolution, SEP-7 `asset_issuer`, and all UI surfaces branch correctly on `"XLM" | "USDC"` — but resolving USDC requires `USDC_ISSUER` / `USDC_SAC_ADDRESS` to be set per network; without them, only XLM resolves.
+- **No live deployment yet.** Railway configs exist for all three services, but there is no confirmed running public URL as of this writing.
 
 ---
 
@@ -228,7 +255,7 @@ Versions are taken from the manifests (`apps/web/package.json`, `apps/subscriber
 
 | Layer | Tech |
 |---|---|
-| **Frontend** | Next.js `^16.2.9` (App Router), React `^19.2.7`, Tailwind CSS `^4.3.1` (`@tailwindcss/postcss`), shadcn/Radix UI, `lucide-react`, `qrcode.react` |
+| **Frontend** | Next.js `^16.2.9` (App Router), React `^19.2.7`, Tailwind CSS `^4.3.1` (`@tailwindcss/postcss`), shadcn/Radix UI, `lucide-react` (icon system), `qrcode.react` |
 | **Backend / API** | Next.js Route Handlers, Zod `^4`, Prisma `^7.8.0` (`@prisma/adapter-pg`), `ioredis`, NextAuth `4.24.14`, `argon2` |
 | **Blockchain client** | `@stellar/stellar-sdk` `15`, `@stellar/freighter-api` `^6.0.1` |
 | **Smart contract** | Rust, `soroban-sdk` `26`, `stellar-cli` `27.0.0` (CI), compiled to WASM |
@@ -236,7 +263,7 @@ Versions are taken from the manifests (`apps/web/package.json`, `apps/subscriber
 | **Data** | PostgreSQL 17, Redis 7 |
 | **Subscriber** | TypeScript worker (`tsx`), `@stellar/stellar-sdk`, `ioredis`, Prisma (shared via `web` workspace dep) |
 | **Tooling** | pnpm 10 (`pnpm@10.6.4`), Node 22 (`.nvmrc`), TypeScript `^6`, Vitest `^4`, Playwright `^1.61`, ESLint `^9`, Prettier `^3` |
-| **CI** | GitHub Actions — `app` job (Postgres+Redis, typecheck/lint/format/tests/integration/build/audit) and `contract` job (stellar-cli build + `cargo test`) |
+| **CI** | GitHub Actions — `app` job (Postgres+Redis, typecheck/lint/format/tests/integration/build/audit) and `contract` job (stellar-cli build + `cargo test`). Triggers on push to `main` and on `pull_request`; does **not** trigger on a direct push to `develop` — branch protection requiring these checks is a documented one-time manual step, not yet enabled. |
 | **Infra / deploy** | Railway (`railway.json` per service), Docker Compose (local), MinIO |
 
 > Note: version numbers reflect this repo's manifests as committed; report them as-is.
@@ -312,7 +339,9 @@ Deploys to **Railway** as three services (configs committed; provisioning/`railw
 | **subscriber** | [`apps/subscriber/railway.json`](./apps/subscriber/railway.json) | NIXPACKS: `db:generate` | `subscriber start` (`tsx`), `restartPolicy: ALWAYS` |
 | **file-storage** | [`infra/file-storage/railway.json`](./infra/file-storage/railway.json) | DOCKERFILE (MinIO) | S3-compatible store on a Railway Volume |
 
-**CI** ([`.github/workflows/ci.yml`](./.github/workflows/ci.yml)): the `app` and `contract` jobs must pass on PRs (branch protection is a one-time maintainer step, documented in the workflow + [`RUNBOOK.md`](./RUNBOOK.md)). Playwright E2E runs out-of-band against Testnet, not on the merge gate.
+Root `package.json` also exposes `build`/`start` scripts (`pnpm --filter web build|start`) for platform auto-detection.
+
+**CI** ([`.github/workflows/ci.yml`](./.github/workflows/ci.yml)): the `app` and `contract` jobs run on pushes to `main` and on pull requests; they must pass before merge, though branch protection enforcing that is a one-time maintainer step not yet enabled (see `RUNBOOK.md`). Playwright E2E runs out-of-band against Testnet, not on the merge gate.
 
 - **Live web URL:** `[PLACEHOLDER: Live app URL]`
 - **RPC / network:** Testnet by default; switch to `public` (Mainnet) via env.
@@ -325,7 +354,7 @@ Deploys to **Railway** as three services (configs committed; provisioning/`railw
 - **Demo video:** `[PLACEHOLDER: Demo video URL]`
 - **Screenshot:** `[PLACEHOLDER: screenshot]`
 
-See [`PITCH_DECK.md`](./PITCH_DECK.md) for the full pitch and the sub-two-minute demo walkthrough.
+See [`docs/pitch-deck.md`](./docs/pitch-deck.md) for the full pitch and the sub-two-minute demo walkthrough.
 
 ---
 
@@ -353,4 +382,4 @@ See [`PITCH_DECK.md`](./PITCH_DECK.md) for the full pitch and the sub-two-minute
 - [`AGENT.md`](./AGENT.md) — engineering rules & safety
 - [`BRAND.md`](./BRAND.md) — design system
 - [`RUNBOOK.md`](./RUNBOOK.md) — deploy & operations
-- [`docs/`](./docs) — phased build plans, verification, acceptance, migrations
+- [`docs/`](./docs) — phased build plans, verification, acceptance, migrations, pitch deck
