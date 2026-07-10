@@ -37,11 +37,19 @@ export default function RegisterPage() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: parsed.data.username, password: parsed.data.password }),
+        body: JSON.stringify({
+          username: parsed.data.username,
+          password: parsed.data.password,
+        }),
       });
 
+      if (!res) {
+        setFormError("Could not create account. Please try a different username.");
+        return;
+      }
+
       const json = res.ok
-        ? ((await res.json()) as { ok: boolean; error?: string })
+        ? ((await res.json().catch(() => ({ ok: false }))) as { ok?: boolean; error?: string })
         : { ok: false as const };
 
       if (!json.ok) {

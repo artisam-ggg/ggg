@@ -6,6 +6,7 @@ const envSchema = z.object({
   // App
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   APP_URL: z.string().url(),
+  ALLOWED_ORIGINS: z.string().optional(),
   SESSION_SECRET: z.string().min(32, "SESSION_SECRET must be at least 32 chars"),
   CSRF_SECRET: z.string().min(32, "CSRF_SECRET must be at least 32 chars"),
 

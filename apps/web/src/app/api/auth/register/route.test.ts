@@ -58,6 +58,16 @@ describe("POST /api/auth/register", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
+  it("falls back when rate-limit service is unavailable", async () => {
+    rateLimitMock.mockRejectedValue(new Error("redis down"));
+    create.mockResolvedValue({ id: "u2", username: "fallback", role: "ORGANIZER" });
+
+    const res = await POST(makeReq({ username: "fallback", password: "a-good-enough-password" }));
+
+    expect(res.status).toBe(201);
+    expect(create).toHaveBeenCalled();
+  });
+
   it("rejects a cross-origin request (CSRF)", async () => {
     const res = await POST(
       makeReq(

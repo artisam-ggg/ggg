@@ -4,6 +4,7 @@ import { parseEnv } from "./env";
 const valid: Record<string, string> = {
   NODE_ENV: "development",
   APP_URL: "http://localhost:3000",
+  ALLOWED_ORIGINS: "https://app.example.com,https://admin.example.com",
   SESSION_SECRET: "x".repeat(32),
   CSRF_SECRET: "y".repeat(32),
   DATABASE_URL: "postgresql://ggg:ggg@localhost:5432/ggg",
@@ -51,5 +52,10 @@ describe("parseEnv", () => {
     });
     expect(env.USDC_ISSUER).toBe("GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN");
     expect(env.USDC_SAC_ADDRESS).toBe("CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75");
+  });
+
+  it("parses ALLOWED_ORIGINS as a comma-separated string", () => {
+    const env = parseEnv(valid);
+    expect(env.ALLOWED_ORIGINS).toBe("https://app.example.com,https://admin.example.com");
   });
 });
