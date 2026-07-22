@@ -87,3 +87,7 @@ Added a root `LICENSE` file containing the full MIT license text, with the copyr
 ## Audit fix — resolve high-severity transitive advisories
 
 Added `pnpm.overrides` in root `package.json` to force patched versions of transitive dependencies flagged by `pnpm audit --audit-level high`: `brace-expansion`, `js-yaml`, `fast-uri`, and `sharp`. Audit now exits clean at the high level (4 moderate remain below the gate), matching the precedent set in Phase 6.5 for `axios`.
+
+## CI — run workflow on develop pushes
+
+Added `develop` to the CI `push` trigger in `.github/workflows/ci.yml` so merge commits into `develop` display CI status checkmarks on the GitHub repo page. No functional or deployment changes.
