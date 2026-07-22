@@ -91,3 +91,7 @@ Added `pnpm.overrides` in root `package.json` to force patched versions of trans
 ## CI — run workflow on develop pushes
 
 Added `develop` to the CI `push` trigger in `.github/workflows/ci.yml` so merge commits into `develop` display CI status checkmarks on the GitHub repo page. No functional or deployment changes.
+
+## Issue #181 — Public deployment health endpoint
+
+Added a dedicated `/api/health` route that returns a 200 JSON payload with service status and timestamp, and updated `apps/web/railway.json` to use `/health` as the Railway healthcheck path. Includes a unit test. Note: resolving the reported HTTP 403 / stale-deployment behavior for `https://ggg.quest` requires a Railway redeploy by someone with project access.
