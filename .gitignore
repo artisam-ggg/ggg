@@ -44,3 +44,10 @@ apps/web/test-results/
 # Local verification artifacts (disposable)
 .env.verify
 .verify-compose.yml
+
+# Local / scratch directories and files (never commit)
+engr
+engr/
+
+# SCF scoping documents — generated locally, not part of the shipped codebase
+docs/scf-30d-scope.md
