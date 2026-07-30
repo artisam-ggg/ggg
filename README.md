@@ -365,7 +365,7 @@ Root `package.json` also exposes `build`/`start` scripts (`pnpm --filter web bui
 
 | Name | Role | Contact |
 |---|---|---|
-| Julyza Peña | Lead Developer | jbpena101@gmail.com |
+| Neil John E. Rivera | Lead Developer | neiljohn.rivera.work@gmail.com |
 
 
 ---
