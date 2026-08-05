@@ -365,8 +365,8 @@ Root `package.json` also exposes `build`/`start` scripts (`pnpm --filter web bui
 
 | Name | Role | Contact |
 |---|---|---|
-| Neil John E. Rivera | Lead Developer | neiljohn.rivera.work@gmail.com |
-
+| `Artisam Labs` | `Incubator` | `hello@artisam.xyz` |
+| `Neil John E. Rivera` | `Lead Developer` | `neiljohn.rivera.work@gmail.com` |
 
 ---
 
