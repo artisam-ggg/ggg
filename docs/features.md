@@ -99,3 +99,7 @@ Added a dedicated `/api/health` route that returns a 200 JSON payload with servi
 ## Issue #208 — Pin remaining Prisma transitive audit fixes
 
 Added narrowly scoped, temporary pnpm overrides for the final Prisma-transitive audit findings. They are retained only until Prisma releases compatible dependency versions; the dependency-only change is covered by the full quality gate suite.
+
+## Issue #191 — Fix unused middleware parameter
+
+Removed the unused request parameter from the authenticated middleware callback. Authentication remains enforced by the `withAuth` authorization callback and security headers are applied unchanged.
