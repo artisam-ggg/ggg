@@ -95,3 +95,7 @@ Added `develop` to the CI `push` trigger in `.github/workflows/ci.yml` so merge 
 ## Issue #181 — Public deployment health endpoint
 
 Added a dedicated `/api/health` route that returns a 200 JSON payload with service status and timestamp, and updated `apps/web/railway.json` to use `/health` as the Railway healthcheck path. Includes a unit test. Note: resolving the reported HTTP 403 / stale-deployment behavior for `https://ggg.quest` requires a Railway redeploy by someone with project access.
+
+## Issue #208 — Pin remaining Prisma transitive audit fixes
+
+Added narrowly scoped, temporary pnpm overrides for the final Prisma-transitive audit findings. They are retained only until Prisma releases compatible dependency versions; the dependency-only change is covered by the full quality gate suite.
