@@ -15,7 +15,7 @@ export function isProtectedPath(pathname: string): boolean {
 }
 
 export default withAuth(
-  function middleware(_req) {
+  function middleware() {
     // Authentication is enforced by the withAuth authorized callback below.
     // This function runs only for allowed requests and applies security headers.
     const response = NextResponse.next();
