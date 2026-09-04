@@ -1,7 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import { buildSecurityHeaders } from "./security-headers";
 
 describe("buildSecurityHeaders", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("returns expected header names", () => {
     const headers = buildSecurityHeaders();
     const names = headers.map(([key]) => key);
@@ -40,5 +44,15 @@ describe("buildSecurityHeaders", () => {
     expect(csp).toContain("https://stellar.expert");
     // S3/MinIO origin for tournament banner images
     expect(csp).toContain("img-src 'self' data: blob: https://stellar.expert");
+  });
+
+  it("allows eval for React debugging only in development", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    const developmentCsp = new Map(buildSecurityHeaders()).get("Content-Security-Policy") ?? "";
+    expect(developmentCsp).toContain("script-src 'self' 'unsafe-inline' 'unsafe-eval'");
+
+    vi.stubEnv("NODE_ENV", "production");
+    const productionCsp = new Map(buildSecurityHeaders()).get("Content-Security-Policy") ?? "";
+    expect(productionCsp).not.toContain("'unsafe-eval'");
   });
 });
