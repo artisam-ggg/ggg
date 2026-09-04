@@ -8,6 +8,10 @@ edits/comments), deployments, production or secret changes, or material scope
 expansion. If the user has already authorized an action category in the current
 task, proceed without asking again.
 
+For an explicitly assigned issue or an issue labeled `agent-ready`, you may
+commit, push, and open a **draft** PR after the required checks pass. Never
+merge, deploy, alter production or secrets, or expand scope without approval.
+
 ## Preamble
 Before starting, make sure to read these files to get more context:
 - README.md — project overview and setup
