@@ -9,10 +9,16 @@ export function buildSecurityHeaders(): Array<[string, string]> {
   // S3/MinIO public origin for tournament banner images; falls back to the
   // local docker-compose MinIO endpoint in dev.
   const s3Origin = process.env.S3_PUBLIC_ORIGIN ?? "http://localhost:9000";
+  // React's development runtime uses eval for debugging features such as
+  // reconstructing call stacks. Keep this exception out of production CSP.
+  const scriptSrc =
+    process.env.NODE_ENV === "development"
+      ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+      : "script-src 'self' 'unsafe-inline'";
 
   const csp = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline'",
+    scriptSrc,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com data:",
     `img-src 'self' data: blob: https://stellar.expert ${s3Origin}`,
