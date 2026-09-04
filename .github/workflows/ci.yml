@@ -90,7 +90,34 @@ jobs:
         run: pnpm --filter web build
 
       - name: Audit (high+)
-        run: pnpm audit --audit-level high
+        run: |
+          # pnpm retries a single audit request, but the npm advisory endpoint
+          # can still time out transiently on GitHub-hosted runners. Retry one
+          # fresh request only for that network failure; audit findings fail
+          # immediately and remain merge-blocking.
+          attempts=2
+          for attempt in $(seq 1 "$attempts"); do
+            set +e
+            output="$(pnpm audit --audit-level high 2>&1)"
+            status=$?
+            set -e
+            printf '%s\n' "$output"
+
+            if [ "$status" -eq 0 ]; then
+              exit 0
+            fi
+
+            if ! printf '%s\n' "$output" | grep -q 'ERR_SOCKET_TIMEOUT'; then
+              exit "$status"
+            fi
+
+            if [ "$attempt" -lt "$attempts" ]; then
+              echo "Audit request timed out; retrying once in 30 seconds."
+              sleep 30
+            fi
+          done
+
+          exit "$status"
 
   contract:
     runs-on: ubuntu-latest
