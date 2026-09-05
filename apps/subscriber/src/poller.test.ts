@@ -1,27 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const {
-  getEvents,
-  decodeScVal,
-  getCursor,
-  setCursor,
-  applyEvent,
-  reconcileSep7Deposits,
-  publishChange,
-} = vi.hoisted(() => ({
-  getEvents: vi.fn(),
-  decodeScVal: vi.fn(),
-  getCursor: vi.fn(),
-  setCursor: vi.fn(),
-  applyEvent: vi.fn(),
-  reconcileSep7Deposits: vi.fn(async () => ({ changes: [], nextCursor: "p1" })),
-  publishChange: vi.fn(),
-}));
+const { getEvents, decodeScVal, getCursor, setCursor, applyEvent, publishChange } = vi.hoisted(
+  () => ({
+    getEvents: vi.fn(),
+    decodeScVal: vi.fn(),
+    getCursor: vi.fn(),
+    setCursor: vi.fn(),
+    applyEvent: vi.fn(),
+    publishChange: vi.fn(),
+  }),
+);
 
-vi.mock("./stellar", () => ({ getEvents, decodeScVal, getContractPayments: vi.fn() }));
+vi.mock("./stellar", () => ({ getEvents, decodeScVal }));
 vi.mock("./cursor", () => ({ getCursor, setCursor }));
 vi.mock("./reconcile", () => ({ applyEvent }));
-vi.mock("./horizon-sep7", () => ({ reconcileSep7Deposits }));
 vi.mock("./publish", () => ({ publishChange }));
 
 import { pollTournament } from "./poller";
@@ -48,7 +40,6 @@ beforeEach(() => {
     txHash: "tx-reg-1",
     data: { player: "GPLAYER1", poolAfter: "10000000" },
   });
-  reconcileSep7Deposits.mockResolvedValue({ changes: [], nextCursor: "p1" });
   setCursor.mockReset();
   publishChange.mockReset();
 });
@@ -66,13 +57,13 @@ describe("pollTournament", () => {
       "t1",
       expect.objectContaining({ type: "REGISTERED", txHash: "tx-reg-1" }),
     );
-    expect(setCursor).toHaveBeenCalledWith("CABC", 201, "p1"); // latestLedger + 1 - SAFETY_LAG(100), hz cursor advanced
+    expect(setCursor).toHaveBeenCalledWith("CABC", 201); // latestLedger + 1 - SAFETY_LAG(100)
   });
 
   it("does not publish a duplicate (applyEvent returns null on replay)", async () => {
     applyEvent.mockResolvedValue(null);
     await pollTournament(tournament);
     expect(publishChange).not.toHaveBeenCalled();
-    expect(setCursor).toHaveBeenCalledWith("CABC", 201, "p1");
+    expect(setCursor).toHaveBeenCalledWith("CABC", 201);
   });
 });

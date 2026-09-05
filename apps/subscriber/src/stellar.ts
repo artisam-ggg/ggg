@@ -1,4 +1,4 @@
-import { rpc, Horizon, scValToNative, xdr } from "@stellar/stellar-sdk";
+import { rpc, scValToNative, xdr } from "@stellar/stellar-sdk";
 import { z } from "zod";
 import { env } from "./env";
 
@@ -35,14 +35,6 @@ function getRpcServer(): rpc.Server {
     allowHttp: env.SOROBAN_RPC_URL.startsWith("http://"),
   });
   return rpcServer;
-}
-
-let horizonServer: Horizon.Server | undefined;
-function getHorizonServer(): Horizon.Server {
-  horizonServer ??= new Horizon.Server(env.HORIZON_URL, {
-    allowHttp: env.HORIZON_URL.startsWith("http://"),
-  });
-  return horizonServer;
 }
 
 // Soroban RPC only retains a recent window of ledgers and rejects an out-of-range
@@ -101,52 +93,4 @@ async function fetchEvents(contractId: string, startLedger: number): Promise<Dec
     })),
   };
   return decodeEventsResponse(normalized);
-}
-
-const paymentSchema = z.object({
-  id: z.string(),
-  type: z.literal("payment"),
-  transaction_hash: z.string(),
-  paging_token: z.string(),
-  from: z.string(),
-  to: z.string(),
-  amount: z.string(),
-});
-export type DecodedPayment = z.infer<typeof paymentSchema>;
-
-export async function getContractPayments(
-  contractAddr: string,
-  hzCursor: string | null,
-): Promise<{ payments: (DecodedPayment & { memo: string | null })[]; nextCursor: string | null }> {
-  let builder = getHorizonServer().payments().forAccount(contractAddr).order("asc").limit(50);
-  if (hzCursor) builder = builder.cursor(hzCursor);
-  let page;
-  try {
-    page = await builder.call();
-  } catch (err) {
-    // A `C…` contract address has no classic Horizon account/payment history, so
-    // `/accounts/{C…}/payments` returns 400/404. That just means there are no
-    // SEP-7 classic-payment deposits to reconcile — not a fatal poll error.
-    const status =
-      typeof err === "object" && err !== null
-        ? ((err as { response?: { status?: number }; status?: number }).response?.status ??
-          (err as { status?: number }).status)
-        : undefined;
-    if (status === 400 || status === 404 || /Bad Request|Not Found/i.test(String(err))) {
-      return { payments: [], nextCursor: hzCursor };
-    }
-    throw err;
-  }
-  const out: (DecodedPayment & { memo: string | null })[] = [];
-  let nextCursor = hzCursor;
-  for (const record of page.records) {
-    if (record.type !== "payment") continue;
-    const payment = paymentSchema.parse(record);
-    const tx = await (
-      record as unknown as { transaction: () => Promise<{ memo?: string | null }> }
-    ).transaction();
-    out.push({ ...payment, memo: tx.memo ?? null });
-    nextCursor = payment.paging_token;
-  }
-  return { payments: out, nextCursor };
 }

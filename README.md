@@ -82,10 +82,10 @@ GGG removes the custodian: **no party holds the funds — the contract does.** M
 
 **Wallet + funding**
 - Client-side signing via **Freighter** (`@stellar/freighter-api`); server never sees a key.
-- **SEP-7 QR** code + payment URI on every active tournament so any SEP-7 wallet can scan and fund ([`SPEC.md`](./SPEC.md) §8).
+- **Tournament join QR** on every active tournament; scanning opens GGG's signed `join_tournament` flow, so only registered players fund the escrow ([`SPEC.md`](./SPEC.md) §8).
 
 **Live state**
-- Background **event subscriber** polls Soroban RPC events + reconciles Horizon payments, then pushes updates over **Server-Sent Events (SSE)** — pool and participants update without a refresh.
+- Background **event subscriber** polls confirmed Soroban contract events, then pushes updates over **Server-Sent Events (SSE)** — pool and participants update without a refresh.
 
 **Admin (beyond original SPEC.md scope)**
 - Full user management: list, view detail, change role, reset password, delete (self-delete/self-demote blocked).
@@ -140,7 +140,6 @@ flowchart TD
     TX -->|"build · simulate · submit"| RPC
     RPC --> ESC
     SUB -->|"getEvents"| RPC
-    SUB -->|"payments"| HZ
     SUB --> PG
     SUB -->|"publish tournament:id"| RD
     RH -->|"SSE subscribe"| RD
@@ -182,7 +181,7 @@ sequenceDiagram
     UI->>SUB: POST /submit (intent=initialize)
     SUB->>RPC: submit + poll getTransaction
     RPC-->>SUB: initialize confirmed (entry fee, referee, split set)
-    SUB-->>UI: ok → QR + payment URI shown
+    SUB-->>UI: ok → tournament join QR shown
 ```
 
 ### 2. Auth / signing flow (Freighter + credentials)
@@ -258,7 +257,7 @@ Function signatures, storage model, events, and security invariants are specifie
 
 - **Two-signature tournament creation**, not one. [`SPEC.md`](./SPEC.md) §6 describes `POST /api/tournaments` as building "the deploy + initialize transaction" as a single unit. The current implementation cannot do this atomically — see the TODO in [`apps/web/src/lib/stellar/builders.ts`](./apps/web/src/lib/stellar/builders.ts) — so it is two organiser-signed transactions (`deploy`, then `initialize`) instead of one. This is being addressed in the current sprint.
 - **Admin scope grew beyond SPEC.md.** §5 originally described `/admin` as "user management, platform overview." The shipped admin surface also includes full tournament oversight (list/detail/edit/force-cancel) and a role hierarchy (`ADMIN` ⊇ `ORGANIZER`) — a superset of spec, not a gap.
-- **USDC is fully wired but environment-gated.** Asset selector, SAC resolution, SEP-7 `asset_issuer`, and all UI surfaces branch correctly on `"XLM" | "USDC"` — but resolving USDC requires `USDC_ISSUER` / `USDC_SAC_ADDRESS` to be set per network; without them, only XLM resolves.
+- **USDC is fully wired but environment-gated.** Asset selector, SAC resolution, and all UI surfaces branch correctly on `"XLM" | "USDC"` — but resolving USDC requires `USDC_ISSUER` / `USDC_SAC_ADDRESS` to be set per network; without them, only XLM resolves.
 
 ---
 

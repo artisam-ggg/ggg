@@ -127,15 +127,7 @@ subscriber.
 ingests the missed join **exactly once** (no duplicate `Participant`), and
 publishes it to the live feed.
 
-### 5. Verify SEP-7 reconciliation
-
-Send a raw Stellar payment to the contract address with `memo == tournamentId`
-(no `join_tournament` call).
-
-**Expected:** the subscriber's Horizon path upserts the sender as a
-`Participant` + `REGISTERED` `ContractEvent`; the feed shows the registration.
-
-### 6. Verify finalize + cancel
+### 5. Verify finalize + cancel
 
 Finalize one tournament; cancel another.
 
@@ -143,7 +135,7 @@ Finalize one tournament; cancel another.
 cancel → `status=CANCELLED` + `cancelledAt`. The detail page reflects each
 change live (pool/feed/status chip) without a refresh.
 
-### 7. Record evidence
+### 6. Record evidence
 
 Capture the relevant logs/DB rows (e.g. `select type, txHash from "ContractEvent"
 where "tournamentId" = '...';`) and the Stellar.Expert links for the join /

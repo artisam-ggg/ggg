@@ -7,16 +7,13 @@ import { ContractAddress } from "./ContractAddress";
 import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
 import { signAndSubmit } from "@/lib/wallet";
 
-type Asset = "XLM" | "USDC";
-
 interface JoinCardProps {
   tournamentId: string;
   contractId: string;
   /** Entry fee in stroops (smallest unit) as a string, e.g. "10000000" = 1 XLM. */
   entryFee: string;
-  asset: Asset;
-  /** Required for non-native assets (USDC etc.). Null for XLM. */
-  assetIssuer: string | null;
+  /** Public tournament URL encoded in the join QR. */
+  joinUrl: string;
   /** Network passphrase — passed from the server shell, not imported here. */
   passphrase: string;
 }
@@ -24,30 +21,11 @@ interface JoinCardProps {
 type Phase = "idle" | "signing" | "submitting" | "success" | "error";
 
 /**
- * buildSep7Uri — constructs a SEP-0007 `web+stellar:pay` URI per SPEC §8.
- *
- * Format: web+stellar:pay?destination=<contractId>&amount=<entryFee>&memo=<tournamentId>&asset_code=<asset>[&asset_issuer=<issuer>]
- * The `asset_issuer` param is omitted for native XLM.
- */
-function buildSep7Uri(props: JoinCardProps): string {
-  const params = new URLSearchParams();
-  params.set("destination", props.contractId);
-  params.set("amount", props.entryFee);
-  params.set("memo", props.tournamentId);
-  params.set("asset_code", props.asset);
-  if (props.asset !== "XLM" && props.assetIssuer) {
-    params.set("asset_issuer", props.assetIssuer);
-  }
-  // URLSearchParams encodes spaces as '+'; SEP-7 URIs expect %20. Also keep
-  // ':' and '?' literal in the scheme prefix.
-  return `web+stellar:pay?${params.toString().replace(/\+/g, "%20")}`;
-}
-
-/**
- * JoinCard — SEP-7 QR join flow (FLOW 02).
+ * JoinCard — contract-backed QR join flow (FLOW 02).
  *
  * Composes:
- * - QrTile: SEP-7 `web+stellar:pay` URI as a scannable QR code.
+ * - QrTile: a public GGG tournament URL, so scanning leads to the signed
+ *   `join_tournament` flow instead of a direct token payment.
  * - ContractAddress: copyable contract address.
  * - WalletButton: connects Freighter; provides `playerAddress`.
  * - Join button: POSTs to /api/tournaments/[id]/join, signs XDR via Freighter,
@@ -60,7 +38,6 @@ export function JoinCard(props: JoinCardProps) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const sep7Uri = buildSep7Uri(props);
   const isPending = phase === "signing" || phase === "submitting";
 
   async function onJoin() {
@@ -112,12 +89,11 @@ export function JoinCard(props: JoinCardProps) {
       <p className="label-caps text-on-surface-variant">Scan to join</p>
 
       <div className="mt-4 flex flex-col items-start gap-4">
-        <QrTile value={sep7Uri} />
+        <QrTile value={props.joinUrl} />
 
         <ContractAddress value={props.contractId} />
 
-        {/* SEP-7 URI displayed for reference — data-mono for on-chain readability */}
-        <code className="data-mono break-all text-xs text-on-surface-variant">{sep7Uri}</code>
+        <code className="data-mono break-all text-xs text-on-surface-variant">{props.joinUrl}</code>
 
         <div className="flex flex-wrap items-center gap-3">
           <WalletButton expectedPassphrase={props.passphrase} onConnected={setPlayer} />

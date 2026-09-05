@@ -26,7 +26,10 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/lib/env", () => ({
-  env: { NETWORK_PASSPHRASE: "Test SDF Network ; September 2015", USDC_ISSUER: "GISSUER" },
+  env: {
+    APP_URL: "https://ggg.quest",
+    NETWORK_PASSPHRASE: "Test SDF Network ; September 2015",
+  },
 }));
 
 // ---------------------------------------------------------------------------

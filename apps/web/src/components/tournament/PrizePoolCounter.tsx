@@ -11,8 +11,8 @@ function fmt(stroops: string) {
 /**
  * Live prize-pool counter. Seeds from the server snapshot (initialPool /
  * participantCount) then derives the live total off the SSE stream: every
- * confirmed REGISTERED event advances the pool to its `poolAfter` (or, for SEP-7
- * deposits with no poolAfter, by one entry fee). Each advance bumps a key that
+ * confirmed REGISTERED event advances the pool to its contract-emitted
+ * `poolAfter`. Each advance bumps a key that
  * replays the `pool-pop` scale animation — `motion-safe:` disables it under
  * prefers-reduced-motion (BRAND §6).
  */
@@ -57,18 +57,18 @@ export function PrizePoolCounter({
         continue;
       }
 
-      // New player → increment count
+      const after = ev.data.poolAfter;
+      if (typeof after !== "string") continue;
+
       countedInStream.add(playerAddr);
       c += 1;
-
-      const after = ev.data.poolAfter;
-      const next = typeof after === "string" ? BigInt(after) : p + BigInt(entryFee);
+      const next = BigInt(after);
       if (next > p) b += 1;
       p = next;
     }
 
     return { pool: p, count: c, bumps: b };
-  }, [events, initialPool, participantCount, entryFee, initialSet]);
+  }, [events, initialPool, participantCount, initialSet]);
 
   return (
     <div className="high-contrast-card acid-glow rounded-none p-8">

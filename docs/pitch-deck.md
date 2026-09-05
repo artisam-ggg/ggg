@@ -72,7 +72,7 @@ Live create → fund → settle, on Stellar Testnet:
 - **Contract** — Rust + `soroban-sdk` 26, one WASM deployed per tournament; 7 functions, 3 events, 28 unit tests
 - **Web** — Next.js 16 (App Router) + React 19 + Prisma 7 / PostgreSQL 17; builds & submits XDR, never signs
 - **Wallet** — Freighter signs client-side; `@stellar/stellar-sdk` 15 talks to Soroban RPC + Horizon
-- **Subscriber** — standalone worker polls contract events + reconciles Horizon payments → Postgres → Redis → SSE
+- **Subscriber** — standalone worker polls contract events → Postgres → Redis → SSE
 - **Data flow:** Browser signs → RPC submits → contract emits event → subscriber ingests → Redis pub/sub → live UI
 
 ![Placeholder: architecture diagram — Browser/Freighter ↔ Next.js (routes, tx-builder) ↔ Postgres/Redis, with Event Subscriber polling Stellar and pushing SSE](placeholder-image.png)
@@ -221,7 +221,7 @@ Enforced in-contract: only the organiser can `initialize`/`cancel`; only the ref
 Code-complete against SPEC.md — all 7 build phases shipped, zero open issues, 498 automated tests passing, and all six §15 acceptance criteria verified **locally against Testnet**. What's *not* done: a live public deployment (Railway configs are committed but not yet running) and a Mainnet launch. So: demo-ready and verifiable, not yet in production.
 
 **Q9. How does the live "pool ticks up" feed work — is that trusted?**
-A standalone subscriber polls Soroban RPC for the contract's own emitted events (`registered`/`finalized`/`cancelled`) and reconciles Horizon payments, writes them to Postgres, and pushes over Redis→SSE to the browser. The UI is a *view* of on-chain truth; the money movement itself is the contract's, and every event is independently verifiable on the explorer.
+A standalone subscriber polls Soroban RPC for the contract's own emitted events (`registered`/`finalized`/`cancelled`), writes them to Postgres, and pushes over Redis→SSE to the browser. The UI is a *view* of on-chain truth; the money movement itself is the contract's, and every event is independently verifiable on the explorer.
 
 ### Business & market
 
@@ -287,8 +287,8 @@ Team: Julyza Peña and Mark Hugh Neri (roles to be finalised on the slide). The 
 | Auth (argon2, session, Redis revoke, CSRF, rate-limit) | **Built** | `apps/web/src/lib/{password,auth,session-store,csrf,rate-limit}.ts` |
 | Tournament API + pages (landing, login, register, list, new, detail, settle, admin) | **Built** | `apps/web/src/app/**` |
 | Admin management (users, tournaments, role hierarchy) | **Built** | `apps/web/src/app/(dashboard)/admin/**`, `apps/web/src/server/services/admin.ts` |
-| Event subscriber (RPC poll + Horizon SEP-7 reconcile + Redis→SSE) | **Built** | `apps/subscriber/src/**` |
-| SEP-7 QR-to-fund | **Built** | `apps/web/src/components/tournament/QrTile.tsx` |
+| Event subscriber (RPC poll + Redis→SSE) | **Built** | `apps/subscriber/src/**` |
+| Contract-backed tournament join QR | **Built** | `apps/web/src/components/tournament/QrTile.tsx` |
 | Tests | **498 passing** | 454 web + 16 subscriber + 28 contract [inferred from `docs/`] |
 | §15 acceptance (6 criteria + <2 min) | **PASS (local Testnet)** | `docs/acceptance-spec-15.md` |
 | Revenue mechanism (protocol fee) | **Not built (planned)** | split sums to 100% to players; issue #159 A1 |

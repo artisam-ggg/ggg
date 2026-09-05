@@ -53,10 +53,9 @@ Built the server-side Stellar integration module (`apps/web/src/lib/stellar/`) t
 Stood up the standalone `apps/subscriber` worker that ingests on-chain activity into Postgres and publishes it to Redis, and wired the Phase 4 detail page to a live SSE feed so joins/finalisations/cancellations propagate without a refresh:
 
 - `SubscriberCursor` model + migration (per-contract ledger cursor) and a `ContractEvent @@unique([txHash, type])` migration backing idempotent dedupe.
-- `apps/subscriber` package: Zod-validated `getEvents`/Horizon `payments` wrapper, fail-closed env loader, Prisma singleton reusing the web-generated client through the `web` workspace dependency.
+- `apps/subscriber` package: Zod-validated `getEvents` wrapper, fail-closed env loader, Prisma singleton reusing the web-generated client through the `web` workspace dependency.
 - Per-contract ledger cursor with restart recovery (`getCursor`/`setCursor`), advanced only after a successful ingest+publish pass (at-least-once).
 - Idempotent reconciliation of `registered`/`finalized`/`cancelled` events into `ContractEvent`/`Participant`/`Payout`/`Tournament` inside one transaction, deduped on `txHash` (replays are no-ops); money handled as `BigInt`.
-- SEP-7 deposit reconciliation: untrusted Horizon payments become registrations only when `memo == tournamentId` and the destination is the contract address.
 - Redis publish to `tournament:<id>` + `pollTournament` orchestration; service loop polls every `ACTIVE` tournament with a `contractId`, isolates per-tournament failures, and shuts down gracefully on SIGTERM/SIGINT.
 - `GET /api/tournaments/[id]/events` SSE route: replays recent confirmed `ContractEvent` rows from Postgres (source of truth) then streams the Redis channel, with heartbeats and a `?fallback=poll` mode.
 - `useTournamentEvents` EventSource hook with auto-reconnect; `<PrizePoolCounter>` ticks up off the stream (key-driven `pool-pop` keyframe, reduced-motion aware) and `<LiveFeed>` renders a human-readable gloss ticker (reduced-motion aware).
@@ -103,6 +102,10 @@ Added narrowly scoped, temporary pnpm overrides for the final Prisma-transitive 
 ## Issue #191 — Fix unused middleware parameter
 
 Removed the unused request parameter from the authenticated middleware callback. Authentication remains enforced by the `withAuth` authorization callback and security headers are applied unchanged.
+
+## Issue #229 — Contract-backed tournament join QR
+
+Changed active-tournament QR codes from raw SEP-7 payment URIs to the public tournament URL. Scanning now opens the existing wallet-backed `join_tournament` flow, ensuring the contract records every player and that displayed pool, eligibility, and payouts remain aligned.
 
 ## Fix — avoid stale login redirects on tournament creation links
 

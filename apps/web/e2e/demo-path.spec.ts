@@ -44,6 +44,7 @@ test("demo path — create, join ×3, finalize, 3 payouts (60/30/10)", async ({
   const detailUrl = page.url();
   await expect(page.getByTestId("status-chip")).toHaveText("ACTIVE", { timeout: 120_000 });
   await expect(page.getByTestId("join-qr")).toBeVisible();
+  await expect(page.getByTestId("join-qr")).toHaveAttribute("href", detailUrl);
   await page.screenshot({ path: `${SHOT}-2-active-with-qr.png`, fullPage: true });
 
   // ── 3. Three players join (each pays the entry fee). ───────────────────────

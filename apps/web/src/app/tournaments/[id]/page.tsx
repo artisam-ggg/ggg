@@ -28,7 +28,7 @@ export default async function TournamentDetailPage({
   if (!t) notFound();
 
   const passphrase = env.NETWORK_PASSPHRASE;
-  const assetIssuer: string | null = t.asset === "USDC" ? (env.USDC_ISSUER ?? null) : null;
+  const joinUrl = new URL(`/tournaments/${t.id}`, env.APP_URL).toString();
 
   const isOrganiser = currentUser?.id === t.organizerId;
   const canCancel = isOrganiser && t.status === "ACTIVE";
@@ -99,8 +99,7 @@ export default async function TournamentDetailPage({
               tournamentId={t.id}
               contractId={t.contractId}
               entryFee={t.entryFee}
-              asset={t.asset}
-              assetIssuer={assetIssuer}
+              joinUrl={joinUrl}
               passphrase={passphrase}
             />
           )}
