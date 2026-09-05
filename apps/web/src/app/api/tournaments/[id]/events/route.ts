@@ -29,45 +29,67 @@ export async function GET(
   // Postgres (the source of truth) before streaming live messages.
   const sub = redis.duplicate();
   const encoder = new TextEncoder();
+  let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
+  let heartbeat: ReturnType<typeof setInterval> | undefined;
+  let closed = false;
+
+  const cleanup = (closeStream = true): void => {
+    if (closed) return;
+    closed = true;
+    if (heartbeat) clearInterval(heartbeat);
+    void sub.unsubscribe(channelFor(id));
+    void sub.quit();
+    if (closeStream) {
+      try {
+        controller?.close();
+      } catch {
+        /* already closed */
+      }
+    }
+  };
+
+  const enqueue = (frame: string): void => {
+    if (closed) return;
+    try {
+      controller?.enqueue(encoder.encode(frame));
+    } catch {
+      cleanup();
+    }
+  };
+
+  req.signal.addEventListener("abort", () => cleanup(), { once: true });
 
   const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      const recent = await prisma.contractEvent.findMany({
-        where: { tournamentId: id },
-        orderBy: { createdAt: "asc" },
-        take: 50,
-      });
-      for (const ev of recent) {
-        controller.enqueue(
-          encoder.encode(sseFrame({ type: ev.type, txHash: ev.txHash, data: ev.payload })),
-        );
+    async start(nextController) {
+      controller = nextController;
+      if (closed) return;
+      try {
+        const recent = await prisma.contractEvent.findMany({
+          where: { tournamentId: id },
+          orderBy: { createdAt: "asc" },
+          take: 50,
+        });
+        for (const ev of recent) {
+          enqueue(sseFrame({ type: ev.type, txHash: ev.txHash, data: ev.payload }));
+        }
+        enqueue(": connected\n\n");
+
+        sub.on("message", (_channel: string, message: string) => {
+          try {
+            enqueue(sseFrame(JSON.parse(message)));
+          } catch {
+            /* drop malformed */
+          }
+        });
+        await sub.subscribe(channelFor(id));
+
+        heartbeat = setInterval(() => enqueue(": ping\n\n"), 25_000);
+      } catch (error) {
+        cleanup(false);
+        throw error;
       }
-      controller.enqueue(encoder.encode(": connected\n\n"));
-
-      sub.on("message", (_channel: string, message: string) => {
-        try {
-          controller.enqueue(encoder.encode(sseFrame(JSON.parse(message))));
-        } catch {
-          /* drop malformed */
-        }
-      });
-      await sub.subscribe(channelFor(id));
-
-      const heartbeat = setInterval(() => {
-        controller.enqueue(encoder.encode(": ping\n\n"));
-      }, 25_000);
-
-      req.signal.addEventListener("abort", () => {
-        clearInterval(heartbeat);
-        void sub.unsubscribe(channelFor(id));
-        void sub.quit();
-        try {
-          controller.close();
-        } catch {
-          /* already closed */
-        }
-      });
     },
+    cancel: cleanup,
   });
 
   return new Response(stream, {

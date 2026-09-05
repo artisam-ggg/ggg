@@ -103,3 +103,7 @@ Added narrowly scoped, temporary pnpm overrides for the final Prisma-transitive 
 ## Issue #191 — Fix unused middleware parameter
 
 Removed the unused request parameter from the authenticated middleware callback. Authentication remains enforced by the `withAuth` authorization callback and security headers are applied unchanged.
+
+## Issue #198 — Clean up SSE subscribers on disconnect and setup failure
+
+The tournament SSE endpoint now uses one idempotent cleanup path for request aborts, stream cancellation, failed setup, and failed writes. Redis subscribers and heartbeat intervals are released in every path; focused tests cover cancellation and replay/subscription failures.
