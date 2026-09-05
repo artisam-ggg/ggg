@@ -1,12 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { duplicate, subscribe, on } = vi.hoisted(() => {
+const { duplicate, subscribe, on, quit, unsubscribe, findMany } = vi.hoisted(() => {
   const subscribe = vi.fn(async () => {});
   const on = vi.fn();
   const quit = vi.fn(async () => {});
   const unsubscribe = vi.fn(async () => {});
+  const findMany = vi.fn(async () => [
+    { type: "REGISTERED", txHash: "tx-old", payload: { player: "GA", poolAfter: "10000000" } },
+  ]);
   const duplicate = vi.fn(() => ({ subscribe, on, quit, unsubscribe }));
-  return { duplicate, subscribe, on };
+  return { duplicate, subscribe, on, quit, unsubscribe, findMany };
 });
 
 let messageHandler: ((channel: string, msg: string) => void) | undefined;
@@ -18,9 +21,7 @@ vi.mock("@/lib/redis", () => ({ redis: { duplicate } }));
 vi.mock("@/lib/db", () => ({
   prisma: {
     contractEvent: {
-      findMany: vi.fn(async () => [
-        { type: "REGISTERED", txHash: "tx-old", payload: { player: "GA", poolAfter: "10000000" } },
-      ]),
+      findMany,
     },
   },
 }));
@@ -28,6 +29,7 @@ vi.mock("@/lib/db", () => ({
 import { GET } from "./route";
 
 beforeEach(() => {
+  vi.clearAllMocks();
   messageHandler = undefined;
 });
 
@@ -63,5 +65,42 @@ describe("GET /api/tournaments/[id]/events (SSE)", () => {
 
     expect(frames).toContain("tx-old"); // replay
     expect(frames).toContain("tx-new"); // live
+    expect(unsubscribe).toHaveBeenCalledWith("tournament:t1");
+    expect(quit).toHaveBeenCalledOnce();
+  });
+
+  it("releases Redis when the request aborts", async () => {
+    const abort = new AbortController();
+    const res = await GET(
+      new Request("http://x/api/tournaments/t1/events", { signal: abort.signal }),
+      {
+        params: Promise.resolve({ id: "t1" }),
+      },
+    );
+
+    await res.body!.getReader().read();
+    abort.abort();
+
+    expect(unsubscribe).toHaveBeenCalledWith("tournament:t1");
+    expect(quit).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ["replay", () => findMany.mockRejectedValueOnce(new Error("db unavailable"))],
+    ["subscription", () => subscribe.mockRejectedValueOnce(new Error("redis unavailable"))],
+  ])("releases Redis when %s setup fails", async (_step, fail) => {
+    fail();
+    const res = await GET(new Request("http://x/api/tournaments/t1/events"), {
+      params: Promise.resolve({ id: "t1" }),
+    });
+
+    const reader = res.body!.getReader();
+    await expect(
+      (async () => {
+        while (true) await reader.read();
+      })(),
+    ).rejects.toThrow();
+    expect(unsubscribe).toHaveBeenCalledWith("tournament:t1");
+    expect(quit).toHaveBeenCalledOnce();
   });
 });
