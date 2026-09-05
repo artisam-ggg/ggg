@@ -104,6 +104,10 @@ Added narrowly scoped, temporary pnpm overrides for the final Prisma-transitive 
 
 Removed the unused request parameter from the authenticated middleware callback. Authentication remains enforced by the `withAuth` authorization callback and security headers are applied unchanged.
 
+## Fix — avoid stale login redirects on tournament creation links
+
+Disabled client prefetching for `/tournaments/new` CTAs. This prevents a prefetch made before authentication has settled from caching the protected route's login redirect and replaying it when the organiser clicks to create a tournament.
+
 ## Issue #198 — Clean up SSE subscribers on disconnect and setup failure
 
 The tournament SSE endpoint now uses one idempotent cleanup path for request aborts, stream cancellation, failed setup, and failed writes. Redis subscribers and heartbeat intervals are released in every path; focused tests cover cancellation and replay/subscription failures.
