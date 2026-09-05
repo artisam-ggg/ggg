@@ -98,7 +98,7 @@ describe("E2E wired selectors", () => {
   });
 
   it("join-qr wraps the join QR code", () => {
-    render(<QrTile value="web+stellar:pay?destination=C..." />);
+    render(<QrTile value="https://ggg.quest/tournaments/t_1" />);
     expect(screen.getByTestId("join-qr")).toBeInTheDocument();
   });
 

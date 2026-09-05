@@ -19,7 +19,7 @@ The signature demo: open the dashboard → create a tournament with an XLM entry
 | Admin | Username + password (seeded) | Optional Freighter |
 | Organiser | Username + password (self-register) | Freighter wallet (source of `initialize`, `cancel`) |
 | Referee | Username + password; identified by wallet address on a tournament | Freighter wallet (source of `finalize_results`) |
-| Player | No app account required | Freighter wallet **or** any SEP-7-capable wallet (source of `join`) |
+| Player | No app account required | Freighter-compatible wallet (source of `join`) |
 
 Web-app authentication (admin/organiser/referee dashboards) is **basic username + password**, seeded with an admin account via a Prisma seed script. Blockchain actions are signed **client-side** with Freighter; the server never holds private keys.
 
@@ -68,7 +68,7 @@ A single deployed WASM contract, instantiated per tournament. The server builds 
 Postgres stores tournament metadata (name, game, entry fee, referee, participants, payouts, status, contract ID) and user accounts. Redis stores rate-limit counters and an optional session cache.
 
 ### Event subscriber — background poller
-Polls Soroban RPC `getEvents` (and Horizon for payment ops) for each active tournament's contract, persists registrations/payouts/cancellations into `ContractEvent`, updates derived state, and pushes updates to clients over SSE.
+Polls Soroban RPC `getEvents` for each active tournament's contract, persists registrations/payouts/cancellations into `ContractEvent`, updates derived state, and pushes updates to clients over SSE.
 
 ```
                          ┌──────────────────────────────────────────────┐
@@ -180,7 +180,7 @@ All authenticated pages live under a `(dashboard)` route group guarded by middle
 | `/register` | Public | Organiser self-registration (username + password). |
 | `/tournaments` | Organiser | List of the user's tournaments with status chips (active / finished / cancelled), pool size, participant count. |
 | `/tournaments/new` | Organiser | Creation form (see fields below). Mirrors the "Tournament Creator" mock. |
-| `/tournaments/[id]` | Public read; organiser/referee controls gated | Detail view: info, live participant list, QR + payment URI, referee panel, live tx feed, winners + payout links when finished. |
+| `/tournaments/[id]` | Public read; organiser/referee controls gated | Detail view: info, live participant list, join QR, referee panel, live tx feed, winners + payout links when finished. |
 | `/tournaments/[id]/settle` | Referee only | Drag-and-drop "Referee Settlement Console" (assign 1st/2nd/3rd, then finalize). Mirrors the settlement mock. |
 | `/admin` | Admin | User management, platform overview. |
 
@@ -195,7 +195,7 @@ All authenticated pages live under a `(dashboard)` route group guarded by middle
 ### `/tournaments/[id]` detail panels
 - **Header:** name, game, tournament ID, contract address (copyable), status, escrow balance.
 - **Prize pool:** live counter (current pool, goal, participant count, entry fee).
-- **Join / QR card:** contract address + SEP-7 QR (§8). "Join" button for connected wallets.
+- **Join / QR card:** contract address + tournament join QR (§8). "Join" button for connected wallets.
 - **Participants:** real-time list of wallet addresses + join timestamps.
 - **Live transaction feed:** registrations ("Player X joined, pool now Y XLM") and finalisation ("Payouts sent: 1st → A, 2nd → B, 3rd → C") via SSE.
 - **Referee panel:** visible only when the connected wallet matches the tournament's referee address — links to `/settle`.
@@ -214,7 +214,7 @@ Base path `/api`. JSON in/out. All inputs validated with Zod; all responses use 
 - Validation: split sums to 10000; `refereeAddress`/`organizerAddress` valid `G...`; `entryFee > 0`; `organizer != referee`.
 - Returns: `{ tournamentId, unsignedXdr, network }`. Status stored as `DRAFT` until the deploy tx is confirmed.
 
-**`POST /api/tournaments/[id]/submit`** — *Organiser.* Accept a signed XDR, submit via Soroban RPC, poll for result. On success, persist the deployed `contractId`, set status `ACTIVE`, generate QR/payment URI. Used for create, finalize, and cancel submission.
+**`POST /api/tournaments/[id]/submit`** — *Organiser.* Accept a signed XDR, submit via Soroban RPC, poll for result. On success, persist the deployed `contractId`, set status `ACTIVE`, and make the tournament join QR available. Used for create, finalize, and cancel submission.
 - Body: `{ signedXdr, intent: "deploy"|"finalize"|"cancel" }`
 
 **`GET /api/tournaments`** — *Organiser.* List tournaments for the authenticated user. Supports `?status=` filter and pagination.
@@ -265,18 +265,14 @@ Two independent layers:
 
 ---
 
-## 8. QR-to-fund flow (SEP-7)
+## 8. QR-to-join flow
 
 For every active tournament, the detail page renders:
 - The **contract address** (`C...`), copyable.
-- A **QR code** (`qrcode.react`) encoding a SEP-7 URI:
-  ```
-  web+stellar:pay?destination=<contract_address>&amount=<entry_fee>&memo=<tournament_id>&asset_code=<XLM|USDC>
-  ```
-  (For non-native assets include `asset_issuer`.)
-- The human-readable URI as text, so any SEP-7-capable Stellar wallet can scan and pay to join.
+- A **QR code** (`qrcode.react`) encoding the public GGG tournament URL.
+- The human-readable URL as text, so scanning opens the detail page and its wallet-backed **Join Tournament** action.
 
-Note: a pure SEP-7 payment moves tokens to the contract address but does not itself call `join_tournament`. For the demo/QR path the contract must accept inbound payments and reconcile them to registrations via the event subscriber (matching `memo = tournamentId` and crediting the sender), **or** the QR deep-links into the GGG join page which builds the proper `join_tournament` invocation. Implement the deep-link path as primary and treat raw SEP-7 deposits as a reconciled fallback.
+A raw SEP-7 payment must not be treated as a tournament join: it transfers tokens but cannot call `join_tournament` or register the player in the escrow. The QR path therefore always leads to the signed contract invocation.
 
 ---
 
@@ -380,7 +376,6 @@ A `prisma/seed.ts` that creates the seeded **admin** user from `ADMIN_USERNAME`/
 
 - A long-running task (a separate Railway service, or a guarded background loop) that, for each `ACTIVE` tournament, polls Soroban RPC `getEvents` filtered by the tournament's `contractId` from the last processed ledger cursor.
 - Maps `registered`/`finalized`/`cancelled` contract events into `ContractEvent`, updates `Participant`, `Payout`, and `Tournament.status`/`finalizedAt`.
-- Also reconciles raw SEP-7 deposits (Horizon payments to the contract address with `memo == tournamentId`) where the QR fallback path is used.
 - Notifies connected clients (publishes to a Redis channel consumed by the SSE handler at `/api/tournaments/[id]/events`).
 - Stores a per-contract cursor to guarantee at-least-once processing with idempotent upserts (dedupe on `txHash`).
 
@@ -391,7 +386,6 @@ A `prisma/seed.ts` that creates the seeded **admin** user from `ADMIN_USERNAME`/
 | Service | Use | Notes |
 |---|---|---|
 | Stellar **Soroban RPC** | Build/simulate/submit/read contract calls | Testnet + Mainnet endpoints via env |
-| Stellar **Horizon** | Payment reconciliation, account lookups | |
 | **Friendbot** | Fund test accounts | Testnet only |
 | **Freighter** wallet | Client-side signing | Browser extension; `@stellar/freighter-api` |
 | **Stellar.Expert / Stellar Explorer** | Tx + contract links in the UI | Network-aware URL builder |
@@ -468,7 +462,7 @@ S3_FORCE_PATH_STYLE=true
 ## 15. Acceptance criteria (demo path)
 
 1. Organiser creates an XLM tournament; a contract is deployed and a QR appears.
-2. Multiple wallets join by scanning/sending; the live pool counter and participant list update in real time.
+2. Multiple wallets scan the join QR or open the detail page, then sign `join_tournament`; the live pool counter and participant list update in real time.
 3. Referee submits 1st/2nd/3rd; the contract pays 60/30/10 in a single finalisation.
 4. Three payout transactions are linkable on the Stellar explorer.
 5. Cancellation before finalisation refunds all players and sets status `CANCELLED`.

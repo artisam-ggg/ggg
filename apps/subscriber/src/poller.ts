@@ -1,7 +1,6 @@
 import { getEvents, decodeScVal } from "./stellar";
 import { getCursor, setCursor } from "./cursor";
 import { applyEvent, type DecodedEvent, type EventType, type Change } from "./reconcile";
-import { reconcileSep7Deposits } from "./horizon-sep7";
 import { publishChange } from "./publish";
 
 const TOPIC_TO_TYPE: Record<string, EventType> = {
@@ -79,12 +78,6 @@ export async function pollTournament(tournament: {
     }
   }
 
-  const sep7 = await reconcileSep7Deposits(tournament, cursor.hzCursor);
-  for (const change of sep7.changes) {
-    await publishChange(tournament.id, change);
-    changes.push(change);
-  }
-
   // Advance the cursor to just behind the tip rather than past it. Soroban RPC's
   // reported `latestLedger` runs a little ahead of when a closed ledger's events
   // are queryable, so jumping the cursor straight to `latestLedger + 1` can step
@@ -93,6 +86,6 @@ export async function pollTournament(tournament: {
   // applyEvent dedupes on txHash, so re-seeing an already-ingested event is a
   // no-op. (Never regress below the current cursor.)
   const nextLedger = Math.max(cursor.ledger, res.latestLedger + 1 - SAFETY_LAG);
-  await setCursor(tournament.contractId, nextLedger, sep7.nextCursor ?? undefined);
+  await setCursor(tournament.contractId, nextLedger);
   return changes;
 }

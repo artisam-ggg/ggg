@@ -3,7 +3,6 @@ import { describe, it, expect, vi } from "vitest";
 const getEventsMock = vi.fn();
 vi.mock("@stellar/stellar-sdk", () => ({
   rpc: { Server: vi.fn(() => ({ getEvents: getEventsMock })) },
-  Horizon: { Server: vi.fn(() => ({})) },
   scValToNative: vi.fn(),
   xdr: { ScVal: { fromXDR: vi.fn() } },
 }));

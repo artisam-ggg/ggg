@@ -72,16 +72,15 @@ describe("PrizePoolCounter", () => {
     expect(screen.getByText("4 players")).toBeInTheDocument();
   });
 
-  it("adds one entry fee for a SEP-7 deposit with no poolAfter", () => {
+  it("ignores registrations without the contract-emitted poolAfter", () => {
     renderCounter();
     act(() =>
       FakeES.instances[0]!.emit({
         type: "REGISTERED",
         txHash: "tx1",
-        data: { player: "GA", poolAfter: null, source: "sep7" },
+        data: { player: "GA", poolAfter: null },
       }),
     );
-    // 30000000 + entryFee 10000000 = 40000000 → 4.0000000
-    expect(screen.getByTestId("pool-amount")).toHaveTextContent("4.0000000");
+    expect(screen.getByTestId("pool-amount")).toHaveTextContent("3.0000000");
   });
 });

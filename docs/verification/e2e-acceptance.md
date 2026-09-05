@@ -62,7 +62,7 @@ render via `apps/web/src/components/tournament/wired-selectors.test.tsx`:
 
 | `data-testid` | Element | File |
 |---------------|---------|------|
-| `join-qr` | SEP-7 join QR tile | `components/tournament/QrTile.tsx` |
+| `join-qr` | Tournament join QR tile | `components/tournament/QrTile.tsx` |
 | `participant-row` | one per joined player | `components/tournament/ParticipantList.tsx` |
 | `pool-amount` | live prize pool (pre-existing) | `components/tournament/PrizePoolCounter.tsx` |
 | `payout-row` | one per winner | `components/tournament/WinnersPanel.tsx` |
