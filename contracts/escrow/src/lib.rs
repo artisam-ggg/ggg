@@ -1,5 +1,12 @@
 #![no_std]
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, token, Address, Env, Symbol, Vec};
+use soroban_sdk::{
+    contract, contracterror, contractevent, contractimpl, contracttype, panic_with_error,
+    symbol_short, token, Address, Env, Symbol, Vec,
+};
+
+/// Ninety days leaves a 30-day margin below Testnet's expected 120-day
+/// persistent-storage baseline. Revisit this with #220 if Testnet TTL settings change.
+pub const TESTNET_SAFE_SETTLEMENT_HORIZON_SECS: u64 = 90 * 24 * 60 * 60;
 
 #[contracttype]
 #[derive(Clone)]
@@ -13,6 +20,8 @@ pub enum DataKey {
     Finished,
     Cancelled,
     Winners,
+    SettlementDeadline,
+    RefundClaimed(Address),
 }
 
 #[contracterror]
@@ -30,6 +39,23 @@ pub enum Error {
     AlreadyJoined = 9,
     WinnersNotDistinct = 10,
     WinnerNotRegistered = 11,
+    DeadlineNotFuture = 12,
+    DeadlineExceedsTestnetSafeHorizon = 13,
+    DeadlineNotReached = 14,
+    PlayerNotRegistered = 15,
+    RefundAlreadyClaimed = 16,
+}
+
+/// Stable for #216: topics are ("refund_claimed", player); data is { amount }.
+#[contractevent]
+pub struct RefundClaimed {
+    #[topic]
+    pub player: Address,
+    pub amount: i128,
+}
+
+pub(crate) fn deadline_reached(env: &Env, deadline: u64) -> bool {
+    env.ledger().timestamp() >= deadline
 }
 
 #[contract]
@@ -44,6 +70,7 @@ impl Escrow {
         token: Address,
         entry_fee: i128,
         distribution_bps: Vec<u32>,
+        settlement_deadline: u64,
     ) {
         if env.storage().instance().has(&DataKey::Organizer) {
             panic_with_error!(&env, Error::AlreadyInitialized);
@@ -66,6 +93,13 @@ impl Escrow {
         if organizer == referee {
             panic_with_error!(&env, Error::OrganizerIsReferee);
         }
+        let now = env.ledger().timestamp();
+        if settlement_deadline <= now {
+            panic_with_error!(&env, Error::DeadlineNotFuture);
+        }
+        if settlement_deadline - now > TESTNET_SAFE_SETTLEMENT_HORIZON_SECS {
+            panic_with_error!(&env, Error::DeadlineExceedsTestnetSafeHorizon);
+        }
 
         let storage = env.storage().instance();
         storage.set(&DataKey::Organizer, &organizer);
@@ -76,6 +110,7 @@ impl Escrow {
         storage.set(&DataKey::Players, &Vec::<Address>::new(&env));
         storage.set(&DataKey::Finished, &false);
         storage.set(&DataKey::Cancelled, &false);
+        storage.set(&DataKey::SettlementDeadline, &settlement_deadline);
     }
 
     pub fn get_pool(env: Env) -> i128 {
@@ -178,10 +213,8 @@ impl Escrow {
         let pool_after = (players.len() as i128)
             .checked_mul(entry_fee)
             .expect("pool overflow");
-        env.events().publish(
-            (Symbol::new(&env, "registered"), player),
-            pool_after,
-        );
+        env.events()
+            .publish((Symbol::new(&env, "registered"), player), pool_after);
     }
 
     pub fn finalize_results(env: Env, first: Address, second: Address, third: Address) {
@@ -248,10 +281,8 @@ impl Escrow {
             &(first.clone(), second.clone(), third.clone()),
         );
 
-        env.events().publish(
-            (symbol_short!("finalized"), first, second, third),
-            amounts,
-        );
+        env.events()
+            .publish((symbol_short!("finalized"), first, second, third), amounts);
     }
 
     pub fn cancel_tournament(env: Env) {
@@ -283,10 +314,8 @@ impl Escrow {
 
         storage.set(&DataKey::Cancelled, &true);
 
-        env.events().publish(
-            (symbol_short!("cancelled"),),
-            players.len() as u32,
-        );
+        env.events()
+            .publish((symbol_short!("cancelled"),), players.len() as u32);
     }
 }
 

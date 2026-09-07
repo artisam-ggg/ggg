@@ -3,16 +3,19 @@ extern crate std;
 
 use soroban_sdk::{
     symbol_short,
-    testutils::{Address as _, Events},
+    testutils::{Address as _, Events, Ledger},
     token::{StellarAssetClient, TokenClient},
     Address, Env, IntoVal, Symbol, Val, Vec,
 };
 
-use crate::{Escrow, EscrowClient};
+use crate::{deadline_reached, Escrow, EscrowClient, TESTNET_SAFE_SETTLEMENT_HORIZON_SECS};
 
 // Registers a Stellar Asset Contract (SAC) test token and returns its
 // admin client (for minting) and the standard token client.
-fn create_token<'a>(env: &Env, admin: &Address) -> (Address, StellarAssetClient<'a>, TokenClient<'a>) {
+fn create_token<'a>(
+    env: &Env,
+    admin: &Address,
+) -> (Address, StellarAssetClient<'a>, TokenClient<'a>) {
     let sac = env.register_stellar_asset_contract_v2(admin.clone());
     let token_address = sac.address();
     (
@@ -32,6 +35,10 @@ fn bps(env: &Env) -> Vec<u32> {
     Vec::from_array(env, [6000u32, 3000u32, 1000u32])
 }
 
+fn valid_deadline(env: &Env) -> u64 {
+    env.ledger().timestamp() + 1
+}
+
 #[test]
 fn initialize_stores_state() {
     let env = Env::default();
@@ -42,11 +49,122 @@ fn initialize_stores_state() {
     let referee = Address::generate(&env);
     let escrow = create_escrow(&env);
 
-    escrow.initialize(&organizer, &referee, &token_addr, &1_000_000i128, &bps(&env));
+    escrow.initialize(
+        &organizer,
+        &referee,
+        &token_addr,
+        &1_000_000i128,
+        &bps(&env),
+        &valid_deadline(&env),
+    );
 
     // get_pool reflects zero players initially.
     assert_eq!(escrow.get_pool(), 0i128);
     assert_eq!(escrow.is_finished(), false);
+}
+
+#[test]
+fn initialize_accepts_deadline_at_testnet_safe_horizon() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().with_mut(|ledger| ledger.timestamp = 1_000);
+    let admin = Address::generate(&env);
+    let (token_addr, _sac, _token) = create_token(&env, &admin);
+    let organizer = Address::generate(&env);
+    let referee = Address::generate(&env);
+    let escrow = create_escrow(&env);
+    let deadline = env.ledger().timestamp() + TESTNET_SAFE_SETTLEMENT_HORIZON_SECS;
+
+    escrow.initialize(
+        &organizer,
+        &referee,
+        &token_addr,
+        &1i128,
+        &bps(&env),
+        &deadline,
+    );
+
+    let stored_deadline: Option<u64> = env.as_contract(&escrow.address, || {
+        env.storage()
+            .instance()
+            .get(&crate::DataKey::SettlementDeadline)
+    });
+    assert_eq!(stored_deadline, Some(deadline));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #12)")] // DeadlineNotFuture
+fn initialize_rejects_past_deadline() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().with_mut(|ledger| ledger.timestamp = 1_000);
+    let admin = Address::generate(&env);
+    let (token_addr, _sac, _token) = create_token(&env, &admin);
+    let organizer = Address::generate(&env);
+    let referee = Address::generate(&env);
+    let escrow = create_escrow(&env);
+
+    escrow.initialize(&organizer, &referee, &token_addr, &1i128, &bps(&env), &999);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #12)")] // DeadlineNotFuture
+fn initialize_rejects_equal_time_deadline() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().with_mut(|ledger| ledger.timestamp = 1_000);
+    let admin = Address::generate(&env);
+    let (token_addr, _sac, _token) = create_token(&env, &admin);
+    let organizer = Address::generate(&env);
+    let referee = Address::generate(&env);
+    let escrow = create_escrow(&env);
+
+    escrow.initialize(
+        &organizer,
+        &referee,
+        &token_addr,
+        &1i128,
+        &bps(&env),
+        &1_000,
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #13)")] // DeadlineExceedsTestnetSafeHorizon
+fn initialize_rejects_horizon_exceeding_deadline() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().with_mut(|ledger| ledger.timestamp = 1_000);
+    let admin = Address::generate(&env);
+    let (token_addr, _sac, _token) = create_token(&env, &admin);
+    let organizer = Address::generate(&env);
+    let referee = Address::generate(&env);
+    let escrow = create_escrow(&env);
+    let deadline = env.ledger().timestamp() + TESTNET_SAFE_SETTLEMENT_HORIZON_SECS + 1;
+
+    escrow.initialize(
+        &organizer,
+        &referee,
+        &token_addr,
+        &1i128,
+        &bps(&env),
+        &deadline,
+    );
+}
+
+#[test]
+fn deadline_boundary_is_inclusive() {
+    let env = Env::default();
+    let deadline = 1_000;
+
+    env.ledger()
+        .with_mut(|ledger| ledger.timestamp = deadline - 1);
+    assert_eq!(deadline_reached(&env, deadline), false);
+    env.ledger().with_mut(|ledger| ledger.timestamp = deadline);
+    assert_eq!(deadline_reached(&env, deadline), true);
+    env.ledger()
+        .with_mut(|ledger| ledger.timestamp = deadline + 1);
+    assert_eq!(deadline_reached(&env, deadline), true);
 }
 
 #[test]
@@ -60,7 +178,14 @@ fn initialize_rejects_bad_bps_len() {
     let referee = Address::generate(&env);
     let escrow = create_escrow(&env);
     let bad = Vec::from_array(&env, [6000u32, 4000u32]); // len 2
-    escrow.initialize(&organizer, &referee, &token_addr, &1i128, &bad);
+    escrow.initialize(
+        &organizer,
+        &referee,
+        &token_addr,
+        &1i128,
+        &bad,
+        &valid_deadline(&env),
+    );
 }
 
 #[test]
@@ -74,7 +199,14 @@ fn initialize_rejects_bad_bps_sum() {
     let referee = Address::generate(&env);
     let escrow = create_escrow(&env);
     let bad = Vec::from_array(&env, [6000u32, 3000u32, 500u32]); // sum 9500
-    escrow.initialize(&organizer, &referee, &token_addr, &1i128, &bad);
+    escrow.initialize(
+        &organizer,
+        &referee,
+        &token_addr,
+        &1i128,
+        &bad,
+        &valid_deadline(&env),
+    );
 }
 
 #[test]
@@ -87,7 +219,14 @@ fn initialize_rejects_zero_entry_fee() {
     let organizer = Address::generate(&env);
     let referee = Address::generate(&env);
     let escrow = create_escrow(&env);
-    escrow.initialize(&organizer, &referee, &token_addr, &0i128, &bps(&env));
+    escrow.initialize(
+        &organizer,
+        &referee,
+        &token_addr,
+        &0i128,
+        &bps(&env),
+        &valid_deadline(&env),
+    );
 }
 
 #[test]
@@ -99,7 +238,14 @@ fn initialize_rejects_organizer_equals_referee() {
     let (token_addr, _sac, _token) = create_token(&env, &admin);
     let same = Address::generate(&env);
     let escrow = create_escrow(&env);
-    escrow.initialize(&same, &same, &token_addr, &1i128, &bps(&env));
+    escrow.initialize(
+        &same,
+        &same,
+        &token_addr,
+        &1i128,
+        &bps(&env),
+        &valid_deadline(&env),
+    );
 }
 
 #[test]
@@ -112,8 +258,22 @@ fn initialize_rejects_double_init() {
     let organizer = Address::generate(&env);
     let referee = Address::generate(&env);
     let escrow = create_escrow(&env);
-    escrow.initialize(&organizer, &referee, &token_addr, &1i128, &bps(&env));
-    escrow.initialize(&organizer, &referee, &token_addr, &1i128, &bps(&env));
+    escrow.initialize(
+        &organizer,
+        &referee,
+        &token_addr,
+        &1i128,
+        &bps(&env),
+        &valid_deadline(&env),
+    );
+    escrow.initialize(
+        &organizer,
+        &referee,
+        &token_addr,
+        &1i128,
+        &bps(&env),
+        &valid_deadline(&env),
+    );
 }
 
 #[test]
@@ -126,7 +286,14 @@ fn initialize_requires_organizer_auth() {
     let organizer = Address::generate(&env);
     let referee = Address::generate(&env);
     let escrow = create_escrow(&env);
-    escrow.initialize(&organizer, &referee, &token_addr, &1i128, &bps(&env));
+    escrow.initialize(
+        &organizer,
+        &referee,
+        &token_addr,
+        &1i128,
+        &bps(&env),
+        &valid_deadline(&env),
+    );
 }
 
 fn init_default<'a>(
@@ -136,7 +303,14 @@ fn init_default<'a>(
     organizer: &Address,
     referee: &Address,
 ) {
-    escrow.initialize(organizer, referee, token_addr, &1_000_000i128, &bps(env));
+    escrow.initialize(
+        organizer,
+        referee,
+        token_addr,
+        &1_000_000i128,
+        &bps(env),
+        &valid_deadline(env),
+    );
 }
 
 #[test]
@@ -206,8 +380,8 @@ fn finalize_pays_60_30_10() {
     assert_eq!(escrow.is_finished(), true);
     // 60/30/10 of 3_000_000 = 1_800_000 / 900_000 / 300_000
     assert_eq!(token.balance(&p1), 10_000_000 - 1_000_000 + 1_800_000); // 10_800_000
-    assert_eq!(token.balance(&p2), 10_000_000 - 1_000_000 + 900_000);   // 9_900_000
-    assert_eq!(token.balance(&p3), 10_000_000 - 1_000_000 + 300_000);   // 9_300_000
+    assert_eq!(token.balance(&p2), 10_000_000 - 1_000_000 + 900_000); // 9_900_000
+    assert_eq!(token.balance(&p3), 10_000_000 - 1_000_000 + 300_000); // 9_300_000
     assert_eq!(token.balance(&escrow.address), 0i128); // pool fully distributed
     assert_eq!(escrow.get_reward(&p1), 1_800_000i128);
 }
@@ -485,17 +659,20 @@ fn join_emits_registered_event() {
     sac.mint(&player, &5_000_000i128);
     escrow.join_tournament(&player);
 
-    let expected: Vec<(Address, Vec<Val>, Val)> = Vec::from_array(&env, [(
-        escrow.address.clone(),
-        Vec::from_array(
-            &env,
-            [
-                Symbol::new(&env, "registered").into_val(&env),
-                player.into_val(&env),
-            ],
-        ),
-        1_000_000i128.into_val(&env),
-    )]);
+    let expected: Vec<(Address, Vec<Val>, Val)> = Vec::from_array(
+        &env,
+        [(
+            escrow.address.clone(),
+            Vec::from_array(
+                &env,
+                [
+                    Symbol::new(&env, "registered").into_val(&env),
+                    player.into_val(&env),
+                ],
+            ),
+            1_000_000i128.into_val(&env),
+        )],
+    );
     assert_eq!(
         env.events().all().filter_by_contract(&escrow.address),
         expected
@@ -557,10 +734,7 @@ fn cancel_emits_cancelled_event() {
         &env,
         [(
             escrow.address.clone(),
-            Vec::from_array(
-                &env,
-                [symbol_short!("cancelled").into_val(&env)],
-            ),
+            Vec::from_array(&env, [symbol_short!("cancelled").into_val(&env)]),
             2u32.into_val(&env),
         )],
     );
@@ -580,11 +754,33 @@ fn finalize_assigns_dust_to_first_and_conserves_pool() {
     let referee = Address::generate(&env);
     let escrow = create_escrow(&env);
     // entry_fee = 1 (smallest unit), 3 players → pool = 3, indivisible by bps.
-    escrow.initialize(&organizer, &referee, &token_addr, &1i128, &bps(&env));
+    escrow.initialize(
+        &organizer,
+        &referee,
+        &token_addr,
+        &1i128,
+        &bps(&env),
+        &valid_deadline(&env),
+    );
 
-    let p1 = { let p = Address::generate(&env); sac.mint(&p, &100i128); escrow.join_tournament(&p); p };
-    let p2 = { let p = Address::generate(&env); sac.mint(&p, &100i128); escrow.join_tournament(&p); p };
-    let p3 = { let p = Address::generate(&env); sac.mint(&p, &100i128); escrow.join_tournament(&p); p };
+    let p1 = {
+        let p = Address::generate(&env);
+        sac.mint(&p, &100i128);
+        escrow.join_tournament(&p);
+        p
+    };
+    let p2 = {
+        let p = Address::generate(&env);
+        sac.mint(&p, &100i128);
+        escrow.join_tournament(&p);
+        p
+    };
+    let p3 = {
+        let p = Address::generate(&env);
+        sac.mint(&p, &100i128);
+        escrow.join_tournament(&p);
+        p
+    };
 
     assert_eq!(escrow.get_pool(), 3i128);
     escrow.finalize_results(&p1, &p2, &p3);
@@ -604,4 +800,3 @@ fn finalize_assigns_dust_to_first_and_conserves_pool() {
     assert_eq!(token.balance(&p2), 100 - 1 + 0); // 99
     assert_eq!(token.balance(&p3), 100 - 1 + 0); // 99
 }
-
