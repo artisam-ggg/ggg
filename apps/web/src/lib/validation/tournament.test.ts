@@ -26,6 +26,7 @@ const validCreate = {
   asset: "XLM" as const,
   refereeAddress: G,
   organizerAddress: G2,
+  settlementDeadline: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
   distributionBps: [6000, 3000, 1000] as [number, number, number],
 };
 
@@ -92,6 +93,7 @@ describe("createTournamentSchema", () => {
     if (r.success) {
       // entryFee coerced to bigint
       expect(r.data.entryFee).toBe(1000n);
+      expect(r.data.settlementDeadline).toBeInstanceOf(Date);
     }
   });
 
@@ -108,6 +110,22 @@ describe("createTournamentSchema", () => {
       ...validCreate,
       refereeAddress: G,
       organizerAddress: G,
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("rejects a past settlement deadline", () => {
+    const r = createTournamentSchema.safeParse({
+      ...validCreate,
+      settlementDeadline: new Date(Date.now() - 1).toISOString(),
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("rejects a settlement deadline beyond the 90-day horizon", () => {
+    const r = createTournamentSchema.safeParse({
+      ...validCreate,
+      settlementDeadline: new Date(Date.now() + 91 * 24 * 60 * 60 * 1000).toISOString(),
     });
     expect(r.success).toBe(false);
   });

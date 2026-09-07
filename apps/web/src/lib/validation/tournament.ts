@@ -7,6 +7,8 @@ import {
 } from "@/lib/stellar";
 import { Asset, TournamentStatus } from "@/generated/prisma/enums";
 
+export const TESTNET_SAFE_SETTLEMENT_HORIZON_MS = 90 * 24 * 60 * 60 * 1000;
+
 // Re-export Phase 2 Stellar validators for convenience
 export { stellarPublicKey, stellarContractId, i128Amount };
 export { signedXdrSchema as signedXdr };
@@ -44,6 +46,7 @@ export const createTournamentSchema = z
     asset: assetSchema,
     refereeAddress: stellarPublicKey,
     organizerAddress: stellarPublicKey,
+    settlementDeadline: z.coerce.date(),
     distributionBps: z.tuple([
       z.number().int().min(0).max(10000),
       z.number().int().min(0).max(10000),
@@ -58,6 +61,23 @@ export const createTournamentSchema = z
   .refine((v) => v.organizerAddress !== v.refereeAddress, {
     message: "Organizer and referee must differ",
     path: ["refereeAddress"],
+  })
+  .superRefine((v, ctx) => {
+    const now = Date.now();
+    const deadline = v.settlementDeadline.getTime();
+    if (deadline <= now) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Settlement deadline must be in the future",
+        path: ["settlementDeadline"],
+      });
+    } else if (deadline - now > TESTNET_SAFE_SETTLEMENT_HORIZON_MS) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Settlement deadline must be within 90 days",
+        path: ["settlementDeadline"],
+      });
+    }
   });
 
 export type CreateTournamentInput = z.infer<typeof createTournamentSchema>;

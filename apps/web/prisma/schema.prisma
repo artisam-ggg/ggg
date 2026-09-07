@@ -41,29 +41,30 @@ model User {
 }
 
 model Tournament {
-  id            String           @id @default(cuid())
-  name          String
-  gameTitle     String
-  asset         Asset            @default(XLM)
-  entryFee      BigInt
-  firstBps      Int
-  secondBps     Int
-  thirdBps      Int
-  organizer     User             @relation("organizer", fields: [organizerId], references: [id])
-  organizerId   String
-  organizerAddr String
-  refereeAddr   String
-  contractId    String?          @unique
-  tokenAddr     String?
-  status        TournamentStatus @default(DRAFT)
-  coverImageKey String?
-  participants  Participant[]
-  payouts       Payout[]
-  events        ContractEvent[]
-  deployTxHash  String?
-  createdAt     DateTime         @default(now())
-  finalizedAt   DateTime?
-  cancelledAt   DateTime?
+  id                 String           @id @default(cuid())
+  name               String
+  gameTitle          String
+  asset              Asset            @default(XLM)
+  entryFee           BigInt
+  firstBps           Int
+  secondBps          Int
+  thirdBps           Int
+  organizer          User             @relation("organizer", fields: [organizerId], references: [id])
+  organizerId        String
+  organizerAddr      String
+  refereeAddr        String
+  settlementDeadline DateTime?
+  contractId         String?          @unique
+  tokenAddr          String?
+  status             TournamentStatus @default(DRAFT)
+  coverImageKey      String?
+  participants       Participant[]
+  payouts            Payout[]
+  events             ContractEvent[]
+  deployTxHash       String?
+  createdAt          DateTime         @default(now())
+  finalizedAt        DateTime?
+  cancelledAt        DateTime?
 }
 
 model Participant {

@@ -8,9 +8,15 @@ const built = (xdr: string) => ({ toXDR: () => xdr });
 const joinFn = vi.fn().mockResolvedValue(built("JOIN_XDR"));
 const finalizeFn = vi.fn().mockResolvedValue(built("FINALIZE_XDR"));
 const cancelFn = vi.fn().mockResolvedValue(built("CANCEL_XDR"));
+const initializeFn = vi.fn().mockResolvedValue(built("INITIALIZE_XDR"));
 const deployFn = vi.fn().mockResolvedValue(built("DEPLOY_XDR"));
 const ClientCtor = vi.fn().mockImplementation(function () {
-  return { join_tournament: joinFn, finalize_results: finalizeFn, cancel_tournament: cancelFn };
+  return {
+    join_tournament: joinFn,
+    finalize_results: finalizeFn,
+    cancel_tournament: cancelFn,
+    initialize: initializeFn,
+  };
 });
 (ClientCtor as unknown as { deploy: typeof deployFn }).deploy = deployFn;
 
@@ -35,6 +41,7 @@ beforeEach(() => {
   joinFn.mockClear();
   finalizeFn.mockClear();
   cancelFn.mockClear();
+  initializeFn.mockClear();
   ClientCtor.mockClear();
 });
 
@@ -59,6 +66,27 @@ describe("buildJoinTx", () => {
     await expect(buildJoinTx({ contractId: C, playerAddress: "x" })).rejects.toMatchObject({
       code: "INVALID_INPUT",
     });
+  });
+});
+
+describe("buildInitializeTx", () => {
+  it("passes the UTC Unix settlement deadline to the contract binding", async () => {
+    const { buildInitializeTx } = await import("./builders");
+    const settlementDeadline = 1_800_000_000n;
+    const res = await buildInitializeTx({
+      contractId: C,
+      organizerAddress: G,
+      refereeAddress: G2,
+      tokenAddr: C,
+      entryFee: 10000000n,
+      distributionBps: [6000, 3000, 1000],
+      settlementDeadline,
+    });
+
+    expect(res).toEqual({ xdr: "INITIALIZE_XDR", network: "testnet" });
+    expect(initializeFn).toHaveBeenCalledWith(
+      expect.objectContaining({ settlement_deadline: settlementDeadline }),
+    );
   });
 });
 

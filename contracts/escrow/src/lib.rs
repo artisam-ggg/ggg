@@ -4,9 +4,14 @@ use soroban_sdk::{
     symbol_short, token, Address, Env, Symbol, Vec,
 };
 
-/// Ninety days leaves a 30-day margin below Testnet's expected 120-day
-/// persistent-storage baseline. Revisit this with #220 if Testnet TTL settings change.
+/// Maximum Testnet settlement window accepted by the contract.
 pub const TESTNET_SAFE_SETTLEMENT_HORIZON_SECS: u64 = 90 * 24 * 60 * 60;
+
+const LEDGERS_PER_DAY: u32 = 17_280;
+pub const TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS: u32 = 90 * LEDGERS_PER_DAY;
+/// Keeps the contract instance and code available for the maximum 90-day
+/// settlement window plus a conservative 30-day restoration margin.
+pub const TESTNET_INSTANCE_TTL_EXTEND_TO_LEDGERS: u32 = 120 * LEDGERS_PER_DAY;
 
 #[contracttype]
 #[derive(Clone)]
@@ -56,6 +61,12 @@ pub struct RefundClaimed {
 
 pub(crate) fn deadline_reached(env: &Env, deadline: u64) -> bool {
     env.ledger().timestamp() >= deadline
+}
+
+fn extend_instance_ttl(env: &Env, threshold: u32) {
+    env.storage()
+        .instance()
+        .extend_ttl(threshold, TESTNET_INSTANCE_TTL_EXTEND_TO_LEDGERS);
 }
 
 #[contract]
@@ -111,6 +122,7 @@ impl Escrow {
         storage.set(&DataKey::Finished, &false);
         storage.set(&DataKey::Cancelled, &false);
         storage.set(&DataKey::SettlementDeadline, &settlement_deadline);
+        extend_instance_ttl(&env, TESTNET_INSTANCE_TTL_EXTEND_TO_LEDGERS);
     }
 
     pub fn get_pool(env: Env) -> i128 {
@@ -209,6 +221,7 @@ impl Escrow {
 
         players.push_back(player.clone());
         storage.set(&DataKey::Players, &players);
+        extend_instance_ttl(&env, TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS);
 
         let pool_after = (players.len() as i128)
             .checked_mul(entry_fee)
@@ -280,6 +293,7 @@ impl Escrow {
             &DataKey::Winners,
             &(first.clone(), second.clone(), third.clone()),
         );
+        extend_instance_ttl(&env, TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS);
 
         env.events()
             .publish((symbol_short!("finalized"), first, second, third), amounts);
@@ -313,6 +327,7 @@ impl Escrow {
         }
 
         storage.set(&DataKey::Cancelled, &true);
+        extend_instance_ttl(&env, TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS);
 
         env.events()
             .publish((symbol_short!("cancelled"),), players.len() as u32);

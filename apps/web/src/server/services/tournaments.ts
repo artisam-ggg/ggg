@@ -36,6 +36,7 @@ export async function createTournament(
       organizerId: userId,
       organizerAddr: input.organizerAddress,
       refereeAddr: input.refereeAddress,
+      settlementDeadline: input.settlementDeadline,
       tokenAddr,
       coverImageKey: input.coverImageKey ?? null,
       status: "DRAFT",
@@ -81,10 +82,11 @@ async function buildInitXdrFor(
     firstBps: number;
     secondBps: number;
     thirdBps: number;
+    settlementDeadline: Date | null;
   },
   contractId: string,
 ): Promise<string | undefined> {
-  if (!tournament.tokenAddr) return undefined;
+  if (!tournament.tokenAddr || !tournament.settlementDeadline) return undefined;
   const { xdr } = await buildInitializeTx({
     contractId,
     organizerAddress: tournament.organizerAddr,
@@ -92,6 +94,7 @@ async function buildInitXdrFor(
     tokenAddr: tournament.tokenAddr,
     entryFee: tournament.entryFee,
     distributionBps: [tournament.firstBps, tournament.secondBps, tournament.thirdBps],
+    settlementDeadline: BigInt(Math.floor(tournament.settlementDeadline.getTime() / 1000)),
   });
   return xdr;
 }
