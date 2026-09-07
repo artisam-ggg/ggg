@@ -199,7 +199,10 @@ describe("POST /api/tournaments/[id]/submit", () => {
       where: { id: "t_1" },
       data: { status: "ACTIVE" },
     });
-    expect(validateInitializeMock).toHaveBeenCalledWith(VALID_XDR, "CDEPLOYED");
+    expect(validateInitializeMock).toHaveBeenCalledWith(
+      VALID_XDR,
+      expect.objectContaining({ contractId: "CDEPLOYED" }),
+    );
   });
 
   it("rejects initialize before an escrow contract has been deployed", async () => {

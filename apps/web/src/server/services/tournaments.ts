@@ -163,8 +163,19 @@ export async function submitTournamentTx(
     if (tournament.status !== "DRAFT" || !tournament.contractId) {
       throw Object.assign(new Error("Tournament is not ready for initialization"), { status: 409 });
     }
-    requireFutureSettlementDeadline(tournament.settlementDeadline);
-    validateInitializeXdr(input.signedXdr, tournament.contractId);
+    const settlementDeadline = requireFutureSettlementDeadline(tournament.settlementDeadline);
+    if (!tournament.tokenAddr) {
+      throw Object.assign(new Error("Tournament is missing its escrow token"), { status: 409 });
+    }
+    validateInitializeXdr(input.signedXdr, {
+      contractId: tournament.contractId,
+      organizerAddress: tournament.organizerAddr,
+      refereeAddress: tournament.refereeAddr,
+      tokenAddr: tournament.tokenAddr,
+      entryFee: tournament.entryFee,
+      distributionBps: [tournament.firstBps, tournament.secondBps, tournament.thirdBps],
+      settlementDeadline: BigInt(Math.floor(settlementDeadline.getTime() / 1000)),
+    });
   }
 
   const result = await submitSignedXdr(input.signedXdr, input.intent);

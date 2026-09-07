@@ -1,4 +1,10 @@
-import { rpc, TransactionBuilder, type Transaction, Address } from "@stellar/stellar-sdk";
+import {
+  rpc,
+  TransactionBuilder,
+  type Transaction,
+  Address,
+  scValToNative,
+} from "@stellar/stellar-sdk";
 import { getRpc, networkPassphrase } from "./client";
 import { signedXdr as signedXdrSchema } from "./validation";
 import { StellarError } from "./errors";
@@ -18,8 +24,19 @@ export interface SubmitResult {
   status: "SUCCESS" | "FAILED";
 }
 
-/** Reject a signed initialize transaction unless it invokes `initialize` on the expected escrow. */
-export function validateInitializeXdr(signedXdrStr: string, expectedContractId: string): void {
+/** The persisted escrow terms a signed `initialize` invocation must exactly match. */
+export interface InitializeTerms {
+  contractId: string;
+  organizerAddress: string;
+  refereeAddress: string;
+  tokenAddr: string;
+  entryFee: bigint;
+  distributionBps: [number, number, number];
+  settlementDeadline: bigint;
+}
+
+/** Reject a signed initialize transaction unless it targets the escrow with the persisted terms. */
+export function validateInitializeXdr(signedXdrStr: string, expected: InitializeTerms): void {
   const parsed = signedXdrSchema.safeParse(signedXdrStr);
   if (!parsed.success) throw new StellarError("INVALID_INPUT", "Malformed signed XDR");
 
@@ -34,6 +51,7 @@ export function validateInitializeXdr(signedXdrStr: string, expectedContractId: 
         value(): {
           contractAddress(): never;
           functionName(): { toString(encoding: string): string };
+          args(): unknown[];
         };
       };
     };
@@ -47,10 +65,29 @@ export function validateInitializeXdr(signedXdrStr: string, expectedContractId: 
     const args = operation.func.value();
     const contractId = Address.fromScAddress(args.contractAddress()).toString();
     if (
-      contractId !== expectedContractId ||
+      contractId !== expected.contractId ||
       args.functionName().toString("utf-8") !== "initialize"
     ) {
       throw new Error("unexpected contract or method");
+    }
+
+    const values = args.args().map(scValToNative);
+    if (
+      values.length !== 6 ||
+      values[0] !== expected.organizerAddress ||
+      values[1] !== expected.refereeAddress ||
+      values[2] !== expected.tokenAddr ||
+      values[3] !== expected.entryFee ||
+      !Array.isArray(values[4]) ||
+      values[4].length !== 3 ||
+      values[4].some(
+        (value, index) =>
+          (typeof value !== "number" && typeof value !== "bigint") ||
+          Number(value) !== expected.distributionBps[index],
+      ) ||
+      values[5] !== expected.settlementDeadline
+    ) {
+      throw new Error("unexpected initialize arguments");
     }
   } catch {
     throw new StellarError(
