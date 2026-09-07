@@ -4,8 +4,11 @@ use soroban_sdk::{
     symbol_short, token, Address, Env, Symbol, Vec,
 };
 
-/// Maximum Testnet settlement window accepted by the contract.
-pub const TESTNET_SAFE_SETTLEMENT_HORIZON_SECS: u64 = 90 * 24 * 60 * 60;
+/// Maximum settlement window accepted on every supported network.
+///
+/// Ninety days is a conservative Testnet-safe limit and is deliberately kept
+/// uniform so client and contract validation cannot diverge by network.
+pub const MAX_SETTLEMENT_HORIZON_SECS: u64 = 90 * 24 * 60 * 60;
 
 const LEDGERS_PER_DAY: u32 = 17_280;
 pub const TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS: u32 = 90 * LEDGERS_PER_DAY;
@@ -108,7 +111,7 @@ impl Escrow {
         if settlement_deadline <= now {
             panic_with_error!(&env, Error::DeadlineNotFuture);
         }
-        if settlement_deadline - now > TESTNET_SAFE_SETTLEMENT_HORIZON_SECS {
+        if settlement_deadline - now > MAX_SETTLEMENT_HORIZON_SECS {
             panic_with_error!(&env, Error::DeadlineExceedsTestnetSafeHorizon);
         }
 

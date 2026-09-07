@@ -7,7 +7,8 @@ import {
 } from "@/lib/stellar";
 import { Asset, TournamentStatus } from "@/generated/prisma/enums";
 
-export const TESTNET_SAFE_SETTLEMENT_HORIZON_MS = 90 * 24 * 60 * 60 * 1000;
+/** Conservative, uniform maximum settlement window for every supported network. */
+export const MAX_SETTLEMENT_HORIZON_MS = 90 * 24 * 60 * 60 * 1000;
 
 // Re-export Phase 2 Stellar validators for convenience
 export { stellarPublicKey, stellarContractId, i128Amount };
@@ -71,7 +72,7 @@ export const createTournamentSchema = z
         message: "Settlement deadline must be in the future",
         path: ["settlementDeadline"],
       });
-    } else if (deadline - now > TESTNET_SAFE_SETTLEMENT_HORIZON_MS) {
+    } else if (deadline - now > MAX_SETTLEMENT_HORIZON_MS) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Settlement deadline must be within 90 days",

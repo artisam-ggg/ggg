@@ -9,8 +9,8 @@ use soroban_sdk::{
 };
 
 use crate::{
-    deadline_reached, Escrow, EscrowClient, TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS,
-    TESTNET_INSTANCE_TTL_EXTEND_TO_LEDGERS, TESTNET_SAFE_SETTLEMENT_HORIZON_SECS,
+    deadline_reached, Escrow, EscrowClient, MAX_SETTLEMENT_HORIZON_SECS,
+    TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS, TESTNET_INSTANCE_TTL_EXTEND_TO_LEDGERS,
 };
 
 // Registers a Stellar Asset Contract (SAC) test token and returns its
@@ -67,7 +67,7 @@ fn initialize_stores_state() {
 }
 
 #[test]
-fn initialize_accepts_deadline_at_testnet_safe_horizon() {
+fn initialize_accepts_deadline_at_max_horizon() {
     let env = Env::default();
     env.mock_all_auths();
     env.ledger().with_mut(|ledger| ledger.timestamp = 1_000);
@@ -76,7 +76,7 @@ fn initialize_accepts_deadline_at_testnet_safe_horizon() {
     let organizer = Address::generate(&env);
     let referee = Address::generate(&env);
     let escrow = create_escrow(&env);
-    let deadline = env.ledger().timestamp() + TESTNET_SAFE_SETTLEMENT_HORIZON_SECS;
+    let deadline = env.ledger().timestamp() + MAX_SETTLEMENT_HORIZON_SECS;
 
     escrow.initialize(
         &organizer,
@@ -116,7 +116,7 @@ fn initialize_extends_insufficient_instance_ttl() {
         &token_addr,
         &1i128,
         &bps(&env),
-        &(1_000 + TESTNET_SAFE_SETTLEMENT_HORIZON_SECS),
+        &(1_000 + MAX_SETTLEMENT_HORIZON_SECS),
     );
 
     let extended_ttl = env.as_contract(&escrow.address, || env.storage().instance().get_ttl());
@@ -171,7 +171,7 @@ fn initialize_rejects_horizon_exceeding_deadline() {
     let organizer = Address::generate(&env);
     let referee = Address::generate(&env);
     let escrow = create_escrow(&env);
-    let deadline = env.ledger().timestamp() + TESTNET_SAFE_SETTLEMENT_HORIZON_SECS + 1;
+    let deadline = env.ledger().timestamp() + MAX_SETTLEMENT_HORIZON_SECS + 1;
 
     escrow.initialize(
         &organizer,
