@@ -174,13 +174,14 @@ sequenceDiagram
     UI->>SUB: POST /submit (intent=deploy)
     SUB->>RPC: submit + poll getTransaction
     RPC-->>SUB: contractId (deployed, not yet initialized)
-    SUB->>DB: Persist contractId, status ACTIVE
+    SUB->>DB: Persist contractId, status DRAFT
     SUB-->>UI: { initializeXdr }
     UI->>FR: signTransaction(initializeXdr)
     FR-->>UI: signedXdr
     UI->>SUB: POST /submit (intent=initialize)
     SUB->>RPC: submit + poll getTransaction
     RPC-->>SUB: initialize confirmed (entry fee, referee, split set)
+    SUB->>DB: Set status ACTIVE
     SUB-->>UI: ok → tournament join QR shown
 ```
 

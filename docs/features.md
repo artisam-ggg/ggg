@@ -118,3 +118,5 @@ The tournament SSE endpoint now uses one idempotent cleanup path for request abo
 ## Issue #233 — Restore settlement deadline integration and TTL safety
 
 Threaded the organiser-selected UTC settlement deadline through tournament creation, persistence, the Stellar transaction builder, and regenerated contract bindings. Contract mutations are responsible for keeping instance and code TTL at 120 days, covering the 90-day Testnet deadline horizon plus a 30-day margin; if either entry is nevertheless archived, the transaction submitter must restore it before invoking the contract. A CI regenerate-and-diff check guards against future contract/binding ABI drift; legacy tournament rows retain a nullable deadline for forward-migration compatibility and cannot generate a new initialize transaction without one.
+
+Deploy confirmation now keeps a tournament in `DRAFT` until its separate `initialize` transaction confirms. A missing or expired settlement deadline fails closed before activation; a regression test covers expiry during deploy confirmation, ensuring no initialization XDR is returned for an unusable escrow.

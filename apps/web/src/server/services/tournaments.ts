@@ -68,10 +68,20 @@ export interface SubmitTxResult {
   initializeXdr?: string;
 }
 
+function requireFutureSettlementDeadline(deadline: Date | null): Date {
+  if (!deadline) {
+    throw Object.assign(new Error("Tournament is missing a settlement deadline"), { status: 409 });
+  }
+  if (deadline.getTime() <= Date.now()) {
+    throw Object.assign(new Error("Settlement deadline has expired"), { status: 409 });
+  }
+  return deadline;
+}
+
 /**
  * Builds the unsigned `initialize` XDR for a deployed tournament contract from
- * its persisted parameters. Returns undefined if the record is missing the
- * fields needed to initialise (e.g. tokenAddr), so callers can degrade safely.
+ * its persisted parameters. Missing or expired deadlines fail closed: the
+ * contract must never be presented as active without a valid initialization.
  */
 async function buildInitXdrFor(
   tournament: {
@@ -85,8 +95,11 @@ async function buildInitXdrFor(
     settlementDeadline: Date | null;
   },
   contractId: string,
-): Promise<string | undefined> {
-  if (!tournament.tokenAddr || !tournament.settlementDeadline) return undefined;
+): Promise<string> {
+  const settlementDeadline = requireFutureSettlementDeadline(tournament.settlementDeadline);
+  if (!tournament.tokenAddr) {
+    throw Object.assign(new Error("Tournament is missing its escrow token"), { status: 409 });
+  }
   const { xdr } = await buildInitializeTx({
     contractId,
     organizerAddress: tournament.organizerAddr,
@@ -94,7 +107,7 @@ async function buildInitXdrFor(
     tokenAddr: tournament.tokenAddr,
     entryFee: tournament.entryFee,
     distributionBps: [tournament.firstBps, tournament.secondBps, tournament.thirdBps],
-    settlementDeadline: BigInt(Math.floor(tournament.settlementDeadline.getTime() / 1000)),
+    settlementDeadline: BigInt(Math.floor(settlementDeadline.getTime() / 1000)),
   });
   return xdr;
 }
@@ -127,21 +140,22 @@ export async function submitTournamentTx(
     throw Object.assign(new Error("Forbidden"), { status: 403 });
   }
 
-  // Guard against re-submitting an already-confirmed deploy (spec §5: dedupe on
-  // confirmed state). contractId has a @unique constraint in the Prisma schema,
-  // so a second Prisma update with the same value would also throw a unique
-  // violation — but we short-circuit before hitting Stellar at all. We still
-  // hand back a fresh initialize XDR so an interrupted deploy→initialize flow
-  // can complete the second leg on retry.
-  if (input.intent === "deploy" && tournament.status === "ACTIVE" && tournament.contractId) {
+  // Guard against re-submitting an already-confirmed deploy. contractId has a
+  // @unique constraint in the Prisma schema, so return a fresh initialize XDR
+  // for an interrupted deploy→initialize flow instead of submitting again.
+  if (input.intent === "deploy" && tournament.contractId) {
     const initializeXdr = await buildInitXdrFor(tournament, tournament.contractId);
     return {
       txHash: tournament.deployTxHash ?? "",
       contractId: tournament.contractId,
       status: tournament.status,
       explorerUrl: explorerTxUrl(tournament.deployTxHash ?? ""),
-      ...(initializeXdr ? { initializeXdr } : {}),
+      initializeXdr,
     };
+  }
+
+  if (input.intent === "deploy") {
+    requireFutureSettlementDeadline(tournament.settlementDeadline);
   }
 
   const result = await submitSignedXdr(input.signedXdr, input.intent);
@@ -157,32 +171,34 @@ export async function submitTournamentTx(
       where: { id },
       data: {
         contractId: result.contractId ?? null,
-        status: "ACTIVE",
         deployTxHash: result.hash,
       },
     });
-    // The contract is deployed but not yet initialised — hand the organiser the
-    // second (initialize) XDR to sign so the contract becomes joinable.
-    const initializeXdr = updated.contractId
-      ? await buildInitXdrFor(updated, updated.contractId)
-      : undefined;
+    // The contract is deployed but remains DRAFT until initialize confirms.
+    if (!updated.contractId) {
+      throw Object.assign(new Error("Deployment succeeded without a contract ID"), { status: 502 });
+    }
+    const initializeXdr = await buildInitXdrFor(updated, updated.contractId);
     return {
       txHash: result.hash,
       contractId: updated.contractId,
       status: updated.status,
       explorerUrl: explorerTxUrl(result.hash),
-      ...(initializeXdr ? { initializeXdr } : {}),
+      initializeXdr,
     };
   }
 
-  // initialize: confirms the contract's state-setting transaction. No DB
-  // mutation — the tournament is already ACTIVE from the deploy leg; this just
-  // verifies the on-chain initialise landed so join/finalize won't panic.
+  // initialize: a confirmed state-setting transaction makes the tournament
+  // joinable.
   if (input.intent === "initialize") {
+    const updated = await prisma.tournament.update({
+      where: { id },
+      data: { status: "ACTIVE" },
+    });
     return {
       txHash: result.hash,
-      contractId: tournament.contractId,
-      status: tournament.status,
+      contractId: updated.contractId,
+      status: updated.status,
       explorerUrl: explorerTxUrl(result.hash),
     };
   }
