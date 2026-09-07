@@ -5,6 +5,7 @@ import {
   stellarContractId,
   stellarPublicKey,
   i128Amount,
+  u64Timestamp,
   distributionBps as bpsSchema,
 } from "./validation";
 import { StellarError } from "./errors";
@@ -54,6 +55,7 @@ export async function buildInitializeTx(params: {
   tokenAddr: string;
   entryFee: bigint;
   distributionBps: [number, number, number];
+  settlementDeadline: bigint;
 }): Promise<{ xdr: string; network: string }> {
   parse(stellarContractId, params.contractId, "contractId");
   parse(stellarPublicKey, params.organizerAddress, "organizerAddress");
@@ -61,6 +63,7 @@ export async function buildInitializeTx(params: {
   parse(stellarContractId, params.tokenAddr, "tokenAddr");
   parse(i128Amount, params.entryFee, "entryFee");
   parse(bpsSchema, params.distributionBps, "distributionBps");
+  parse(u64Timestamp, params.settlementDeadline, "settlementDeadline");
   if (params.organizerAddress === params.refereeAddress) {
     throw new StellarError("INVALID_INPUT", "organizer must differ from referee");
   }
@@ -71,6 +74,7 @@ export async function buildInitializeTx(params: {
     token: params.tokenAddr,
     entry_fee: params.entryFee,
     distribution_bps: params.distributionBps,
+    settlement_deadline: params.settlementDeadline,
   });
   return { xdr: assembled.toXDR(), network: networkName() };
 }

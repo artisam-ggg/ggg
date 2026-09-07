@@ -75,9 +75,11 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
           ? "NOT_FOUND"
           : status === 403
             ? "FORBIDDEN"
-            : status === 502
-              ? "TX_FAILED"
-              : "INTERNAL_ERROR";
+            : status === 409
+              ? "CONFLICT"
+              : status === 502
+                ? "TX_FAILED"
+                : "INTERNAL_ERROR";
       return err(code, e.message, status);
     }
     return err("INTERNAL_ERROR", "Submit failed", 500);

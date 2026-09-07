@@ -72,6 +72,7 @@ const validBody = {
   asset: "XLM",
   refereeAddress: VALID_REFEREE,
   organizerAddress: VALID_ORGANIZER,
+  settlementDeadline: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
   distributionBps: [6000, 3000, 1000],
 };
 
@@ -123,6 +124,7 @@ describe("POST /api/tournaments", () => {
     expect(createArgs.thirdBps).toBe(1000);
     expect(createArgs.organizerAddr).toBe(VALID_ORGANIZER);
     expect(createArgs.refereeAddr).toBe(VALID_REFEREE);
+    expect(createArgs.settlementDeadline).toBeInstanceOf(Date);
   });
 
   it("calls buildDeployInitializeTx with correct parameters", async () => {

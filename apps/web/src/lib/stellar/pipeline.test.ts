@@ -1,4 +1,6 @@
+// @vitest-environment node
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { Address, Keypair, nativeToScVal, TransactionBuilder } from "@stellar/stellar-sdk";
 import { makeFakeRpc, errorSim, txStatus } from "./__mocks__/rpc";
 
 const rpcRef: { current: ReturnType<typeof makeFakeRpc> } = { current: makeFakeRpc() };
@@ -25,6 +27,10 @@ vi.mock("@stellar/stellar-sdk", async (orig) => {
 
 beforeEach(() => {
   rpcRef.current = makeFakeRpc();
+  vi.mocked(TransactionBuilder.fromXDR).mockReset();
+  vi.mocked(TransactionBuilder.fromXDR).mockReturnValue({
+    hash: () => Buffer.from("HASH"),
+  } as never);
 });
 
 describe("simulateAndAssemble", () => {
@@ -81,5 +87,60 @@ describe("submitSignedXdr", () => {
     const { submitSignedXdr } = await import("./pipeline");
     await expect(submitSignedXdr("!!!", "join")).rejects.toMatchObject({ code: "INVALID_INPUT" });
     expect(send).not.toHaveBeenCalled();
+  });
+});
+
+describe("validateInitializeXdr", () => {
+  const contractId = "CCJZ5DGASBWQXR5MPFCJXMBI333XE5U3FSJTNQU7RIKE3P5GN2K2WYD5";
+  const terms = {
+    contractId,
+    organizerAddress: Keypair.random().publicKey(),
+    refereeAddress: Keypair.random().publicKey(),
+    tokenAddr: contractId,
+    entryFee: 10n,
+    distributionBps: [6000, 3000, 1000] as [number, number, number],
+    settlementDeadline: 1_800_000_000n,
+  };
+
+  function initializeOperation(entryFee = terms.entryFee) {
+    const args = [
+      nativeToScVal(terms.organizerAddress, { type: "address" }),
+      nativeToScVal(terms.refereeAddress, { type: "address" }),
+      nativeToScVal(terms.tokenAddr, { type: "address" }),
+      nativeToScVal(entryFee, { type: "i128" }),
+      nativeToScVal(terms.distributionBps, { type: ["u32"] }),
+      nativeToScVal(terms.settlementDeadline, { type: "u64" }),
+    ];
+    return {
+      operations: [
+        {
+          type: "invokeHostFunction",
+          func: {
+            switch: () => ({ name: "hostFunctionTypeInvokeContract" }),
+            value: () => ({
+              contractAddress: () => Address.fromString(contractId).toScVal().address(),
+              functionName: () => ({ toString: () => "initialize" }),
+              args: () => args,
+            }),
+          },
+        },
+      ],
+    };
+  }
+
+  it("rejects initialize terms that differ from the persisted tournament", async () => {
+    vi.mocked(TransactionBuilder.fromXDR).mockReturnValue(initializeOperation(11n) as never);
+    const { validateInitializeXdr } = await import("./pipeline");
+
+    expect(() => validateInitializeXdr("AAAAAgAAAAA=", terms)).toThrow(
+      "Initialize transaction must target this tournament's escrow contract",
+    );
+  });
+
+  it("accepts an initialize transaction with the persisted terms", async () => {
+    vi.mocked(TransactionBuilder.fromXDR).mockReturnValue(initializeOperation() as never);
+    const { validateInitializeXdr } = await import("./pipeline");
+
+    expect(() => validateInitializeXdr("AAAAAgAAAAA=", terms)).not.toThrow();
   });
 });

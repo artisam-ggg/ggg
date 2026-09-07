@@ -157,6 +157,18 @@ jobs:
       - name: Contract build
         run: cd contracts/escrow && stellar contract build
 
+      - name: Verify generated contract bindings
+        run: |
+          stellar contract bindings typescript \
+            --wasm contracts/escrow/target/wasm32v1-none/release/ggg_escrow.wasm \
+            --output-dir /tmp/ggg-escrow-bindings \
+            --overwrite
+          sed -i '1i// @ts-nocheck -- Stellar CLI generated binding includes unused SDK template imports.' \
+            /tmp/ggg-escrow-bindings/src/index.ts
+          diff -u \
+            apps/web/src/contract-client/src/index.ts \
+            /tmp/ggg-escrow-bindings/src/index.ts
+
       - name: Contract tests
         run: cd contracts/escrow && cargo test
 

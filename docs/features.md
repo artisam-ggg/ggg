@@ -114,3 +114,9 @@ Disabled client prefetching for `/tournaments/new` CTAs. This prevents a prefetc
 ## Issue #198 — Clean up SSE subscribers on disconnect and setup failure
 
 The tournament SSE endpoint now uses one idempotent cleanup path for request aborts, stream cancellation, failed setup, and failed writes. Redis subscribers and heartbeat intervals are released in every path; focused tests cover cancellation and replay/subscription failures.
+
+## Issue #233 — Restore settlement deadline integration and TTL safety
+
+Threaded the organiser-selected UTC settlement deadline through tournament creation, persistence, the Stellar transaction builder, and regenerated contract bindings. The conservative 90-day maximum settlement horizon is Testnet-safe and deliberately enforced uniformly on every supported network, so client and contract validation cannot diverge. Contract mutations are responsible for keeping instance and code TTL at 120 days, covering that horizon plus a 30-day margin; if either entry is nevertheless archived, the transaction submitter must restore it before invoking the contract. A CI regenerate-and-diff check guards against future contract/binding ABI drift; legacy tournament rows retain a nullable deadline for forward-migration compatibility and cannot generate a new initialize transaction without one.
+
+Deploy confirmation now keeps a tournament in `DRAFT` until its separate `initialize` transaction confirms. A missing or expired settlement deadline fails closed before activation; a regression test covers expiry during deploy confirmation, ensuring no initialization XDR is returned for an unusable escrow.

@@ -3,12 +3,15 @@ extern crate std;
 
 use soroban_sdk::{
     symbol_short,
-    testutils::{Address as _, Events, Ledger},
+    testutils::{storage::Instance as _, Address as _, Events, Ledger},
     token::{StellarAssetClient, TokenClient},
     Address, Env, IntoVal, Symbol, Val, Vec,
 };
 
-use crate::{deadline_reached, Escrow, EscrowClient, TESTNET_SAFE_SETTLEMENT_HORIZON_SECS};
+use crate::{
+    deadline_reached, Escrow, EscrowClient, MAX_SETTLEMENT_HORIZON_SECS,
+    TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS, TESTNET_INSTANCE_TTL_EXTEND_TO_LEDGERS,
+};
 
 // Registers a Stellar Asset Contract (SAC) test token and returns its
 // admin client (for minting) and the standard token client.
@@ -64,7 +67,7 @@ fn initialize_stores_state() {
 }
 
 #[test]
-fn initialize_accepts_deadline_at_testnet_safe_horizon() {
+fn initialize_accepts_deadline_at_max_horizon() {
     let env = Env::default();
     env.mock_all_auths();
     env.ledger().with_mut(|ledger| ledger.timestamp = 1_000);
@@ -73,7 +76,7 @@ fn initialize_accepts_deadline_at_testnet_safe_horizon() {
     let organizer = Address::generate(&env);
     let referee = Address::generate(&env);
     let escrow = create_escrow(&env);
-    let deadline = env.ledger().timestamp() + TESTNET_SAFE_SETTLEMENT_HORIZON_SECS;
+    let deadline = env.ledger().timestamp() + MAX_SETTLEMENT_HORIZON_SECS;
 
     escrow.initialize(
         &organizer,
@@ -90,6 +93,34 @@ fn initialize_accepts_deadline_at_testnet_safe_horizon() {
             .get(&crate::DataKey::SettlementDeadline)
     });
     assert_eq!(stored_deadline, Some(deadline));
+}
+
+#[test]
+fn initialize_extends_insufficient_instance_ttl() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let (token_addr, _sac, _token) = create_token(&env, &admin);
+    let organizer = Address::generate(&env);
+    let referee = Address::generate(&env);
+    let escrow = create_escrow(&env);
+    let initial_ttl = env.as_contract(&escrow.address, || env.storage().instance().get_ttl());
+
+    env.ledger().with_mut(|ledger| {
+        ledger.sequence_number += initial_ttl - 1;
+        ledger.timestamp = 1_000;
+    });
+    escrow.initialize(
+        &organizer,
+        &referee,
+        &token_addr,
+        &1i128,
+        &bps(&env),
+        &(1_000 + MAX_SETTLEMENT_HORIZON_SECS),
+    );
+
+    let extended_ttl = env.as_contract(&escrow.address, || env.storage().instance().get_ttl());
+    assert_eq!(extended_ttl, TESTNET_INSTANCE_TTL_EXTEND_TO_LEDGERS);
 }
 
 #[test]
@@ -140,7 +171,7 @@ fn initialize_rejects_horizon_exceeding_deadline() {
     let organizer = Address::generate(&env);
     let referee = Address::generate(&env);
     let escrow = create_escrow(&env);
-    let deadline = env.ledger().timestamp() + TESTNET_SAFE_SETTLEMENT_HORIZON_SECS + 1;
+    let deadline = env.ledger().timestamp() + MAX_SETTLEMENT_HORIZON_SECS + 1;
 
     escrow.initialize(
         &organizer,
@@ -333,6 +364,30 @@ fn join_transfers_fee_and_records_player() {
     // fee left player, sits in contract escrow.
     assert_eq!(token.balance(&player), 4_000_000i128);
     assert_eq!(token.balance(&escrow.address), 1_000_000i128);
+}
+
+#[test]
+fn join_refreshes_instance_ttl_below_threshold() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let (token_addr, sac, _token) = create_token(&env, &admin);
+    let organizer = Address::generate(&env);
+    let referee = Address::generate(&env);
+    let escrow = create_escrow(&env);
+    init_default(&env, &escrow, &token_addr, &organizer, &referee);
+
+    env.ledger().with_mut(|ledger| {
+        ledger.sequence_number += TESTNET_INSTANCE_TTL_EXTEND_TO_LEDGERS
+            - TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS
+            + 1;
+    });
+    let player = Address::generate(&env);
+    sac.mint(&player, &5_000_000i128);
+    escrow.join_tournament(&player);
+
+    let ttl = env.as_contract(&escrow.address, || env.storage().instance().get_ttl());
+    assert_eq!(ttl, TESTNET_INSTANCE_TTL_EXTEND_TO_LEDGERS);
 }
 
 #[test]
