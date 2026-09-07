@@ -51,7 +51,7 @@ export function validateInitializeXdr(signedXdrStr: string, expected: Initialize
         value(): {
           contractAddress(): never;
           functionName(): { toString(encoding: string): string };
-          args(): unknown[];
+          args(): Parameters<typeof scValToNative>[0][];
         };
       };
     };
