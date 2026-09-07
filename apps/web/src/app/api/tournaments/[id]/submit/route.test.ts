@@ -5,13 +5,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // vi.hoisted is used so that submitMock is available inside the hoisted vi.mock call.
 // ---------------------------------------------------------------------------
 
-const { submitMock, buildInitializeMock } = vi.hoisted(() => ({
+const { submitMock, buildInitializeMock, validateInitializeMock } = vi.hoisted(() => ({
   submitMock: vi.fn(async () => ({
     hash: "TX1" as string,
     contractId: "CDEPLOYED" as string | undefined,
     status: "SUCCESS" as "SUCCESS" | "FAILED",
   })),
   buildInitializeMock: vi.fn(async () => ({ xdr: "INITIALIZE_XDR", network: "testnet" })),
+  validateInitializeMock: vi.fn(),
 }));
 
 vi.mock("@/lib/stellar", async (orig) => {
@@ -20,6 +21,7 @@ vi.mock("@/lib/stellar", async (orig) => {
     ...actual,
     buildInitializeTx: buildInitializeMock,
     submitSignedXdr: submitMock,
+    validateInitializeXdr: validateInitializeMock,
     explorerTxUrl: (_hash: string) => `https://stellar.expert/tx/${_hash}`,
   };
 });
@@ -142,6 +144,7 @@ describe("POST /api/tournaments/[id]/submit", () => {
     store.clear();
     submitMock.mockResolvedValue({ hash: "TX1", contractId: "CDEPLOYED", status: "SUCCESS" });
     buildInitializeMock.mockResolvedValue({ xdr: "INITIALIZE_XDR", network: "testnet" });
+    validateInitializeMock.mockReturnValue(undefined);
     assertSameOriginMock.mockReturnValue(undefined);
     requireUserMock.mockResolvedValue({ id: "user_1", username: "organizer", role: "ORGANIZER" });
     rateLimitMock.mockResolvedValue({ ok: true, remaining: 19 });
@@ -180,6 +183,8 @@ describe("POST /api/tournaments/[id]/submit", () => {
   });
 
   it("sets ACTIVE only after initialize succeeds", async () => {
+    findUniqueMock.mockResolvedValueOnce({ ...dbTournament, contractId: "CDEPLOYED" });
+
     const res = await POST(
       makeReq("k_initialize", { signedXdr: VALID_XDR, intent: "initialize" }) as Parameters<
         typeof POST
@@ -194,6 +199,49 @@ describe("POST /api/tournaments/[id]/submit", () => {
       where: { id: "t_1" },
       data: { status: "ACTIVE" },
     });
+    expect(validateInitializeMock).toHaveBeenCalledWith(VALID_XDR, "CDEPLOYED");
+  });
+
+  it("rejects initialize before an escrow contract has been deployed", async () => {
+    const res = await POST(
+      makeReq("k_initialize_undeployed", {
+        signedXdr: VALID_XDR,
+        intent: "initialize",
+      }) as Parameters<typeof POST>[0],
+      ctx,
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(json.ok).toBe(false);
+    expect(json.error.code).toBe("CONFLICT");
+    expect(validateInitializeMock).not.toHaveBeenCalled();
+    expect(submitMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects initialize for a cancelled tournament", async () => {
+    findUniqueMock.mockResolvedValueOnce({
+      ...dbTournament,
+      contractId: "CDEPLOYED",
+      status: "CANCELLED",
+    });
+
+    const res = await POST(
+      makeReq("k_initialize_cancelled", {
+        signedXdr: VALID_XDR,
+        intent: "initialize",
+      }) as Parameters<typeof POST>[0],
+      ctx,
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(json.ok).toBe(false);
+    expect(json.error.code).toBe("CONFLICT");
+    expect(validateInitializeMock).not.toHaveBeenCalled();
+    expect(submitMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
   });
 
   // ---------------------------------------------------------------------------

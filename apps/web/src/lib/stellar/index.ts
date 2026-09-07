@@ -5,7 +5,7 @@ export {
   buildFinalizeTx,
   buildCancelTx,
 } from "./builders";
-export { submitSignedXdr } from "./pipeline";
+export { submitSignedXdr, validateInitializeXdr } from "./pipeline";
 export { resolveSacAddress } from "./sac";
 export { explorerTxUrl, explorerContractUrl } from "./explorer";
 export { stellarPublicKey, stellarContractId, i128Amount, signedXdr } from "./validation";

@@ -18,6 +18,48 @@ export interface SubmitResult {
   status: "SUCCESS" | "FAILED";
 }
 
+/** Reject a signed initialize transaction unless it invokes `initialize` on the expected escrow. */
+export function validateInitializeXdr(signedXdrStr: string, expectedContractId: string): void {
+  const parsed = signedXdrSchema.safeParse(signedXdrStr);
+  if (!parsed.success) throw new StellarError("INVALID_INPUT", "Malformed signed XDR");
+
+  try {
+    const tx = TransactionBuilder.fromXDR(parsed.data, networkPassphrase());
+    if (tx.operations.length !== 1) throw new Error("expected one operation");
+
+    const operation = tx.operations[0] as unknown as {
+      type?: string;
+      func?: {
+        switch(): { name?: string };
+        value(): {
+          contractAddress(): never;
+          functionName(): { toString(encoding: string): string };
+        };
+      };
+    };
+    if (
+      operation.type !== "invokeHostFunction" ||
+      operation.func?.switch().name !== "hostFunctionTypeInvokeContract"
+    ) {
+      throw new Error("not an invokeContract operation");
+    }
+
+    const args = operation.func.value();
+    const contractId = Address.fromScAddress(args.contractAddress()).toString();
+    if (
+      contractId !== expectedContractId ||
+      args.functionName().toString("utf-8") !== "initialize"
+    ) {
+      throw new Error("unexpected contract or method");
+    }
+  } catch {
+    throw new StellarError(
+      "INVALID_INPUT",
+      "Initialize transaction must target this tournament's escrow contract",
+    );
+  }
+}
+
 export async function submitSignedXdr(
   signedXdrStr: string,
   intent: "deploy" | "initialize" | "join" | "finalize" | "cancel",

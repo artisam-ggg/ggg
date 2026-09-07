@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { findUniqueMock, updateMock, submitMock, buildInitializeMock } = vi.hoisted(() => ({
-  findUniqueMock: vi.fn(),
-  updateMock: vi.fn(),
-  submitMock: vi.fn(),
-  buildInitializeMock: vi.fn(),
-}));
+const { findUniqueMock, updateMock, submitMock, buildInitializeMock, validateInitializeMock } =
+  vi.hoisted(() => ({
+    findUniqueMock: vi.fn(),
+    updateMock: vi.fn(),
+    submitMock: vi.fn(),
+    buildInitializeMock: vi.fn(),
+    validateInitializeMock: vi.fn(),
+  }));
 
 vi.mock("@/lib/db", () => ({
   prisma: {
@@ -28,6 +30,7 @@ vi.mock("@/lib/stellar", () => ({
   explorerTxUrl: vi.fn(),
   resolveSacAddress: vi.fn(),
   submitSignedXdr: submitMock,
+  validateInitializeXdr: validateInitializeMock,
 }));
 
 import { submitTournamentTx } from "./tournaments";
@@ -87,5 +90,25 @@ describe("submitTournamentTx", () => {
       data: { contractId: "CDEPLOYED", deployTxHash: "TX_DEPLOY" },
     });
     expect(buildInitializeMock).not.toHaveBeenCalled();
+  });
+
+  it("does not broadcast initialize after its deadline has expired", async () => {
+    const deadline = new Date("2026-09-08T00:00:00.000Z");
+    vi.setSystemTime(deadline);
+    findUniqueMock.mockResolvedValue({
+      id: "t_1",
+      organizerId: "user_1",
+      settlementDeadline: deadline,
+      status: "DRAFT",
+      contractId: "CDEPLOYED",
+    });
+
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "initialize" }, "user_1"),
+    ).rejects.toMatchObject({ message: "Settlement deadline has expired", status: 409 });
+
+    expect(validateInitializeMock).not.toHaveBeenCalled();
+    expect(submitMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
   });
 });

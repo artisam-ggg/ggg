@@ -10,6 +10,7 @@ import {
   explorerTxUrl,
   resolveSacAddress,
   submitSignedXdr,
+  validateInitializeXdr,
 } from "@/lib/stellar";
 import type {
   CreateTournamentInput,
@@ -156,6 +157,14 @@ export async function submitTournamentTx(
 
   if (input.intent === "deploy") {
     requireFutureSettlementDeadline(tournament.settlementDeadline);
+  }
+
+  if (input.intent === "initialize") {
+    if (tournament.status !== "DRAFT" || !tournament.contractId) {
+      throw Object.assign(new Error("Tournament is not ready for initialization"), { status: 409 });
+    }
+    requireFutureSettlementDeadline(tournament.settlementDeadline);
+    validateInitializeXdr(input.signedXdr, tournament.contractId);
   }
 
   const result = await submitSignedXdr(input.signedXdr, input.intent);
