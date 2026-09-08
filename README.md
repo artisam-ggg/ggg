@@ -31,7 +31,7 @@ For the Stellar ecosystem, GGG is a concrete use case for Soroban: it turns paid
 - **Version:** `0.0.0` (workspace manifests) · contract crate `ggg-escrow` `0.1.0`
 - **Status:** Live on Stellar Testnet at https://ggg.quest
 - **Default network:** Stellar Testnet (`STELLAR_NETWORK=testnet`)
-- **Uploaded escrow WASM hash:** `c6952e467e6a5a7c7599db3276fb98fcb7e97d2fb438670c649e8340830cd818`
+- **Escrow WASM hash:** `9319ccbb7148750882df1cf735162059afe017778c9af37984304f291d5fe702` (recorded in `apps/web/.env.example`).
 - **License:** Released under the MIT License. Copyright © 2026 Artisam Labs.
 
 ---
@@ -77,7 +77,7 @@ GGG removes the custodian: **no party holds the funds — the contract does.** M
 **On-chain money rails (Soroban)**
 - One WASM escrow contract deployed per tournament; entry fees pulled into escrow on join.
 - Referee-signed finalisation pays the configured split in a single transaction, with rounding dust deterministically assigned to 1st place.
-- Organiser-signed cancellation refunds every registered player before finalisation.
+- Organiser-signed cancellation makes one permissionless refund claim available per registered player.
 - Tournament creation is a **two-transaction flow**: the organiser signs a `deploy`, then a second `initialize` transaction that sets the entry fee, referee, and split (see [Known deviations from SPEC.md](#known-deviations-from-specmd) below).
 
 **Wallet + funding**
@@ -248,9 +248,9 @@ Contract crates found in the repo:
 
 | Crate | Path | Purpose |
 |---|---|---|
-| `ggg-escrow` | [`contracts/escrow`](./contracts/escrow) | Per-tournament prize escrow: `initialize`, `join_tournament`, `finalize_results`, `cancel_tournament`, and read-only `get_pool` / `get_reward` / `is_finished`. Emits `registered` / `finalized` / `cancelled` events. Built with `soroban-sdk` 26. 28 unit tests. |
+| `ggg-escrow` | [`contracts/escrow`](./contracts/escrow) | Per-tournament prize escrow: `initialize`, `join_tournament`, `finalize_results`, `cancel_tournament`, `claim_refund`, and read-only `get_pool` / `get_reward` / `is_finished`. Emits `registered` / `finalized` / `cancelled` / `refund_claimed` events. Built with `soroban-sdk` 26. 49 unit tests. |
 
-Function signatures, storage model, events, and security invariants are specified in [`SPEC.md`](./SPEC.md) §4; the source of truth is `contracts/escrow/src/lib.rs` with 28 tests in `contracts/escrow/src/test.rs`.
+Function signatures, storage model, events, and security invariants are specified in [`SPEC.md`](./SPEC.md) §4; the source of truth is `contracts/escrow/src/lib.rs` with 49 tests in `contracts/escrow/src/test.rs`.
 
 ---
 

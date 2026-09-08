@@ -6,6 +6,7 @@ import { Keypair } from "@stellar/stellar-sdk";
 
 const built = (xdr: string) => ({ toXDR: () => xdr });
 const joinFn = vi.fn().mockResolvedValue(built("JOIN_XDR"));
+const claimRefundFn = vi.fn().mockResolvedValue(built("REFUND_XDR"));
 const finalizeFn = vi.fn().mockResolvedValue(built("FINALIZE_XDR"));
 const cancelFn = vi.fn().mockResolvedValue(built("CANCEL_XDR"));
 const initializeFn = vi.fn().mockResolvedValue(built("INITIALIZE_XDR"));
@@ -13,6 +14,7 @@ const deployFn = vi.fn().mockResolvedValue(built("DEPLOY_XDR"));
 const ClientCtor = vi.fn().mockImplementation(function () {
   return {
     join_tournament: joinFn,
+    claim_refund: claimRefundFn,
     finalize_results: finalizeFn,
     cancel_tournament: cancelFn,
     initialize: initializeFn,
@@ -39,10 +41,25 @@ const C = "CCJZ5DGASBWQXR5MPFCJXMBI333XE5U3FSJTNQU7RIKE3P5GN2K2WYD5";
 
 beforeEach(() => {
   joinFn.mockClear();
+  claimRefundFn.mockClear();
   finalizeFn.mockClear();
   cancelFn.mockClear();
   initializeFn.mockClear();
   ClientCtor.mockClear();
+});
+
+describe("buildClaimRefundTx", () => {
+  it("uses the relay as source while paying the registered player", async () => {
+    const { buildClaimRefundTx } = await import("./builders");
+    const res = await buildClaimRefundTx({
+      contractId: C,
+      playerAddress: G,
+      submitterAddress: G2,
+    });
+    expect(res).toEqual({ xdr: "REFUND_XDR", network: "testnet" });
+    expect(ClientCtor).toHaveBeenCalledWith(expect.objectContaining({ publicKey: G2 }));
+    expect(claimRefundFn).toHaveBeenCalledWith({ player: G });
+  });
 });
 
 describe("buildJoinTx", () => {

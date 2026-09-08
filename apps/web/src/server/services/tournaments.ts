@@ -5,6 +5,7 @@ import {
   buildDeployInitializeTx,
   buildInitializeTx,
   buildFinalizeTx,
+  buildClaimRefundTx,
   buildJoinTx,
   explorerContractUrl,
   explorerTxUrl,
@@ -301,6 +302,28 @@ export async function buildJoin(
   return { unsignedXdr: xdr, network };
 }
 
+export async function buildRefundClaim(
+  id: string,
+  playerAddress: string,
+  submitterAddress: string,
+): Promise<{ unsignedXdr: string; network: string }> {
+  const t = await prisma.tournament.findUnique({ where: { id } });
+  if (!t) throw Object.assign(new Error("Tournament not found"), { status: 404 });
+  const deadlineReached =
+    t.settlementDeadline != null && t.settlementDeadline.getTime() <= Date.now();
+  if ((t.status !== "CANCELLED" && !(t.status === "ACTIVE" && deadlineReached)) || !t.contractId) {
+    throw Object.assign(new Error("Tournament is not available for refund claims"), {
+      status: 409,
+    });
+  }
+  const { xdr, network } = await buildClaimRefundTx({
+    contractId: t.contractId,
+    playerAddress,
+    submitterAddress,
+  });
+  return { unsignedXdr: xdr, network };
+}
+
 export async function buildFinalize(
   id: string,
   input: FinalizeInput,
@@ -368,12 +391,26 @@ export async function getTournamentDetail(id: string) {
     include: {
       participants: { orderBy: { joinedAt: "asc" } },
       payouts: { orderBy: { rank: "asc" } },
+      events: {
+        where: { type: "REFUND_CLAIMED" },
+        select: { payload: true },
+      },
     },
   });
 
   if (!t) return null;
 
-  const pool = (t.entryFee * BigInt(t.participants.length)).toString();
+  const refundClaims = t.events.flatMap((event) => {
+    const payload = event.payload;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return [];
+    const { player, amount } = payload as Record<string, unknown>;
+    return typeof player === "string" && typeof amount === "string" && /^[1-9]\d*$/.test(amount)
+      ? [{ player, amount }]
+      : [];
+  });
+  const refunded = refundClaims.reduce((total, claim) => total + BigInt(claim.amount), 0n);
+  const grossPool = t.entryFee * BigInt(t.participants.length);
+  const pool = (grossPool > refunded ? grossPool - refunded : 0n).toString();
 
   return {
     id: t.id,
@@ -390,6 +427,7 @@ export async function getTournamentDetail(id: string) {
     organizerAddr: t.organizerAddr,
     refereeAddr: t.refereeAddr,
     pool,
+    refundClaimedPlayers: refundClaims.map((claim) => claim.player),
     participants: t.participants.map((p) => ({
       playerAddr: p.playerAddr,
       joinedAt: p.joinedAt.toISOString(),
@@ -402,5 +440,10 @@ export async function getTournamentDetail(id: string) {
       txHash: p.txHash,
       explorerUrl: p.txHash ? explorerTxUrl(p.txHash) : null,
     })),
+    refundsClaimable:
+      t.status === "CANCELLED" ||
+      (t.status === "ACTIVE" &&
+        t.settlementDeadline != null &&
+        t.settlementDeadline.getTime() <= Date.now()),
   };
 }

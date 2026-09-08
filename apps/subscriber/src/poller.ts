@@ -7,6 +7,7 @@ const TOPIC_TO_TYPE: Record<string, EventType> = {
   registered: "REGISTERED",
   finalized: "FINALIZED",
   cancelled: "CANCELLED",
+  refund_claimed: "REFUND_CLAIMED",
 };
 
 // How many ledgers behind the reported tip to keep the cursor, so freshly-closed
@@ -45,10 +46,13 @@ function decodeEvent(raw: {
     const third = String(decodeScVal(raw.topic[3]!));
     const amounts = value as bigint[];
     data = { first, second, third, amounts: amounts.map((a) => a.toString()) };
+  } else if (type === "CANCELLED") {
+    data = { claimableCount: Number(value as bigint | number) };
   } else {
-    // CANCELLED: topic is `(symbol "cancelled",)`; value is the refunded count.
-    const refundedCount = Number(value as bigint | number);
-    data = { refundedCount };
+    data = {
+      player: String(decodeScVal(raw.topic[1]!)),
+      amount: String((value as { amount: bigint }).amount),
+    };
   }
   return { type, ledger: raw.ledger, txHash: raw.txHash, data };
 }

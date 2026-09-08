@@ -122,9 +122,34 @@ describe("applyEvent", () => {
       type: "CANCELLED",
       ledger: 30,
       txHash: "tx-can-1",
-      data: { refundedCount: 4 },
+      data: { claimableCount: 4 },
     });
     expect(tournaments.t1?.status).toBe("CANCELLED");
     expect(tournaments.t1?.cancelledAt).toBeInstanceOf(Date);
+  });
+
+  it("persists a refund claim without changing cancelled lifecycle state", async () => {
+    tournaments.t1 = { id: "t1", status: "CANCELLED" };
+    await applyEvent(tournament, {
+      type: "REFUND_CLAIMED",
+      ledger: 31,
+      txHash: "tx-ref-1",
+      data: { player: "GPLAYER1", amount: "10000000" },
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0]?.payload).toEqual({ player: "GPLAYER1", amount: "10000000" });
+    expect(tournaments.t1?.status).toBe("CANCELLED");
+  });
+
+  it("ignores malformed refund claims", async () => {
+    await expect(
+      applyEvent(tournament, {
+        type: "REFUND_CLAIMED",
+        ledger: 31,
+        txHash: "tx-ref-invalid",
+        data: { player: "GPLAYER1", amount: "not-a-number" },
+      }),
+    ).resolves.toBeNull();
+    expect(events).toHaveLength(0);
   });
 });

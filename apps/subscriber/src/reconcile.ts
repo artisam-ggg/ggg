@@ -1,7 +1,7 @@
 import { Prisma } from "web/src/generated/prisma/client";
 import { prisma } from "./db";
 
-export type EventType = "REGISTERED" | "FINALIZED" | "CANCELLED";
+export type EventType = "REGISTERED" | "FINALIZED" | "CANCELLED" | "REFUND_CLAIMED";
 
 export interface DecodedEvent {
   type: EventType;
@@ -14,6 +14,15 @@ export interface Change {
   type: EventType;
   txHash: string;
   data: Record<string, unknown>;
+}
+
+function isRefundClaim(data: Record<string, unknown>): data is { player: string; amount: string } {
+  return (
+    typeof data.player === "string" &&
+    data.player.length > 0 &&
+    typeof data.amount === "string" &&
+    /^[1-9]\d*$/.test(data.amount)
+  );
 }
 
 /**
@@ -31,6 +40,8 @@ export async function applyEvent(
   },
   evt: DecodedEvent,
 ): Promise<Change | null> {
+  if (evt.type === "REFUND_CLAIMED" && !isRefundClaim(evt.data)) return null;
+
   return prisma.$transaction(async (tx) => {
     // Idempotency: dedupe on (txHash, type).
     const existing = await tx.contractEvent.findUnique({
@@ -73,7 +84,7 @@ export async function applyEvent(
         where: { id: tournament.id },
         data: { status: "FINISHED", finalizedAt: new Date() },
       });
-    } else {
+    } else if (evt.type === "CANCELLED") {
       await tx.tournament.update({
         where: { id: tournament.id },
         data: { status: "CANCELLED", cancelledAt: new Date() },
