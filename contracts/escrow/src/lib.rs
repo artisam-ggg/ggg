@@ -32,6 +32,7 @@ pub enum DataKey {
     Cancelled,
     Winners,
     SettlementDeadline,
+    Registered(Address),
     RefundClaimed(Address),
 }
 
@@ -232,6 +233,7 @@ impl Escrow {
         client.transfer(&player, &env.current_contract_address(), &entry_fee);
 
         players.push_back(player.clone());
+        storage.set(&DataKey::Registered(player.clone()), &true);
         storage.set(&DataKey::Players, &players);
         extend_instance_ttl(&env, TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS);
 
@@ -349,8 +351,7 @@ impl Escrow {
             panic_with_error!(&env, Error::AlreadyFinished);
         }
 
-        let players: Vec<Address> = storage.get(&DataKey::Players).unwrap();
-        if !players.contains(&player) {
+        if !storage.has(&DataKey::Registered(player.clone())) {
             panic_with_error!(&env, Error::PlayerNotRegistered);
         }
         let claimed_key = DataKey::RefundClaimed(player.clone());

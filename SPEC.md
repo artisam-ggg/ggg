@@ -111,6 +111,7 @@ Written in Rust with `soroban-sdk` 26, compiled to WASM, deployed once, instanti
 - `finished: bool`, `cancelled: bool`
 - `winners: Option<(Address, Address, Address)>`
 - `settlement_deadline: u64` (UTC seconds; at and after it, claims are enabled and settlement mutations reject)
+- `Registered(Address): bool` (address-keyed membership for O(1) refund eligibility checks)
 - `RefundClaimed(Address): bool` (one successful refund per registered player)
 - `MAX_PLAYERS = 100` (Testnet-simulated registration ceiling)
 

@@ -28,7 +28,7 @@ Implemented the trustless tournament prize-escrow contract (`contracts/escrow`) 
 - `finalize_results` (referee-only) pays 60/30/10 with deterministic dust to 1st place; emits `finalized` event.
 - `cancel_tournament` (organizer-only) records cancellation; registered players claim refunds individually.
 - Read-only `get_pool`, `get_reward`, `is_finished`.
-- Exhaustive `#[cfg(test)]` suite (28 tests) covering happy paths and all reverts.
+- Exhaustive `#[cfg(test)]` suite (49 tests) covering happy paths and all reverts.
 - Built, optimized, and uploaded WASM to Testnet; recorded `ESCROW_WASM_HASH` in `apps/web/.env.example`.
 - Generated TypeScript bindings under `apps/web/src/contract-client` for Phase 2/4 consumption.
 

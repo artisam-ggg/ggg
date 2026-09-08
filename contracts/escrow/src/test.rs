@@ -793,6 +793,26 @@ fn refund_succeeds_at_deadline_and_conserves_pool() {
 }
 
 #[test]
+fn refund_succeeds_after_deadline() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().with_mut(|ledger| ledger.timestamp = 1_000);
+    let admin = Address::generate(&env);
+    let (token_addr, sac, token) = create_token(&env, &admin);
+    let organizer = Address::generate(&env);
+    let referee = Address::generate(&env);
+    let escrow = create_escrow(&env);
+    init_with_deadline(&env, &escrow, &token_addr, &organizer, &referee, 1_001);
+    let player = join(&env, &escrow, &sac);
+    env.ledger().with_mut(|ledger| ledger.timestamp = 1_002);
+
+    escrow.claim_refund(&player);
+
+    assert_eq!(token.balance(&player), 10_000_000i128);
+    assert_eq!(escrow.get_pool(), 0i128);
+}
+
+#[test]
 #[should_panic(expected = "Error(Contract, #15)")] // PlayerNotRegistered
 fn refund_rejects_unknown_player() {
     let env = Env::default();

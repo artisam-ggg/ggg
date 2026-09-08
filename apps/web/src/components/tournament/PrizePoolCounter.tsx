@@ -1,14 +1,9 @@
 "use client";
 import { useMemo } from "react";
 import { useTournamentEvents } from "@/hooks/use-tournament-events";
+import { formatStroops } from "@/lib/format-stroops";
 
 const EMPTY_PLAYERS: string[] = [];
-
-/** Convert a stroop string to human-readable decimal (7 decimal places). */
-function fmt(stroops: string) {
-  const n = BigInt(stroops);
-  return `${n / 10_000_000n}.${(n % 10_000_000n).toString().padStart(7, "0")}`;
-}
 
 /**
  * Live prize-pool counter. Seeds from the server snapshot (initialPool /
@@ -104,14 +99,14 @@ export function PrizePoolCounter({
           aria-atomic="true"
           className="data-mono text-[96px] font-extrabold leading-none text-acid-yellow motion-safe:animate-pool-pop"
         >
-          {fmt(pool.toString())}
+          {formatStroops(pool.toString())}
         </span>
         <span className="label-caps mb-3 text-on-surface-variant">{asset}</span>
       </p>
       <div className="data-mono mt-4 flex gap-6 text-on-surface-variant">
         <span>{count} players</span>
         <span>
-          entry {fmt(entryFee)} {asset}
+          entry {formatStroops(entryFee)} {asset}
         </span>
       </div>
     </div>
