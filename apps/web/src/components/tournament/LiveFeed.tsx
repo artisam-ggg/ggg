@@ -13,7 +13,10 @@ function gloss(ev: LiveEvent): string {
       String(ev.data.second),
     )}, 3rd → ${trunc(String(ev.data.third))}`;
   }
-  return `Tournament cancelled — ${String(ev.data.refundedCount)} players refunded`;
+  if (ev.type === "CANCELLED") {
+    return `Tournament cancelled — ${String(ev.data.claimableCount)} refunds available to claim`;
+  }
+  return `${trunc(String(ev.data.player))} claimed ${String(ev.data.amount)}`;
 }
 
 /**

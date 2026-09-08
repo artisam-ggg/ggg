@@ -56,6 +56,7 @@ pub enum Error {
     PlayerNotRegistered = 15,
     RefundAlreadyClaimed = 16,
     MaxPlayersReached = 17,
+    DeadlineReached = 18,
 }
 
 /// Stable for #216: topics are ("refund_claimed", player); data is { amount }.
@@ -68,6 +69,12 @@ pub struct RefundClaimed {
 
 pub(crate) fn deadline_reached(env: &Env, deadline: u64) -> bool {
     env.ledger().timestamp() >= deadline
+}
+
+fn require_before_deadline(env: &Env, deadline: u64) {
+    if deadline_reached(env, deadline) {
+        panic_with_error!(env, Error::DeadlineReached);
+    }
 }
 
 fn extend_instance_ttl(env: &Env, threshold: u32) {
@@ -214,6 +221,7 @@ impl Escrow {
         if cancelled {
             panic_with_error!(&env, Error::AlreadyCancelled);
         }
+        require_before_deadline(&env, storage.get(&DataKey::SettlementDeadline).unwrap());
 
         let mut players: Vec<Address> = storage.get(&DataKey::Players).unwrap();
         if players.contains(&player) {
@@ -256,6 +264,7 @@ impl Escrow {
         if cancelled {
             panic_with_error!(&env, Error::AlreadyCancelled);
         }
+        require_before_deadline(&env, storage.get(&DataKey::SettlementDeadline).unwrap());
 
         // Distinct.
         if first == second || first == third || second == third {
@@ -325,11 +334,14 @@ impl Escrow {
         if cancelled {
             panic_with_error!(&env, Error::AlreadyCancelled);
         }
+        require_before_deadline(&env, storage.get(&DataKey::SettlementDeadline).unwrap());
 
+        let players: Vec<Address> = storage.get(&DataKey::Players).unwrap();
         storage.set(&DataKey::Cancelled, &true);
         extend_instance_ttl(&env, TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS);
 
-        env.events().publish((symbol_short!("cancelled"),), ());
+        env.events()
+            .publish((symbol_short!("cancelled"),), players.len() as u32);
     }
 
     /// Anyone may submit this claim, but it always pays the registered player.

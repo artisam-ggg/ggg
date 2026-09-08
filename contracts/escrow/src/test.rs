@@ -684,15 +684,63 @@ fn arbitrary_caller_claims_cancelled_player_refund() {
     let escrow = create_escrow(&env);
     init_default(&env, &escrow, &token_addr, &organizer, &referee);
     let player = join(&env, &escrow, &sac);
-    let caller = Address::generate(&env);
     escrow.cancel_tournament();
 
     env.set_auths(&[]);
     escrow.claim_refund(&player);
 
-    assert_ne!(caller, player);
     assert_eq!(token.balance(&player), 10_000_000i128);
-    assert_eq!(token.balance(&caller), 0i128);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #18)")] // DeadlineReached
+fn join_rejects_at_deadline() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().with_mut(|ledger| ledger.timestamp = 1_000);
+    let admin = Address::generate(&env);
+    let (token_addr, sac, _token) = create_token(&env, &admin);
+    let organizer = Address::generate(&env);
+    let referee = Address::generate(&env);
+    let escrow = create_escrow(&env);
+    init_with_deadline(&env, &escrow, &token_addr, &organizer, &referee, 1_001);
+    env.ledger().with_mut(|ledger| ledger.timestamp = 1_001);
+    join(&env, &escrow, &sac);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #18)")] // DeadlineReached
+fn finalize_rejects_at_deadline() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().with_mut(|ledger| ledger.timestamp = 1_000);
+    let admin = Address::generate(&env);
+    let (token_addr, sac, _token) = create_token(&env, &admin);
+    let organizer = Address::generate(&env);
+    let referee = Address::generate(&env);
+    let escrow = create_escrow(&env);
+    init_with_deadline(&env, &escrow, &token_addr, &organizer, &referee, 1_001);
+    let p1 = join(&env, &escrow, &sac);
+    let p2 = join(&env, &escrow, &sac);
+    let p3 = join(&env, &escrow, &sac);
+    env.ledger().with_mut(|ledger| ledger.timestamp = 1_001);
+    escrow.finalize_results(&p1, &p2, &p3);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #18)")] // DeadlineReached
+fn cancel_rejects_at_deadline() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().with_mut(|ledger| ledger.timestamp = 1_000);
+    let admin = Address::generate(&env);
+    let (token_addr, _sac, _token) = create_token(&env, &admin);
+    let organizer = Address::generate(&env);
+    let referee = Address::generate(&env);
+    let escrow = create_escrow(&env);
+    init_with_deadline(&env, &escrow, &token_addr, &organizer, &referee, 1_001);
+    env.ledger().with_mut(|ledger| ledger.timestamp = 1_001);
+    escrow.cancel_tournament();
 }
 
 #[test]
@@ -960,7 +1008,7 @@ fn cancel_emits_cancelled_event() {
         [(
             escrow.address.clone(),
             Vec::from_array(&env, [symbol_short!("cancelled").into_val(&env)]),
-            ().into_val(&env),
+            2u32.into_val(&env),
         )],
     );
     assert_eq!(

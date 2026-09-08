@@ -5,6 +5,7 @@ import {
   buildDeployInitializeTx,
   buildInitializeTx,
   buildFinalizeTx,
+  buildClaimRefundTx,
   buildJoinTx,
   explorerContractUrl,
   explorerTxUrl,
@@ -301,6 +302,26 @@ export async function buildJoin(
   return { unsignedXdr: xdr, network };
 }
 
+export async function buildRefundClaim(
+  id: string,
+  playerAddress: string,
+): Promise<{ unsignedXdr: string; network: string }> {
+  const t = await prisma.tournament.findUnique({ where: { id } });
+  if (!t) throw Object.assign(new Error("Tournament not found"), { status: 404 });
+  const deadlineReached =
+    t.settlementDeadline !== null && t.settlementDeadline.getTime() <= Date.now();
+  if ((t.status !== "CANCELLED" && !(t.status === "ACTIVE" && deadlineReached)) || !t.contractId) {
+    throw Object.assign(new Error("Tournament is not available for refund claims"), {
+      status: 409,
+    });
+  }
+  const { xdr, network } = await buildClaimRefundTx({
+    contractId: t.contractId,
+    playerAddress,
+  });
+  return { unsignedXdr: xdr, network };
+}
+
 export async function buildFinalize(
   id: string,
   input: FinalizeInput,
@@ -402,5 +423,10 @@ export async function getTournamentDetail(id: string) {
       txHash: p.txHash,
       explorerUrl: p.txHash ? explorerTxUrl(p.txHash) : null,
     })),
+    refundsClaimable:
+      t.status === "CANCELLED" ||
+      (t.status === "ACTIVE" &&
+        t.settlementDeadline !== null &&
+        t.settlementDeadline.getTime() <= Date.now()),
   };
 }

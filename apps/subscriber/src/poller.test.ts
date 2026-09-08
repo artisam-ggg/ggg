@@ -66,4 +66,39 @@ describe("pollTournament", () => {
     expect(publishChange).not.toHaveBeenCalled();
     expect(setCursor).toHaveBeenCalledWith("CABC", 201);
   });
+
+  it("decodes cancellation availability and refund-claim events", async () => {
+    getEvents.mockResolvedValue({
+      latestLedger: 300,
+      events: [
+        { type: "contract", ledger: 105, txHash: "tx-can", topic: ["CAN"], value: "COUNT" },
+        {
+          type: "contract",
+          ledger: 106,
+          txHash: "tx-ref",
+          topic: ["REF", "PLY"],
+          value: "REFUND",
+        },
+      ],
+    });
+    decodeScVal.mockImplementation((b64: string) => {
+      if (b64 === "CAN") return "cancelled";
+      if (b64 === "REF") return "refund_claimed";
+      if (b64 === "PLY") return "GPLAYER1";
+      if (b64 === "COUNT") return 3n;
+      return { amount: 10000000n };
+    });
+    applyEvent.mockResolvedValueOnce({ type: "CANCELLED", txHash: "tx-can", data: {} });
+    applyEvent.mockResolvedValueOnce({ type: "REFUND_CLAIMED", txHash: "tx-ref", data: {} });
+
+    await pollTournament(tournament);
+
+    expect(applyEvent.mock.calls.slice(-2).map((call) => call[1])).toEqual([
+      expect.objectContaining({ type: "CANCELLED", data: { claimableCount: 3 } }),
+      expect.objectContaining({
+        type: "REFUND_CLAIMED",
+        data: { player: "GPLAYER1", amount: "10000000" },
+      }),
+    ]);
+  });
 });

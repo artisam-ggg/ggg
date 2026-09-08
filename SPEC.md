@@ -120,12 +120,12 @@ Creates the tournament. **Requires `organizer.require_auth()`.** Validates: `dis
 ```rust
 join_tournament(player: Address)
 ```
-`player.require_auth()`. Calls `token.transfer(player, current_contract_address, entry_fee)` to pull the entry fee into escrow, then records the player. Rejects if `finished`/`cancelled`, if the player already joined, or if the fee transfer fails. Emits a `registered` event.
+`player.require_auth()`. Calls `token.transfer(player, current_contract_address, entry_fee)` to pull the entry fee into escrow, then records the player. Rejects at or after the settlement deadline, if `finished`/`cancelled`, if the player already joined, or if the fee transfer fails. Emits a `registered` event.
 
 ```rust
 finalize_results(first: Address, second: Address, third: Address)
 ```
-**`referee.require_auth()` only.** Validates all three addresses are **distinct** and **registered**, and that the tournament is not already finished/cancelled. Computes each prize as `pool * bps[i] / 10000`, transfers from the contract to each winner, handles the rounding remainder deterministically (assign to 1st place), sets `finished = true` and `winners`. Emits a `finalized` event with the three transfers.
+**`referee.require_auth()` only.** Before the settlement deadline, validates all three addresses are **distinct** and **registered**, and that the tournament is not already finished/cancelled. Computes each prize as `pool * bps[i] / 10000`, transfers from the contract to each winner, handles the rounding remainder deterministically (assign to 1st place), sets `finished = true` and `winners`. Emits a `finalized` event with the three transfers.
 
 ```rust
 get_pool() -> i128
@@ -145,18 +145,24 @@ True after payouts have been sent.
 ```rust
 cancel_tournament()  // optional but specified
 ```
-`organizer.require_auth()`. Only before finalisation. Refunds every registered player their `entry_fee` from escrow, sets `cancelled = true`. Emits `cancelled`.
+`organizer.require_auth()`. Before the settlement deadline and finalisation, sets `cancelled = true` without transferring funds. Emits `cancelled` with the number of now-claimable refunds.
+
+```rust
+claim_refund(player: Address)
+```
+Permissionless. After the inclusive settlement deadline, or immediately after cancellation, anyone may submit a claim for a registered player. The contract transfers one `entry_fee` only to that player, records the claim, and emits `refund_claimed(player, amount)`; duplicate and unknown-player claims reject.
 
 ### Events
 - `registered` → `(player: Address, pool_after: i128)`
 - `finalized` → `(first, second, third, amounts: Vec<i128>)`
-- `cancelled` → `(refunded_count: u32)`
+- `cancelled` → `(claimable_count: u32)`
+- `refund_claimed` → `(player: Address, amount: i128)`
 
 ### Security invariants
 - Only `organizer` may `initialize` and `cancel`.
 - Only `referee` may `finalize_results`.
 - Funds leave the contract **only** via payout or refund logic — there is no withdraw function.
-- Idempotency: `finalize`/`cancel` cannot run twice; `join` cannot double-register.
+- Idempotency: `finalize`/`cancel` cannot run twice; `join` cannot double-register; each player can claim one refund.
 - Every state-changing call emits an event for the off-chain subscriber.
 - Reject finalisation if winners are not all registered or not all distinct.
 
@@ -214,8 +220,8 @@ Base path `/api`. JSON in/out. All inputs validated with Zod; all responses use 
 - Validation: split sums to 10000; `refereeAddress`/`organizerAddress` valid `G...`; `entryFee > 0`; `organizer != referee`.
 - Returns: `{ tournamentId, unsignedXdr, network }`. Status stored as `DRAFT` until the deploy tx is confirmed.
 
-**`POST /api/tournaments/[id]/submit`** — *Organiser.* Accept a signed XDR, submit via Soroban RPC, poll for result. On success, persist the deployed `contractId`, set status `ACTIVE`, and make the tournament join QR available. Used for create, finalize, and cancel submission.
-- Body: `{ signedXdr, intent: "deploy"|"finalize"|"cancel" }`
+**`POST /api/tournaments/[id]/submit`** — *Authenticated user.* Accept a signed XDR, submit via Soroban RPC, and poll for result. On success, persist lifecycle state for deploy, finalize, and cancel; a refund claim leaves the cancelled tournament state unchanged.
+- Body: `{ signedXdr, intent: "deploy"|"initialize"|"join"|"claim_refund"|"finalize"|"cancel" }`
 
 **`GET /api/tournaments`** — *Organiser.* List tournaments for the authenticated user. Supports `?status=` filter and pagination.
 
@@ -224,10 +230,12 @@ Base path `/api`. JSON in/out. All inputs validated with Zod; all responses use 
 **`POST /api/tournaments/[id]/join`** — *Public.* Build and return an unsigned `join_tournament` transaction for a given `playerAddress`. (Submission via `/submit` with `intent: "join"`, or a dedicated `/join/submit`.)
 - Body: `{ playerAddress }` → `{ unsignedXdr, network }`
 
+**`POST /api/tournaments/[id]/refund`** — *Public.* After cancellation or the inclusive settlement deadline, build an unsigned `claim_refund` invocation for `playerAddress`. The contract permits any submitter but transfers only to that registered player.
+
 **`POST /api/tournaments/[id]/finalize`** — *Referee only.* Build the unsigned `finalize_results` transaction from **manually entered** winner addresses.
 - Body: `{ first, second, third }`. Validates all three are registered and distinct → `{ unsignedXdr }`.
 
-**`POST /api/tournaments/[id]/cancel`** — *Organiser only, pre-finalisation.* Build the unsigned `cancel_tournament` transaction (or, if batched refunds are required off-contract, build the refund set). → `{ unsignedXdr }`. On confirmation, status → `CANCELLED`.
+**`POST /api/tournaments/[id]/cancel`** — *Organiser only, before the settlement deadline and finalisation.* Build the unsigned `cancel_tournament` state transition. → `{ unsignedXdr }`. On confirmation, status → `CANCELLED` and players can claim individually.
 
 **`GET /api/tournaments/[id]/events`** — *Public.* Streams contract events (registrations, payouts, cancellation) as **SSE** (`text/event-stream`); falls back to polling. Backed by the `ContractEvent` table populated by the subscriber.
 
@@ -375,7 +383,7 @@ A `prisma/seed.ts` that creates the seeded **admin** user from `ADMIN_USERNAME`/
 ## 11. Event subscriber
 
 - A long-running task (a separate Railway service, or a guarded background loop) that, for each `ACTIVE` tournament, polls Soroban RPC `getEvents` filtered by the tournament's `contractId` from the last processed ledger cursor.
-- Maps `registered`/`finalized`/`cancelled` contract events into `ContractEvent`, updates `Participant`, `Payout`, and `Tournament.status`/`finalizedAt`.
+- Maps `registered`/`finalized`/`cancelled`/`refund_claimed` contract events into `ContractEvent`, updates `Participant`, `Payout`, and lifecycle state. Refund events are retained and streamed without changing `CANCELLED` status.
 - Notifies connected clients (publishes to a Redis channel consumed by the SSE handler at `/api/tournaments/[id]/events`).
 - Stores a per-contract cursor to guarantee at-least-once processing with idempotent upserts (dedupe on `txHash`).
 
@@ -403,7 +411,7 @@ A `prisma/seed.ts` that creates the seeded **admin** user from `ADMIN_USERNAME`/
 
 **Flow 03 — Referee finalises.** Referee opens `/settle` → assigns 1st/2nd/3rd (drag-and-drop or manual entry of wallet addresses) → `POST /api/tournaments/[id]/finalize` validates + builds `finalize_results` XDR (referee as source) → Freighter signs → submitted → contract sends the split → UI shows payout txs with explorer links.
 
-**Flow 04 — Cancellation (refund).** Organiser (pre-finalisation) clicks "Cancel" → `POST /api/tournaments/[id]/cancel` builds `cancel_tournament` (or refund set) → Freighter signs → submitted → each player refunded → status `CANCELLED`.
+**Flow 04 — Cancellation and refund claims.** Organiser (before deadline/finalisation) clicks "Cancel" → `POST /api/tournaments/[id]/cancel` builds `cancel_tournament` → Freighter signs → submitted → status `CANCELLED`. Each registered player can then connect a wallet and submit `claim_refund`; any caller may relay the claim, but the entry fee always goes to the registered player.
 
 ---
 
@@ -465,5 +473,5 @@ S3_FORCE_PATH_STYLE=true
 2. Multiple wallets scan the join QR or open the detail page, then sign `join_tournament`; the live pool counter and participant list update in real time.
 3. Referee submits 1st/2nd/3rd; the contract pays 60/30/10 in a single finalisation.
 4. Three payout transactions are linkable on the Stellar explorer.
-5. Cancellation before finalisation refunds all players and sets status `CANCELLED`.
+5. Cancellation before the deadline sets status `CANCELLED`; registered players claim their own entry-fee refund individually.
 6. End-to-end happy path completes well under two minutes.

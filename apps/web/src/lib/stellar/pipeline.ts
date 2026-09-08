@@ -99,7 +99,7 @@ export function validateInitializeXdr(signedXdrStr: string, expected: Initialize
 
 export async function submitSignedXdr(
   signedXdrStr: string,
-  intent: "deploy" | "initialize" | "join" | "finalize" | "cancel",
+  intent: "deploy" | "initialize" | "join" | "claim_refund" | "finalize" | "cancel",
   opts: { attempts?: number; intervalMs?: number } = {},
 ): Promise<SubmitResult> {
   const parsed = signedXdrSchema.safeParse(signedXdrStr);
@@ -128,7 +128,7 @@ export async function submitSignedXdr(
 }
 
 function extractContractId(
-  intent: "deploy" | "initialize" | "join" | "finalize" | "cancel",
+  intent: "deploy" | "initialize" | "join" | "claim_refund" | "finalize" | "cancel",
   got: { returnValue?: unknown },
 ): string | undefined {
   if (intent !== "deploy" || !got.returnValue) return undefined;

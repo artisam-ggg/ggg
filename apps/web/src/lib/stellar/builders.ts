@@ -38,6 +38,18 @@ export async function buildJoinTx(params: {
   return { xdr: assembled.toXDR(), network: networkName() };
 }
 
+/** Builds a permissionless refund claim which always pays the registered player. */
+export async function buildClaimRefundTx(params: {
+  contractId: string;
+  playerAddress: string;
+}): Promise<{ xdr: string; network: string }> {
+  parse(stellarContractId, params.contractId, "contractId");
+  parse(stellarPublicKey, params.playerAddress, "playerAddress");
+  const c = clientFor(params.contractId, params.playerAddress);
+  const assembled = await c.claim_refund({ player: params.playerAddress });
+  return { xdr: assembled.toXDR(), network: networkName() };
+}
+
 /**
  * Builds the `initialize` invocation for a freshly-deployed escrow contract.
  *

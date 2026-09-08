@@ -1,7 +1,7 @@
 import { Prisma } from "web/src/generated/prisma/client";
 import { prisma } from "./db";
 
-export type EventType = "REGISTERED" | "FINALIZED" | "CANCELLED";
+export type EventType = "REGISTERED" | "FINALIZED" | "CANCELLED" | "REFUND_CLAIMED";
 
 export interface DecodedEvent {
   type: EventType;
@@ -73,7 +73,7 @@ export async function applyEvent(
         where: { id: tournament.id },
         data: { status: "FINISHED", finalizedAt: new Date() },
       });
-    } else {
+    } else if (evt.type === "CANCELLED") {
       await tx.tournament.update({
         where: { id: tournament.id },
         data: { status: "CANCELLED", cancelledAt: new Date() },

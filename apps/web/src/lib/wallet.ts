@@ -35,7 +35,7 @@ export async function ensureWallet(expectedPassphrase: string): Promise<string> 
 
 export async function signAndSubmit(
   unsignedXdr: string,
-  intent: "deploy" | "initialize" | "join" | "finalize" | "cancel",
+  intent: "deploy" | "initialize" | "join" | "claim_refund" | "finalize" | "cancel",
   submitUrl: string,
   expectedPassphrase: string,
 ): Promise<SubmitResult> {

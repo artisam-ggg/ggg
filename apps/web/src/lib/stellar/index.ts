@@ -2,6 +2,7 @@ export {
   buildDeployInitializeTx,
   buildInitializeTx,
   buildJoinTx,
+  buildClaimRefundTx,
   buildFinalizeTx,
   buildCancelTx,
 } from "./builders";

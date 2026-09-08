@@ -26,7 +26,7 @@ Implemented the trustless tournament prize-escrow contract (`contracts/escrow`) 
 - `initialize` (organizer-only) with validation of distribution bps, entry fee, and organizer≠referee.
 - `join_tournament` (player-auth) pulls entry fee, dedupes players, emits `registered` event.
 - `finalize_results` (referee-only) pays 60/30/10 with deterministic dust to 1st place; emits `finalized` event.
-- `cancel_tournament` (organizer-only) refunds all players; emits `cancelled` event.
+- `cancel_tournament` (organizer-only) records cancellation; registered players claim refunds individually.
 - Read-only `get_pool`, `get_reward`, `is_finished`.
 - Exhaustive `#[cfg(test)]` suite (28 tests) covering happy paths and all reverts.
 - Built, optimized, and uploaded WASM to Testnet; recorded `ESCROW_WASM_HASH` in `apps/web/.env.example`.
@@ -42,7 +42,7 @@ Built the server-side Stellar integration module (`apps/web/src/lib/stellar/`) t
 - Network-aware Stellar.Expert URL builders for transactions and contracts.
 - Shared Vitest fakes for RPC/Horizon plus canned simulation/transaction responses.
 - `simulateAndAssemble` pipeline that always simulates before returning XDR, and `submitSignedXdr` that submits a Freighter-signed XDR and polls `getTransaction` with bounded retries/timeouts.
-- Unsigned-XDR builders for `join_tournament`, `finalize_results`, `cancel_tournament`, and `deploy` (the generated Phase 1 binding deploys the contract; initialize is a known follow-up once the contract/binding supports constructor-style deploy or a manual multi-op transaction).
+- Unsigned-XDR builders for `join_tournament`, `claim_refund`, `finalize_results`, `cancel_tournament`, and `deploy` (the generated Phase 1 binding deploys the contract; initialize is a known follow-up once the contract/binding supports constructor-style deploy or a manual multi-op transaction).
 - Public barrel (`index.ts`) exporting the exact Phase-4 contract surface.
 - Gated Testnet integration test (`RUN_STELLAR_IT=1`) proving a deploy XDR simulates successfully against Testnet.
 - Added `@stellar/stellar-sdk` 15 to `apps/web` and adjusted the generated contract-client package for strict TypeScript/ESLint compatibility.
@@ -55,7 +55,7 @@ Stood up the standalone `apps/subscriber` worker that ingests on-chain activity 
 - `SubscriberCursor` model + migration (per-contract ledger cursor) and a `ContractEvent @@unique([txHash, type])` migration backing idempotent dedupe.
 - `apps/subscriber` package: Zod-validated `getEvents` wrapper, fail-closed env loader, Prisma singleton reusing the web-generated client through the `web` workspace dependency.
 - Per-contract ledger cursor with restart recovery (`getCursor`/`setCursor`), advanced only after a successful ingest+publish pass (at-least-once).
-- Idempotent reconciliation of `registered`/`finalized`/`cancelled` events into `ContractEvent`/`Participant`/`Payout`/`Tournament` inside one transaction, deduped on `txHash` (replays are no-ops); money handled as `BigInt`.
+- Idempotent reconciliation of `registered`/`finalized`/`cancelled`/`refund_claimed` events into `ContractEvent`/`Participant`/`Payout`/`Tournament` inside one transaction, deduped on `txHash` (replays are no-ops); money handled as `BigInt`.
 - Redis publish to `tournament:<id>` + `pollTournament` orchestration; service loop polls every `ACTIVE` tournament with a `contractId`, isolates per-tournament failures, and shuts down gracefully on SIGTERM/SIGINT.
 - `GET /api/tournaments/[id]/events` SSE route: replays recent confirmed `ContractEvent` rows from Postgres (source of truth) then streams the Redis channel, with heartbeats and a `?fallback=poll` mode.
 - `useTournamentEvents` EventSource hook with auto-reconnect; `<PrizePoolCounter>` ticks up off the stream (key-driven `pool-pop` keyframe, reduced-motion aware) and `<LiveFeed>` renders a human-readable gloss ticker (reduced-motion aware).

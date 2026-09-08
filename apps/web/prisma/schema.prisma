@@ -28,6 +28,7 @@ enum EventType {
   REGISTERED
   FINALIZED
   CANCELLED
+  REFUND_CLAIMED
 }
 
 model User {
