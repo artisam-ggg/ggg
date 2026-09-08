@@ -50,7 +50,8 @@ export const Errors = {
   13: {message:"DeadlineExceedsTestnetSafeHorizon"},
   14: {message:"DeadlineNotReached"},
   15: {message:"PlayerNotRegistered"},
-  16: {message:"RefundAlreadyClaimed"}
+  16: {message:"RefundAlreadyClaimed"},
+  17: {message:"MaxPlayersReached"}
 }
 
 export type DataKey = {tag: "Organizer", values: void} | {tag: "Referee", values: void} | {tag: "Token", values: void} | {tag: "EntryFee", values: void} | {tag: "DistributionBps", values: void} | {tag: "Players", values: void} | {tag: "Finished", values: void} | {tag: "Cancelled", values: void} | {tag: "Winners", values: void} | {tag: "SettlementDeadline", values: void} | {tag: "RefundClaimed", values: readonly [string]};
@@ -76,6 +77,13 @@ export interface Client {
    * Construct and simulate a is_finished transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    */
   is_finished: (options?: MethodOptions) => Promise<AssembledTransaction<boolean>>
+
+  /**
+   * Construct and simulate a claim_refund transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Anyone may submit this claim, but it always pays the registered player.
+   * Cancellation enables immediate claims; otherwise the deadline is inclusive.
+   */
+  claim_refund: ({player}: {player: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
    * Construct and simulate a join_tournament transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -110,13 +118,14 @@ export class Client extends ContractClient {
   }
   constructor(public readonly options: ContractClientOptions) {
     super(
-      new ContractSpec([ "AAAABAAAAAAAAAAAAAAABUVycm9yAAAAAAAAEAAAAAAAAAASQWxyZWFkeUluaXRpYWxpemVkAAAAAAABAAAAAAAAABJCYWREaXN0cmlidXRpb25MZW4AAAAAAAIAAAAAAAAAEkJhZERpc3RyaWJ1dGlvblN1bQAAAAAAAwAAAAAAAAATTm9uUG9zaXRpdmVFbnRyeUZlZQAAAAAEAAAAAAAAABJPcmdhbml6ZXJJc1JlZmVyZWUAAAAAAAUAAAAAAAAADk5vdEluaXRpYWxpemVkAAAAAAAGAAAAAAAAAA9BbHJlYWR5RmluaXNoZWQAAAAABwAAAAAAAAAQQWxyZWFkeUNhbmNlbGxlZAAAAAgAAAAAAAAADUFscmVhZHlKb2luZWQAAAAAAAAJAAAAAAAAABJXaW5uZXJzTm90RGlzdGluY3QAAAAAAAoAAAAAAAAAE1dpbm5lck5vdFJlZ2lzdGVyZWQAAAAACwAAAAAAAAARRGVhZGxpbmVOb3RGdXR1cmUAAAAAAAAMAAAAAAAAACFEZWFkbGluZUV4Y2VlZHNUZXN0bmV0U2FmZUhvcml6b24AAAAAAAANAAAAAAAAABJEZWFkbGluZU5vdFJlYWNoZWQAAAAAAA4AAAAAAAAAE1BsYXllck5vdFJlZ2lzdGVyZWQAAAAADwAAAAAAAAAUUmVmdW5kQWxyZWFkeUNsYWltZWQAAAAQ",
+      new ContractSpec([ "AAAABAAAAAAAAAAAAAAABUVycm9yAAAAAAAAEQAAAAAAAAASQWxyZWFkeUluaXRpYWxpemVkAAAAAAABAAAAAAAAABJCYWREaXN0cmlidXRpb25MZW4AAAAAAAIAAAAAAAAAEkJhZERpc3RyaWJ1dGlvblN1bQAAAAAAAwAAAAAAAAATTm9uUG9zaXRpdmVFbnRyeUZlZQAAAAAEAAAAAAAAABJPcmdhbml6ZXJJc1JlZmVyZWUAAAAAAAUAAAAAAAAADk5vdEluaXRpYWxpemVkAAAAAAAGAAAAAAAAAA9BbHJlYWR5RmluaXNoZWQAAAAABwAAAAAAAAAQQWxyZWFkeUNhbmNlbGxlZAAAAAgAAAAAAAAADUFscmVhZHlKb2luZWQAAAAAAAAJAAAAAAAAABJXaW5uZXJzTm90RGlzdGluY3QAAAAAAAoAAAAAAAAAE1dpbm5lck5vdFJlZ2lzdGVyZWQAAAAACwAAAAAAAAARRGVhZGxpbmVOb3RGdXR1cmUAAAAAAAAMAAAAAAAAACFEZWFkbGluZUV4Y2VlZHNUZXN0bmV0U2FmZUhvcml6b24AAAAAAAANAAAAAAAAABJEZWFkbGluZU5vdFJlYWNoZWQAAAAAAA4AAAAAAAAAE1BsYXllck5vdFJlZ2lzdGVyZWQAAAAADwAAAAAAAAAUUmVmdW5kQWxyZWFkeUNsYWltZWQAAAAQAAAAAAAAABFNYXhQbGF5ZXJzUmVhY2hlZAAAAAAAABE=",
         "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAACwAAAAAAAAAAAAAACU9yZ2FuaXplcgAAAAAAAAAAAAAAAAAAB1JlZmVyZWUAAAAAAAAAAAAAAAAFVG9rZW4AAAAAAAAAAAAAAAAAAAhFbnRyeUZlZQAAAAAAAAAAAAAAD0Rpc3RyaWJ1dGlvbkJwcwAAAAAAAAAAAAAAAAdQbGF5ZXJzAAAAAAAAAAAAAAAACEZpbmlzaGVkAAAAAAAAAAAAAAAJQ2FuY2VsbGVkAAAAAAAAAAAAAAAAAAAHV2lubmVycwAAAAAAAAAAAAAAABJTZXR0bGVtZW50RGVhZGxpbmUAAAAAAAEAAAAAAAAADVJlZnVuZENsYWltZWQAAAAAAAABAAAAEw==",
         "AAAABQAAAEtTdGFibGUgZm9yICMyMTY6IHRvcGljcyBhcmUgKCJyZWZ1bmRfY2xhaW1lZCIsIHBsYXllcik7IGRhdGEgaXMgeyBhbW91bnQgfS4AAAAAAAAAAA1SZWZ1bmRDbGFpbWVkAAAAAAAAAQAAAA5yZWZ1bmRfY2xhaW1lZAAAAAAAAgAAAAAAAAAGcGxheWVyAAAAAAATAAAAAQAAAAAAAAAGYW1vdW50AAAAAAALAAAAAAAAAAI=",
         "AAAAAAAAAAAAAAAIZ2V0X3Bvb2wAAAAAAAAAAQAAAAs=",
         "AAAAAAAAAAAAAAAKZ2V0X3Jld2FyZAAAAAAAAQAAAAAAAAAGcGxheWVyAAAAAAATAAAAAQAAAAs=",
         "AAAAAAAAAAAAAAAKaW5pdGlhbGl6ZQAAAAAABgAAAAAAAAAJb3JnYW5pemVyAAAAAAAAEwAAAAAAAAAHcmVmZXJlZQAAAAATAAAAAAAAAAV0b2tlbgAAAAAAABMAAAAAAAAACWVudHJ5X2ZlZQAAAAAAAAsAAAAAAAAAEGRpc3RyaWJ1dGlvbl9icHMAAAPqAAAABAAAAAAAAAATc2V0dGxlbWVudF9kZWFkbGluZQAAAAAGAAAAAA==",
         "AAAAAAAAAAAAAAALaXNfZmluaXNoZWQAAAAAAAAAAAEAAAAB",
+        "AAAAAAAAAJNBbnlvbmUgbWF5IHN1Ym1pdCB0aGlzIGNsYWltLCBidXQgaXQgYWx3YXlzIHBheXMgdGhlIHJlZ2lzdGVyZWQgcGxheWVyLgpDYW5jZWxsYXRpb24gZW5hYmxlcyBpbW1lZGlhdGUgY2xhaW1zOyBvdGhlcndpc2UgdGhlIGRlYWRsaW5lIGlzIGluY2x1c2l2ZS4AAAAADGNsYWltX3JlZnVuZAAAAAEAAAAAAAAABnBsYXllcgAAAAAAEwAAAAA=",
         "AAAAAAAAAAAAAAAPam9pbl90b3VybmFtZW50AAAAAAEAAAAAAAAABnBsYXllcgAAAAAAEwAAAAA=",
         "AAAAAAAAAAAAAAAQZmluYWxpemVfcmVzdWx0cwAAAAMAAAAAAAAABWZpcnN0AAAAAAAAEwAAAAAAAAAGc2Vjb25kAAAAAAATAAAAAAAAAAV0aGlyZAAAAAAAABMAAAAA",
         "AAAAAAAAAAAAAAARY2FuY2VsX3RvdXJuYW1lbnQAAAAAAAAAAAAAAA==" ]),
@@ -128,6 +137,7 @@ export class Client extends ContractClient {
         get_reward: this.txFromJSON<i128>,
         initialize: this.txFromJSON<null>,
         is_finished: this.txFromJSON<boolean>,
+        claim_refund: this.txFromJSON<null>,
         join_tournament: this.txFromJSON<null>,
         finalize_results: this.txFromJSON<null>,
         cancel_tournament: this.txFromJSON<null>
