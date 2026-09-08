@@ -448,6 +448,7 @@ fn finalize_pays_60_30_10() {
     let p2 = join(&env, &escrow, &sac);
     let p3 = join(&env, &escrow, &sac);
     // pool = 3_000_000
+    let pool = escrow.get_pool();
 
     escrow.finalize_results(&p1, &p2, &p3);
 
@@ -458,6 +459,10 @@ fn finalize_pays_60_30_10() {
     assert_eq!(token.balance(&p3), 10_000_000 - 1_000_000 + 300_000); // 9_300_000
     assert_eq!(token.balance(&escrow.address), 0i128); // pool fully distributed
     assert_eq!(escrow.get_reward(&p1), 1_800_000i128);
+    assert_eq!(
+        pool,
+        escrow.get_reward(&p1) + escrow.get_reward(&p2) + escrow.get_reward(&p3)
+    );
 }
 
 #[test]

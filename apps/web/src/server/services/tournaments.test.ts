@@ -72,6 +72,31 @@ describe("getTournamentDetail", () => {
       refundClaimedPlayers: ["GA"],
     });
   });
+
+  it("clamps the displayed pool at zero when refunds exceed persisted participants", async () => {
+    findUniqueMock.mockResolvedValue({
+      id: "t_1",
+      name: "Tournament",
+      gameTitle: "Game",
+      status: "CANCELLED",
+      asset: "XLM",
+      entryFee: 10_000_000n,
+      firstBps: 6000,
+      secondBps: 3000,
+      thirdBps: 1000,
+      contractId: "CESCROW",
+      tokenAddr: "CTOKEN",
+      organizerId: "user_1",
+      organizerAddr: "GORG",
+      refereeAddr: "GREF",
+      settlementDeadline: null,
+      participants: [],
+      payouts: [],
+      events: [{ payload: { player: "GA", amount: "10000000" } }],
+    });
+
+    await expect(getTournamentDetail("t_1")).resolves.toMatchObject({ pool: "0" });
+  });
 });
 
 describe("submitTournamentTx", () => {

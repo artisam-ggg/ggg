@@ -145,7 +145,7 @@ finalize_results(first: Address, second: Address, third: Address)
 get_pool() -> i128
 ```
 
-Returns the escrow contract's current token balance. It decreases as individual refunds are paid and reaches zero after all refunds or final payouts.
+Returns the escrow contract's current raw token balance. Tokens sent directly to the contract can make this exceed the registration-derived settlement pool and can remain after all refunds or final payouts.
 
 ```rust
 get_reward(player: Address) -> i128

@@ -2,6 +2,8 @@
 import { useMemo } from "react";
 import { useTournamentEvents } from "@/hooks/use-tournament-events";
 
+const EMPTY_PLAYERS: string[] = [];
+
 /** Convert a stroop string to human-readable decimal (7 decimal places). */
 function fmt(stroops: string) {
   const n = BigInt(stroops);
@@ -22,8 +24,8 @@ export function PrizePoolCounter({
   asset,
   participantCount,
   entryFee,
-  initialParticipants = [], // new prop
-  initialRefundPlayers = [],
+  initialParticipants = EMPTY_PLAYERS, // new prop
+  initialRefundPlayers = EMPTY_PLAYERS,
 }: {
   tournamentId: string;
   initialPool: string;
@@ -37,6 +39,7 @@ export function PrizePoolCounter({
 
   // Build a Set of initial participant addresses for quick lookup
   const initialSet = useMemo(() => new Set(initialParticipants), [initialParticipants]);
+  const initialRefundSet = useMemo(() => new Set(initialRefundPlayers), [initialRefundPlayers]);
 
   // Pool + count are derived state — computed during render, not stored.
   const { pool, count, bumps } = useMemo(() => {
@@ -46,7 +49,7 @@ export function PrizePoolCounter({
 
     // Track addresses already counted from the stream
     const countedInStream = new Set<string>();
-    const refundedPlayers = new Set(initialRefundPlayers);
+    const refundedPlayers = new Set(initialRefundSet);
 
     for (const ev of events) {
       if (ev.type === "REFUND_CLAIMED") {
@@ -88,7 +91,7 @@ export function PrizePoolCounter({
     }
 
     return { pool: p, count: c, bumps: b };
-  }, [events, initialPool, participantCount, initialSet, initialRefundPlayers]);
+  }, [events, initialPool, participantCount, initialSet, initialRefundSet]);
 
   return (
     <div className="high-contrast-card acid-glow rounded-none p-8">

@@ -409,7 +409,8 @@ export async function getTournamentDetail(id: string) {
       : [];
   });
   const refunded = refundClaims.reduce((total, claim) => total + BigInt(claim.amount), 0n);
-  const pool = (t.entryFee * BigInt(t.participants.length) - refunded).toString();
+  const grossPool = t.entryFee * BigInt(t.participants.length);
+  const pool = (grossPool > refunded ? grossPool - refunded : 0n).toString();
 
   return {
     id: t.id,
