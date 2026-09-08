@@ -1,5 +1,6 @@
 "use client";
 import { useTournamentEvents, type LiveEvent } from "@/hooks/use-tournament-events";
+import { formatStroops } from "@/lib/format-stroops";
 
 const trunc = (a: string): string => (a.length > 10 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a);
 
@@ -16,7 +17,7 @@ function gloss(ev: LiveEvent): string {
   if (ev.type === "CANCELLED") {
     return `Tournament cancelled — ${String(ev.data.claimableCount)} refunds available to claim`;
   }
-  return `${trunc(String(ev.data.player))} claimed ${String(ev.data.amount)}`;
+  return `${trunc(String(ev.data.player))} claimed ${formatStroops(String(ev.data.amount))}`;
 }
 
 /**

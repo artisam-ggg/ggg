@@ -776,6 +776,7 @@ fn refund_succeeds_at_deadline_and_conserves_pool() {
     env.ledger().with_mut(|ledger| ledger.timestamp = 1_001);
 
     escrow.claim_refund(&p1);
+    assert_eq!(escrow.get_pool(), 2_000_000i128);
     escrow.claim_refund(&p2);
     escrow.claim_refund(&p3);
 
@@ -783,6 +784,7 @@ fn refund_succeeds_at_deadline_and_conserves_pool() {
     assert_eq!(token.balance(&p2), 10_000_000i128);
     assert_eq!(token.balance(&p3), 10_000_000i128);
     assert_eq!(token.balance(&escrow.address), 0i128);
+    assert_eq!(escrow.get_pool(), 0i128);
 }
 
 #[test]

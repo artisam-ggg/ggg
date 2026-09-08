@@ -42,10 +42,12 @@ export async function buildJoinTx(params: {
 export async function buildClaimRefundTx(params: {
   contractId: string;
   playerAddress: string;
+  submitterAddress: string;
 }): Promise<{ xdr: string; network: string }> {
   parse(stellarContractId, params.contractId, "contractId");
   parse(stellarPublicKey, params.playerAddress, "playerAddress");
-  const c = clientFor(params.contractId, params.playerAddress);
+  parse(stellarPublicKey, params.submitterAddress, "submitterAddress");
+  const c = clientFor(params.contractId, params.submitterAddress);
   const assembled = await c.claim_refund({ player: params.playerAddress });
   return { xdr: assembled.toXDR(), network: networkName() };
 }

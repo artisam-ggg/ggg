@@ -305,6 +305,7 @@ export async function buildJoin(
 export async function buildRefundClaim(
   id: string,
   playerAddress: string,
+  submitterAddress: string,
 ): Promise<{ unsignedXdr: string; network: string }> {
   const t = await prisma.tournament.findUnique({ where: { id } });
   if (!t) throw Object.assign(new Error("Tournament not found"), { status: 404 });
@@ -318,6 +319,7 @@ export async function buildRefundClaim(
   const { xdr, network } = await buildClaimRefundTx({
     contractId: t.contractId,
     playerAddress,
+    submitterAddress,
   });
   return { unsignedXdr: xdr, network };
 }

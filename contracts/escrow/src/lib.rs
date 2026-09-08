@@ -140,19 +140,13 @@ impl Escrow {
     }
 
     pub fn get_pool(env: Env) -> i128 {
-        let players: Vec<Address> = env
-            .storage()
-            .instance()
-            .get(&DataKey::Players)
-            .unwrap_or(Vec::new(&env));
-        let entry_fee: i128 = env
-            .storage()
-            .instance()
-            .get(&DataKey::EntryFee)
-            .unwrap_or(0);
-        (players.len() as i128)
-            .checked_mul(entry_fee)
-            .expect("pool overflow")
+        let storage = env.storage().instance();
+        let token: Option<Address> = storage.get(&DataKey::Token);
+        token
+            .map(|token| {
+                token::TokenClient::new(&env, &token).balance(&env.current_contract_address())
+            })
+            .unwrap_or(0)
     }
 
     pub fn is_finished(env: Env) -> bool {

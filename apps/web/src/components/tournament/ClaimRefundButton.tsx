@@ -29,18 +29,21 @@ export function ClaimRefundButton({
       const response = await fetch(`/api/tournaments/${tournamentId}/refund`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ playerAddress: player }),
+        body: JSON.stringify({ playerAddress: player, submitterAddress: player }),
       });
       const built = (await response.json()) as {
         ok: boolean;
-        data?: { unsignedXdr: string };
-        error?: string;
+        data?: { unsignedXdr?: string };
+        error?: { message?: string } | string;
       };
-      if (!built.ok) throw new Error(built.error ?? "Failed to build refund claim");
+      const message = typeof built.error === "string" ? built.error : built.error?.message;
+      if (!response.ok || !built.ok || !built.data?.unsignedXdr) {
+        throw new Error(message ?? "Failed to build refund claim");
+      }
 
       setPhase("signing");
       await signAndSubmit(
-        built.data!.unsignedXdr,
+        built.data.unsignedXdr,
         "claim_refund",
         `/api/tournaments/${tournamentId}/submit`,
         passphrase,

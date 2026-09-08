@@ -46,11 +46,15 @@ describe("LiveFeed", () => {
     useTournamentEvents.mockReturnValue({
       events: [
         { type: "CANCELLED", txHash: "tx3", data: { claimableCount: 4 } },
-        { type: "REFUND_CLAIMED", txHash: "tx4", data: { player: "GPLAYER", amount: "10" } },
+        {
+          type: "REFUND_CLAIMED",
+          txHash: "tx4",
+          data: { player: "GPLAYER", amount: "10000000" },
+        },
       ],
     });
     render(<LiveFeed tournamentId="t_1" />);
     expect(screen.getByText(/refunds available to claim/i)).toBeInTheDocument();
-    expect(screen.getByText(/claimed 10/i)).toBeInTheDocument();
+    expect(screen.getByText(/claimed 1\.0000000/i)).toBeInTheDocument();
   });
 });

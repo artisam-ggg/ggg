@@ -3,7 +3,7 @@ import { ok, err } from "@/lib/api";
 import { assertSameOrigin, CsrfError } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
 import { StellarError } from "@/lib/stellar";
-import { joinSchema } from "@/lib/validation/tournament";
+import { refundClaimSchema } from "@/lib/validation/tournament";
 import { buildRefundClaim } from "@/server/services/tournaments";
 
 /** Build an unsigned claim for the named player; the contract always pays that player. */
@@ -28,13 +28,13 @@ export async function POST(
   } catch {
     return err("INVALID_REQUEST", "Invalid request body", 400);
   }
-  const parsed = joinSchema.safeParse(body);
+  const parsed = refundClaimSchema.safeParse(body);
   if (!parsed.success) {
     return err("INVALID_REQUEST", parsed.error.issues[0]?.message ?? "Invalid input", 400);
   }
 
   try {
-    return ok(await buildRefundClaim(id, parsed.data.playerAddress));
+    return ok(await buildRefundClaim(id, parsed.data.playerAddress, parsed.data.submitterAddress));
   } catch (e) {
     if (e instanceof StellarError) return err("STELLAR_ERROR", e.message, 422);
     const status = (e as { status?: number }).status;

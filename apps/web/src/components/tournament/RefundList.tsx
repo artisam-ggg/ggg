@@ -1,13 +1,9 @@
 // SERVER COMPONENT — no "use client" directive.
 // Pure server render from props; lists claims made available by cancellation.
 
-type Participant = { playerAddr: string; joinedAt: string };
+import { formatStroops } from "@/lib/format-stroops";
 
-/** Convert a stroop string to a human-readable decimal (7 dp). */
-function fmt(stroops: string): string {
-  const n = BigInt(stroops);
-  return `${n / 10_000_000n}.${(n % 10_000_000n).toString().padStart(7, "0")}`;
-}
+type Participant = { playerAddr: string; joinedAt: string };
 
 function trunc(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-6)}`;
@@ -35,9 +31,10 @@ export function RefundList({
 
   return (
     <div className="mt-4">
-      <p className="label-caps text-error">Refund claims available ({participants.length})</p>
+      <p className="label-caps text-error">Registered players ({participants.length})</p>
       <p className="mt-2 text-sm text-on-surface-variant">
-        Each registered player may claim {fmt(entryFee)} {asset} to their registered wallet.
+        Each registered player may claim {formatStroops(entryFee)} {asset} to their registered
+        wallet.
       </p>
       <ul className="mt-3 flex flex-col gap-2" aria-label="Refund claims">
         {participants.map((p) => (
@@ -48,7 +45,7 @@ export function RefundList({
           >
             <span className="data-mono text-on-surface">{trunc(p.playerAddr)}</span>
             <span className="data-mono text-error">
-              {fmt(entryFee)} {asset}
+              {formatStroops(entryFee)} {asset}
             </span>
           </li>
         ))}
