@@ -97,6 +97,7 @@ export default async function TournamentDetailPage({
             participantCount={t.participants.length}
             entryFee={t.entryFee}
             initialParticipants={participantAddresses}
+            initialRefundPlayers={t.refundClaimedPlayers}
           />
 
           {t.status === "ACTIVE" && !t.refundsClaimable && t.contractId && (

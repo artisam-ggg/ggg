@@ -23,6 +23,7 @@ export function PrizePoolCounter({
   participantCount,
   entryFee,
   initialParticipants = [], // new prop
+  initialRefundPlayers = [],
 }: {
   tournamentId: string;
   initialPool: string;
@@ -30,6 +31,7 @@ export function PrizePoolCounter({
   participantCount: number;
   entryFee: string;
   initialParticipants?: string[]; // addresses already counted
+  initialRefundPlayers?: string[];
 }) {
   const { events } = useTournamentEvents(tournamentId);
 
@@ -44,8 +46,26 @@ export function PrizePoolCounter({
 
     // Track addresses already counted from the stream
     const countedInStream = new Set<string>();
+    const refundedPlayers = new Set(initialRefundPlayers);
 
     for (const ev of events) {
+      if (ev.type === "REFUND_CLAIMED") {
+        const playerAddr = ev.data.player;
+        const amount = ev.data.amount;
+        if (
+          typeof playerAddr !== "string" ||
+          refundedPlayers.has(playerAddr) ||
+          typeof amount !== "string" ||
+          !/^\d+$/.test(amount)
+        ) {
+          continue;
+        }
+
+        refundedPlayers.add(playerAddr);
+        p -= BigInt(amount);
+        continue;
+      }
+
       if (ev.type !== "REGISTERED") continue;
 
       // Cast player to string (it's a Stellar address)
@@ -68,7 +88,7 @@ export function PrizePoolCounter({
     }
 
     return { pool: p, count: c, bumps: b };
-  }, [events, initialPool, participantCount, initialSet]);
+  }, [events, initialPool, participantCount, initialSet, initialRefundPlayers]);
 
   return (
     <div className="high-contrast-card acid-glow rounded-none p-8">

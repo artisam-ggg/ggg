@@ -391,12 +391,18 @@ export async function getTournamentDetail(id: string) {
     include: {
       participants: { orderBy: { joinedAt: "asc" } },
       payouts: { orderBy: { rank: "asc" } },
+      events: {
+        where: { type: "REFUND_CLAIMED" },
+        select: { payload: true },
+      },
     },
   });
 
   if (!t) return null;
 
-  const pool = (t.entryFee * BigInt(t.participants.length)).toString();
+  const refundClaims = t.events.map((event) => event.payload as { player: string; amount: string });
+  const refunded = refundClaims.reduce((total, claim) => total + BigInt(claim.amount), 0n);
+  const pool = (t.entryFee * BigInt(t.participants.length) - refunded).toString();
 
   return {
     id: t.id,
@@ -413,6 +419,7 @@ export async function getTournamentDetail(id: string) {
     organizerAddr: t.organizerAddr,
     refereeAddr: t.refereeAddr,
     pool,
+    refundClaimedPlayers: refundClaims.map((claim) => claim.player),
     participants: t.participants.map((p) => ({
       playerAddr: p.playerAddr,
       joinedAt: p.joinedAt.toISOString(),

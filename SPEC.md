@@ -339,7 +339,7 @@ Prisma 7 with `generator client { provider = "prisma-client" }` and a `prisma.co
 enum Role { ADMIN ORGANIZER }
 enum Asset { XLM USDC }
 enum TournamentStatus { DRAFT ACTIVE FINISHED CANCELLED }
-enum EventType { REGISTERED FINALIZED CANCELLED }
+enum EventType { REGISTERED FINALIZED CANCELLED REFUND_CLAIMED }
 
 model User {
   id           String       @id @default(cuid())
