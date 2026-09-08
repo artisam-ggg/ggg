@@ -15,6 +15,9 @@ pub const TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS: u32 = 90 * LEDGERS_PER_DA
 /// Keeps the contract instance and code available for the maximum 90-day
 /// settlement window plus a conservative 30-day restoration margin.
 pub const TESTNET_INSTANCE_TTL_EXTEND_TO_LEDGERS: u32 = 120 * LEDGERS_PER_DAY;
+/// Testnet-simulated operational ceiling. Refunds are individual O(1) claims,
+/// so this limit is about bounded registration storage, not refund batching.
+pub const MAX_PLAYERS: u32 = 100;
 
 #[contracttype]
 #[derive(Clone)]
@@ -52,6 +55,7 @@ pub enum Error {
     DeadlineNotReached = 14,
     PlayerNotRegistered = 15,
     RefundAlreadyClaimed = 16,
+    MaxPlayersReached = 17,
 }
 
 /// Stable for #216: topics are ("refund_claimed", player); data is { amount }.
@@ -215,6 +219,9 @@ impl Escrow {
         if players.contains(&player) {
             panic_with_error!(&env, Error::AlreadyJoined);
         }
+        if players.len() >= MAX_PLAYERS {
+            panic_with_error!(&env, Error::MaxPlayersReached);
+        }
 
         let token: Address = storage.get(&DataKey::Token).unwrap();
         let entry_fee: i128 = storage.get(&DataKey::EntryFee).unwrap();
@@ -319,21 +326,51 @@ impl Escrow {
             panic_with_error!(&env, Error::AlreadyCancelled);
         }
 
-        let players: Vec<Address> = storage.get(&DataKey::Players).unwrap();
-        let entry_fee: i128 = storage.get(&DataKey::EntryFee).unwrap();
-        let token: Address = storage.get(&DataKey::Token).unwrap();
-        let client = token::TokenClient::new(&env, &token);
-        let contract = env.current_contract_address();
-
-        for p in players.iter() {
-            client.transfer(&contract, &p, &entry_fee);
-        }
-
         storage.set(&DataKey::Cancelled, &true);
         extend_instance_ttl(&env, TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS);
 
-        env.events()
-            .publish((symbol_short!("cancelled"),), players.len() as u32);
+        env.events().publish((symbol_short!("cancelled"),), ());
+    }
+
+    /// Anyone may submit this claim, but it always pays the registered player.
+    /// Cancellation enables immediate claims; otherwise the deadline is inclusive.
+    pub fn claim_refund(env: Env, player: Address) {
+        let storage = env.storage().instance();
+        if !storage.has(&DataKey::Organizer) {
+            panic_with_error!(&env, Error::NotInitialized);
+        }
+        if storage.get(&DataKey::Finished).unwrap_or(false) {
+            panic_with_error!(&env, Error::AlreadyFinished);
+        }
+
+        let players: Vec<Address> = storage.get(&DataKey::Players).unwrap();
+        if !players.contains(&player) {
+            panic_with_error!(&env, Error::PlayerNotRegistered);
+        }
+        let claimed_key = DataKey::RefundClaimed(player.clone());
+        if storage.has(&claimed_key) {
+            panic_with_error!(&env, Error::RefundAlreadyClaimed);
+        }
+        let cancelled: bool = storage.get(&DataKey::Cancelled).unwrap_or(false);
+        let deadline: u64 = storage.get(&DataKey::SettlementDeadline).unwrap();
+        if !cancelled && !deadline_reached(&env, deadline) {
+            panic_with_error!(&env, Error::DeadlineNotReached);
+        }
+
+        let token: Address = storage.get(&DataKey::Token).unwrap();
+        let entry_fee: i128 = storage.get(&DataKey::EntryFee).unwrap();
+        token::TokenClient::new(&env, &token).transfer(
+            &env.current_contract_address(),
+            &player,
+            &entry_fee,
+        );
+        storage.set(&claimed_key, &true);
+        extend_instance_ttl(&env, TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS);
+        RefundClaimed {
+            player,
+            amount: entry_fee,
+        }
+        .publish(&env);
     }
 }
 
