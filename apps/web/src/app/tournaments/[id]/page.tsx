@@ -72,7 +72,7 @@ export default async function TournamentDetailPage({
         <StatusChip status={t.status} />
       </header>
 
-      {t.refundsClaimable && (
+      {(t.status === "CANCELLED" || t.refundsClaimable) && (
         <section
           aria-labelledby="cancelled-heading"
           className="mt-8 rounded-2xl border-2 border-error bg-error-container p-6"

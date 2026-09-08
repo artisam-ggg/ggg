@@ -309,7 +309,7 @@ export async function buildRefundClaim(
   const t = await prisma.tournament.findUnique({ where: { id } });
   if (!t) throw Object.assign(new Error("Tournament not found"), { status: 404 });
   const deadlineReached =
-    t.settlementDeadline !== null && t.settlementDeadline.getTime() <= Date.now();
+    t.settlementDeadline != null && t.settlementDeadline.getTime() <= Date.now();
   if ((t.status !== "CANCELLED" && !(t.status === "ACTIVE" && deadlineReached)) || !t.contractId) {
     throw Object.assign(new Error("Tournament is not available for refund claims"), {
       status: 409,
@@ -426,7 +426,7 @@ export async function getTournamentDetail(id: string) {
     refundsClaimable:
       t.status === "CANCELLED" ||
       (t.status === "ACTIVE" &&
-        t.settlementDeadline !== null &&
+        t.settlementDeadline != null &&
         t.settlementDeadline.getTime() <= Date.now()),
   };
 }
