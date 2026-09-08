@@ -140,4 +140,16 @@ describe("applyEvent", () => {
     expect(events[0]?.payload).toEqual({ player: "GPLAYER1", amount: "10000000" });
     expect(tournaments.t1?.status).toBe("CANCELLED");
   });
+
+  it("ignores malformed refund claims", async () => {
+    await expect(
+      applyEvent(tournament, {
+        type: "REFUND_CLAIMED",
+        ledger: 31,
+        txHash: "tx-ref-invalid",
+        data: { player: "GPLAYER1", amount: "not-a-number" },
+      }),
+    ).resolves.toBeNull();
+    expect(events).toHaveLength(0);
+  });
 });

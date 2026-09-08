@@ -16,6 +16,15 @@ export interface Change {
   data: Record<string, unknown>;
 }
 
+function isRefundClaim(data: Record<string, unknown>): data is { player: string; amount: string } {
+  return (
+    typeof data.player === "string" &&
+    data.player.length > 0 &&
+    typeof data.amount === "string" &&
+    /^[1-9]\d*$/.test(data.amount)
+  );
+}
+
 /**
  * Apply a decoded contract event to Postgres inside one transaction, deduped on
  * `(txHash, type)`. A replay of the same event is a no-op and returns `null`
@@ -31,6 +40,8 @@ export async function applyEvent(
   },
   evt: DecodedEvent,
 ): Promise<Change | null> {
+  if (evt.type === "REFUND_CLAIMED" && !isRefundClaim(evt.data)) return null;
+
   return prisma.$transaction(async (tx) => {
     // Idempotency: dedupe on (txHash, type).
     const existing = await tx.contractEvent.findUnique({

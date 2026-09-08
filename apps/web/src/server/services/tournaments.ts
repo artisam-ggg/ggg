@@ -400,7 +400,14 @@ export async function getTournamentDetail(id: string) {
 
   if (!t) return null;
 
-  const refundClaims = t.events.map((event) => event.payload as { player: string; amount: string });
+  const refundClaims = t.events.flatMap((event) => {
+    const payload = event.payload;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return [];
+    const { player, amount } = payload as Record<string, unknown>;
+    return typeof player === "string" && typeof amount === "string" && /^[1-9]\d*$/.test(amount)
+      ? [{ player, amount }]
+      : [];
+  });
   const refunded = refundClaims.reduce((total, claim) => total + BigInt(claim.amount), 0n);
   const pool = (t.entryFee * BigInt(t.participants.length) - refunded).toString();
 

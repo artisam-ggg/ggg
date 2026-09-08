@@ -61,7 +61,10 @@ describe("getTournamentDetail", () => {
         { playerAddr: "GC", joinedAt: new Date(), joinTxHash: null },
       ],
       payouts: [],
-      events: [{ payload: { player: "GA", amount: "10000000" } }],
+      events: [
+        { payload: { player: "GA", amount: "10000000" } },
+        { payload: { player: "GB", amount: "not-a-number" } },
+      ],
     });
 
     await expect(getTournamentDetail("t_1")).resolves.toMatchObject({
