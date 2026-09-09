@@ -1,6 +1,7 @@
 export {
   buildDeployInitializeTx,
   buildInitializeTx,
+  readSettlementDeadline,
   buildJoinTx,
   buildClaimRefundTx,
   buildFinalizeTx,

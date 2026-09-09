@@ -38,6 +38,20 @@ export async function buildJoinTx(params: {
   return { xdr: assembled.toXDR(), network: networkName() };
 }
 
+/** Reads the deadline stored in a deployed deadline-aware escrow contract. */
+export async function readSettlementDeadline(params: {
+  contractId: string;
+  sourceAddress: string;
+}): Promise<bigint | undefined> {
+  parse(stellarContractId, params.contractId, "contractId");
+  parse(stellarPublicKey, params.sourceAddress, "sourceAddress");
+  const assembled = await clientFor(
+    params.contractId,
+    params.sourceAddress,
+  ).get_settlement_deadline();
+  return assembled.result;
+}
+
 /** Builds a permissionless refund claim which always pays the registered player. */
 export async function buildClaimRefundTx(params: {
   contractId: string;
@@ -137,12 +151,14 @@ export async function buildDeployInitializeTx(params: {
   tokenAddr: string;
   entryFee: bigint;
   distributionBps: [number, number, number];
+  settlementDeadline: bigint;
 }): Promise<{ xdr: string; network: string }> {
   parse(stellarPublicKey, params.organizerAddress, "organizerAddress");
   parse(stellarPublicKey, params.refereeAddress, "refereeAddress");
   parse(stellarContractId, params.tokenAddr, "tokenAddr");
   parse(i128Amount, params.entryFee, "entryFee");
   parse(bpsSchema, params.distributionBps, "distributionBps");
+  parse(u64Timestamp, params.settlementDeadline, "settlementDeadline");
   if (params.organizerAddress === params.refereeAddress) {
     throw new StellarError("INVALID_INPUT", "organizer must differ from referee");
   }

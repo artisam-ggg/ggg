@@ -21,6 +21,7 @@ d("Testnet integration", () => {
       tokenAddr: resolveSacAddress("XLM"),
       entryFee: 10_000_000n,
       distributionBps: [6000, 3000, 1000],
+      settlementDeadline: BigInt(Math.floor(Date.now() / 1000) + 24 * 60 * 60),
     });
     expect(out.network).toBe("testnet");
     expect(out.xdr.length).toBeGreaterThan(0);

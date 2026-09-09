@@ -4,6 +4,7 @@ import {
   buildCancelTx,
   buildDeployInitializeTx,
   buildInitializeTx,
+  readSettlementDeadline,
   buildFinalizeTx,
   buildClaimRefundTx,
   buildJoinTx,
@@ -38,7 +39,7 @@ export async function createTournament(
       organizerId: userId,
       organizerAddr: input.organizerAddress,
       refereeAddr: input.refereeAddress,
-      settlementDeadline: input.settlementDeadline,
+      settlementDeadline: new Date(input.settlementDeadline * 1000),
       tokenAddr,
       coverImageKey: input.coverImageKey ?? null,
       status: "DRAFT",
@@ -51,6 +52,7 @@ export async function createTournament(
     tokenAddr,
     entryFee: input.entryFee,
     distributionBps: input.distributionBps,
+    settlementDeadline: BigInt(input.settlementDeadline),
   });
 
   return { tournamentId: tournament.id, unsignedXdr, network: env.STELLAR_NETWORK };
@@ -177,6 +179,36 @@ export async function submitTournamentTx(
       distributionBps: [tournament.firstBps, tournament.secondBps, tournament.thirdBps],
       settlementDeadline: BigInt(Math.floor(settlementDeadline.getTime() / 1000)),
     });
+
+    // A previous initialize may have succeeded while its read-back failed. Avoid
+    // re-submitting it: initialize is one-time on the contract.
+    let confirmedDeadline: bigint | undefined;
+    try {
+      confirmedDeadline = await readSettlementDeadline({
+        contractId: tournament.contractId,
+        sourceAddress: tournament.organizerAddr,
+      });
+    } catch {
+      // An uninitialized contract and transient RPC failures both proceed to submit.
+    }
+    if (confirmedDeadline !== undefined) {
+      if (confirmedDeadline !== BigInt(Math.floor(settlementDeadline.getTime() / 1000))) {
+        throw Object.assign(
+          new Error("On-chain settlement deadline does not match this tournament"),
+          { status: 502 },
+        );
+      }
+      const updated = await prisma.tournament.update({
+        where: { id },
+        data: { status: "ACTIVE", deadlineConfirmedAt: new Date() },
+      });
+      return {
+        txHash: tournament.deployTxHash ?? "",
+        contractId: updated.contractId,
+        status: updated.status,
+        explorerUrl: explorerContractUrl(tournament.contractId),
+      };
+    }
   }
 
   const result = await submitSignedXdr(input.signedXdr, input.intent);
@@ -212,9 +244,31 @@ export async function submitTournamentTx(
   // initialize: a confirmed state-setting transaction makes the tournament
   // joinable.
   if (input.intent === "initialize") {
+    const settlementDeadline = requireFutureSettlementDeadline(tournament.settlementDeadline);
+    const expectedDeadline = BigInt(Math.floor(settlementDeadline.getTime() / 1000));
+    let confirmedDeadline: bigint | undefined;
+    let deadlineReadFailed = false;
+    try {
+      confirmedDeadline = await readSettlementDeadline({
+        contractId: tournament.contractId!,
+        sourceAddress: tournament.organizerAddr,
+      });
+    } catch {
+      deadlineReadFailed = true;
+    }
+    if (!deadlineReadFailed && confirmedDeadline !== expectedDeadline) {
+      throw Object.assign(
+        new Error("On-chain settlement deadline does not match this tournament"),
+        {
+          status: 502,
+        },
+      );
+    }
     const updated = await prisma.tournament.update({
       where: { id },
-      data: { status: "ACTIVE" },
+      data: deadlineReadFailed
+        ? { status: "ACTIVE" }
+        : { status: "ACTIVE", deadlineConfirmedAt: new Date() },
     });
     return {
       txHash: result.hash,
@@ -310,7 +364,9 @@ export async function buildRefundClaim(
   const t = await prisma.tournament.findUnique({ where: { id } });
   if (!t) throw Object.assign(new Error("Tournament not found"), { status: 404 });
   const deadlineReached =
-    t.settlementDeadline != null && t.settlementDeadline.getTime() <= Date.now();
+    t.deadlineConfirmedAt != null &&
+    t.settlementDeadline != null &&
+    t.settlementDeadline.getTime() <= Date.now();
   if ((t.status !== "CANCELLED" && !(t.status === "ACTIVE" && deadlineReached)) || !t.contractId) {
     throw Object.assign(new Error("Tournament is not available for refund claims"), {
       status: 409,
@@ -411,6 +467,7 @@ export async function getTournamentDetail(id: string) {
   const refunded = refundClaims.reduce((total, claim) => total + BigInt(claim.amount), 0n);
   const grossPool = t.entryFee * BigInt(t.participants.length);
   const pool = (grossPool > refunded ? grossPool - refunded : 0n).toString();
+  const confirmedSettlementDeadline = t.deadlineConfirmedAt ? t.settlementDeadline : null;
 
   return {
     id: t.id,
@@ -421,6 +478,14 @@ export async function getTournamentDetail(id: string) {
     entryFee: t.entryFee.toString(),
     distributionBps: [t.firstBps, t.secondBps, t.thirdBps] as const,
     contractId: t.contractId,
+    settlementDeadline: confirmedSettlementDeadline
+      ? Math.floor(confirmedSettlementDeadline.getTime() / 1000)
+      : null,
+    contractVersion: confirmedSettlementDeadline
+      ? "DEADLINE"
+      : t.status === "DRAFT"
+        ? "PENDING"
+        : "LEGACY",
     contractUrl: t.contractId ? explorerContractUrl(t.contractId) : null,
     tokenAddr: t.tokenAddr,
     organizerId: t.organizerId,
@@ -443,6 +508,7 @@ export async function getTournamentDetail(id: string) {
     refundsClaimable:
       t.status === "CANCELLED" ||
       (t.status === "ACTIVE" &&
+        t.deadlineConfirmedAt != null &&
         t.settlementDeadline != null &&
         t.settlementDeadline.getTime() <= Date.now()),
   };

@@ -55,6 +55,8 @@ model Tournament {
   organizerAddr      String
   refereeAddr        String
   settlementDeadline DateTime?
+  // Set only after the deadline-aware initialize transaction is confirmed.
+  deadlineConfirmedAt DateTime?
   contractId         String?          @unique
   tokenAddr          String?
   status             TournamentStatus @default(DRAFT)
@@ -97,10 +99,12 @@ model ContractEvent {
   type         EventType
   ledger       Int?
   txHash       String?
+  // Soroban RPC event id. Together with txHash it is stable across subscriber replay.
+  eventId      String?
   payload      Json
   createdAt    DateTime   @default(now())
 
-  @@unique([txHash, type], name: "txHash_type")
+  @@unique([txHash, eventId], name: "txHash_eventId")
   @@index([tournamentId, createdAt])
 }
 

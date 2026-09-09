@@ -72,7 +72,7 @@ const validBody = {
   asset: "XLM",
   refereeAddress: VALID_REFEREE,
   organizerAddress: VALID_ORGANIZER,
-  settlementDeadline: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+  settlementDeadline: Math.floor(Date.now() / 1000) + 24 * 60 * 60,
   distributionBps: [6000, 3000, 1000],
 };
 
@@ -124,7 +124,7 @@ describe("POST /api/tournaments", () => {
     expect(createArgs.thirdBps).toBe(1000);
     expect(createArgs.organizerAddr).toBe(VALID_ORGANIZER);
     expect(createArgs.refereeAddr).toBe(VALID_REFEREE);
-    expect(createArgs.settlementDeadline).toBeInstanceOf(Date);
+    expect(createArgs.settlementDeadline).toEqual(new Date(validBody.settlementDeadline * 1000));
   });
 
   it("calls buildDeployInitializeTx with correct parameters", async () => {
@@ -139,6 +139,7 @@ describe("POST /api/tournaments", () => {
     expect(txParams.tokenAddr).toBe("CSAC...NATIVE");
     expect(txParams.entryFee).toBe(10000000n);
     expect(txParams.distributionBps).toEqual([6000, 3000, 1000]);
+    expect(txParams.settlementDeadline).toBe(BigInt(validBody.settlementDeadline));
   });
 
   it("rejects a distribution that doesn't sum to 10000 with 400", async () => {

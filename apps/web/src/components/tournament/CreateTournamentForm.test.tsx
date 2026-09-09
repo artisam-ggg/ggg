@@ -141,7 +141,7 @@ describe("CreateTournamentForm", () => {
     expect(body.gameTitle).toBe("SF6");
     expect(body.organizerAddress).toBe(MOCK_ORGANIZER);
     expect(body.refereeAddress).toBe(REF);
-    expect(Date.parse(body.settlementDeadline)).toBeGreaterThan(Date.now());
+    expect(body.settlementDeadline).toBeGreaterThan(Math.floor(Date.now() / 1000));
     // default splits 60/30/10 → bps [6000,3000,1000]
     expect(body.distributionBps).toEqual([6000, 3000, 1000]);
 

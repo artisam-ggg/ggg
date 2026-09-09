@@ -129,7 +129,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         asset,
         refereeAddress,
         organizerAddress,
-        settlementDeadline: new Date(deadlineMs).toISOString(),
+        settlementDeadline: Math.floor(deadlineMs / 1000),
         distributionBps: bps,
         coverImageKey,
       };
@@ -310,7 +310,8 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
           aria-describedby="settlement-deadline-help"
         />
         <p id="settlement-deadline-help" className="mt-1 text-sm text-on-surface-variant">
-          Choose a future date within 90 days. Your local time is stored on-chain as UTC.
+          Choose a time at least one hour and no more than 90 days away. It is stored on-chain as
+          UTC.
         </p>
       </div>
 

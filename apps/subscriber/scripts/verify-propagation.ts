@@ -133,6 +133,7 @@ async function legPersistence(t: {
 }): Promise<{ change: Change; player: string }> {
   const player = Keypair.random().publicKey();
   const evt: DecodedEvent = {
+    eventId: uniq("EVENTREG"),
     type: "REGISTERED",
     ledger: 1,
     txHash: uniq("TXREG"),
@@ -141,7 +142,7 @@ async function legPersistence(t: {
   const change = await applyEvent(t, evt);
   assert(change !== null, "applyEvent persisted a new REGISTERED event (returned a Change)");
   const row = await prisma.contractEvent.findUnique({
-    where: { txHash_type: { txHash: evt.txHash, type: "REGISTERED" } },
+    where: { txHash_eventId: { txHash: evt.txHash, eventId: evt.eventId } },
   });
   assert(row !== null, "ContractEvent row exists in Postgres (source of truth)");
   const part = await prisma.participant.findUnique({
@@ -268,6 +269,7 @@ async function legSse(webUrl: string, t: { id: string }): Promise<void> {
   // `redis.publish` returning ≥1 subscriber is the signal the server subscribed.
   const liveTxHash = uniq("TXFIN");
   const finalize: DecodedEvent = {
+    eventId: uniq("EVENTFIN"),
     type: "FINALIZED",
     ledger: 2,
     txHash: liveTxHash,

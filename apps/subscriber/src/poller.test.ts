@@ -19,26 +19,34 @@ vi.mock("./publish", () => ({ publishChange }));
 import { pollTournament } from "./poller";
 
 const tournament = { id: "t1", contractId: "CABC" };
+const PLAYER = "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI";
 
 beforeEach(() => {
   getCursor.mockResolvedValue({ ledger: 100, hzCursor: null });
   getEvents.mockResolvedValue({
     latestLedger: 300,
     events: [
-      { type: "contract", ledger: 105, txHash: "tx-reg-1", topic: ["REG", "PLY"], value: "VAL" },
+      {
+        eventId: "event-reg-1",
+        type: "contract",
+        ledger: 105,
+        txHash: "tx-reg-1",
+        topic: ["REG", "PLY"],
+        value: "VAL",
+      },
     ],
   });
   // topic[0] → the "registered" symbol, topic[1] → the player address; the value
   // decodes to the post-join pool total (a bare i128).
   decodeScVal.mockImplementation((b64: string) => {
     if (b64 === "REG") return "registered";
-    if (b64 === "PLY") return "GPLAYER1";
+    if (b64 === "PLY") return PLAYER;
     return 10000000n;
   });
   applyEvent.mockResolvedValue({
     type: "REGISTERED",
     txHash: "tx-reg-1",
-    data: { player: "GPLAYER1", poolAfter: "10000000" },
+    data: { player: PLAYER, poolAfter: "10000000" },
   });
   setCursor.mockReset();
   publishChange.mockReset();
@@ -67,12 +75,39 @@ describe("pollTournament", () => {
     expect(setCursor).toHaveBeenCalledWith("CABC", 201);
   });
 
+  it("drops malformed external event payloads", async () => {
+    decodeScVal.mockImplementation((b64: string) => {
+      if (b64 === "REG") return "registered";
+      if (b64 === "PLY") return "not-a-stellar-address";
+      return 10000000n;
+    });
+    const callsBefore = applyEvent.mock.calls.length;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    await pollTournament(tournament);
+
+    expect(applyEvent).toHaveBeenCalledTimes(callsBefore);
+    expect(warn).toHaveBeenCalledWith(
+      "[subscriber] dropped undecodable event",
+      expect.objectContaining({ txHash: "tx-reg-1", eventId: "event-reg-1", ledger: 105 }),
+    );
+    warn.mockRestore();
+  });
+
   it("decodes cancellation availability and refund-claim events", async () => {
     getEvents.mockResolvedValue({
       latestLedger: 300,
       events: [
-        { type: "contract", ledger: 105, txHash: "tx-can", topic: ["CAN"], value: "COUNT" },
         {
+          eventId: "event-can",
+          type: "contract",
+          ledger: 105,
+          txHash: "tx-can",
+          topic: ["CAN"],
+          value: "COUNT",
+        },
+        {
+          eventId: "event-ref",
           type: "contract",
           ledger: 106,
           txHash: "tx-ref",
@@ -84,7 +119,7 @@ describe("pollTournament", () => {
     decodeScVal.mockImplementation((b64: string) => {
       if (b64 === "CAN") return "cancelled";
       if (b64 === "REF") return "refund_claimed";
-      if (b64 === "PLY") return "GPLAYER1";
+      if (b64 === "PLY") return PLAYER;
       if (b64 === "COUNT") return 3n;
       return { amount: 10000000n };
     });
@@ -97,7 +132,7 @@ describe("pollTournament", () => {
       expect.objectContaining({ type: "CANCELLED", data: { claimableCount: 3 } }),
       expect.objectContaining({
         type: "REFUND_CLAIMED",
-        data: { player: "GPLAYER1", amount: "10000000" },
+        data: { player: PLAYER, amount: "10000000" },
       }),
     ]);
   });

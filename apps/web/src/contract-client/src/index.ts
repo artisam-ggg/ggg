@@ -101,6 +101,12 @@ export interface Client {
    */
   cancel_tournament: (options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
+  /**
+   * Construct and simulate a get_settlement_deadline transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Returns the initialized UTC Unix settlement deadline for state reconciliation.
+   */
+  get_settlement_deadline: (options?: MethodOptions) => Promise<AssembledTransaction<Option<u64>>>
+
 }
 export class Client extends ContractClient {
   static async deploy<T = Client>(
@@ -129,7 +135,8 @@ export class Client extends ContractClient {
         "AAAAAAAAAJNBbnlvbmUgbWF5IHN1Ym1pdCB0aGlzIGNsYWltLCBidXQgaXQgYWx3YXlzIHBheXMgdGhlIHJlZ2lzdGVyZWQgcGxheWVyLgpDYW5jZWxsYXRpb24gZW5hYmxlcyBpbW1lZGlhdGUgY2xhaW1zOyBvdGhlcndpc2UgdGhlIGRlYWRsaW5lIGlzIGluY2x1c2l2ZS4AAAAADGNsYWltX3JlZnVuZAAAAAEAAAAAAAAABnBsYXllcgAAAAAAEwAAAAA=",
         "AAAAAAAAAAAAAAAPam9pbl90b3VybmFtZW50AAAAAAEAAAAAAAAABnBsYXllcgAAAAAAEwAAAAA=",
         "AAAAAAAAAAAAAAAQZmluYWxpemVfcmVzdWx0cwAAAAMAAAAAAAAABWZpcnN0AAAAAAAAEwAAAAAAAAAGc2Vjb25kAAAAAAATAAAAAAAAAAV0aGlyZAAAAAAAABMAAAAA",
-        "AAAAAAAAAAAAAAARY2FuY2VsX3RvdXJuYW1lbnQAAAAAAAAAAAAAAA==" ]),
+        "AAAAAAAAAAAAAAARY2FuY2VsX3RvdXJuYW1lbnQAAAAAAAAAAAAAAA==",
+        "AAAAAAAAAE5SZXR1cm5zIHRoZSBpbml0aWFsaXplZCBVVEMgVW5peCBzZXR0bGVtZW50IGRlYWRsaW5lIGZvciBzdGF0ZSByZWNvbmNpbGlhdGlvbi4AAAAAABdnZXRfc2V0dGxlbWVudF9kZWFkbGluZQAAAAAAAAAAAQAAA+gAAAAG" ]),
       options
     )
   }
@@ -141,6 +148,7 @@ export class Client extends ContractClient {
         claim_refund: this.txFromJSON<null>,
         join_tournament: this.txFromJSON<null>,
         finalize_results: this.txFromJSON<null>,
-        cancel_tournament: this.txFromJSON<null>
+        cancel_tournament: this.txFromJSON<null>,
+        get_settlement_deadline: this.txFromJSON<Option<u64>>
   }
 }

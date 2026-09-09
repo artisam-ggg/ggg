@@ -31,7 +31,7 @@ For the Stellar ecosystem, GGG is a concrete use case for Soroban: it turns paid
 - **Version:** `0.0.0` (workspace manifests) · contract crate `ggg-escrow` `0.1.0`
 - **Status:** Live on Stellar Testnet at https://ggg.quest
 - **Default network:** Stellar Testnet (`STELLAR_NETWORK=testnet`)
-- **Escrow WASM hash:** `9319ccbb7148750882df1cf735162059afe017778c9af37984304f291d5fe702` (recorded in `apps/web/.env.example`).
+- **Escrow WASM hash:** `56faadf3395536f14b10c263c6369dda77dd2bc3ec9c24c6ce39fada518986ac` (recorded in `apps/web/.env.example`).
 - **License:** Released under the MIT License. Copyright © 2026 Artisam Labs.
 
 ---
