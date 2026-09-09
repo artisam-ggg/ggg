@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // vi.hoisted is used so that submitMock is available inside the hoisted vi.mock call.
 // ---------------------------------------------------------------------------
 
-const { submitMock, buildInitializeMock, validateInitializeMock } = vi.hoisted(() => ({
+const { submitMock, buildInitializeMock, validateInitializeMock, readSettlementDeadlineMock } = vi.hoisted(() => ({
   submitMock: vi.fn(async () => ({
     hash: "TX1" as string,
     contractId: "CDEPLOYED" as string | undefined,
@@ -13,6 +13,7 @@ const { submitMock, buildInitializeMock, validateInitializeMock } = vi.hoisted((
   })),
   buildInitializeMock: vi.fn(async () => ({ xdr: "INITIALIZE_XDR", network: "testnet" })),
   validateInitializeMock: vi.fn(),
+  readSettlementDeadlineMock: vi.fn(),
 }));
 
 vi.mock("@/lib/stellar", async (orig) => {
@@ -22,6 +23,7 @@ vi.mock("@/lib/stellar", async (orig) => {
     buildInitializeTx: buildInitializeMock,
     submitSignedXdr: submitMock,
     validateInitializeXdr: validateInitializeMock,
+    readSettlementDeadline: readSettlementDeadlineMock,
     explorerTxUrl: (_hash: string) => `https://stellar.expert/tx/${_hash}`,
   };
 });
@@ -145,6 +147,10 @@ describe("POST /api/tournaments/[id]/submit", () => {
     submitMock.mockResolvedValue({ hash: "TX1", contractId: "CDEPLOYED", status: "SUCCESS" });
     buildInitializeMock.mockResolvedValue({ xdr: "INITIALIZE_XDR", network: "testnet" });
     validateInitializeMock.mockReturnValue(undefined);
+    readSettlementDeadlineMock
+      .mockReset()
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValue(4_070_908_800n);
     assertSameOriginMock.mockReturnValue(undefined);
     requireUserMock.mockResolvedValue({ id: "user_1", username: "organizer", role: "ORGANIZER" });
     rateLimitMock.mockResolvedValue({ ok: true, remaining: 19 });

@@ -7,7 +7,7 @@ import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
 import { signAndSubmit } from "@/lib/wallet";
 import { formatStroops } from "@/lib/format-stroops";
 
-type Phase = "idle" | "signing" | "submitting" | "awaitingConfirmation" | "success" | "error";
+type Phase = "idle" | "signing" | "submitting" | "awaitingConfirmation" | "error";
 
 export function ClaimRefundButton({
   tournamentId,

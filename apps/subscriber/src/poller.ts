@@ -64,7 +64,13 @@ function decodeEvent(raw: {
       });
     }
     return { type, ledger: raw.ledger, txHash: raw.txHash, eventId: raw.eventId, data };
-  } catch {
+  } catch (err) {
+    console.warn("[subscriber] dropped undecodable event", {
+      txHash: raw.txHash,
+      eventId: raw.eventId,
+      ledger: raw.ledger,
+      err,
+    });
     return null;
   }
 }

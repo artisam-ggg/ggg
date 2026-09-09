@@ -179,6 +179,36 @@ export async function submitTournamentTx(
       distributionBps: [tournament.firstBps, tournament.secondBps, tournament.thirdBps],
       settlementDeadline: BigInt(Math.floor(settlementDeadline.getTime() / 1000)),
     });
+
+    // A previous initialize may have succeeded while its read-back failed. Avoid
+    // re-submitting it: initialize is one-time on the contract.
+    let confirmedDeadline: bigint | undefined;
+    try {
+      confirmedDeadline = await readSettlementDeadline({
+        contractId: tournament.contractId,
+        sourceAddress: tournament.organizerAddr,
+      });
+    } catch {
+      // An uninitialized contract and transient RPC failures both proceed to submit.
+    }
+    if (confirmedDeadline !== undefined) {
+      if (confirmedDeadline !== BigInt(Math.floor(settlementDeadline.getTime() / 1000))) {
+        throw Object.assign(
+          new Error("On-chain settlement deadline does not match this tournament"),
+          { status: 502 },
+        );
+      }
+      const updated = await prisma.tournament.update({
+        where: { id },
+        data: { status: "ACTIVE", deadlineConfirmedAt: new Date() },
+      });
+      return {
+        txHash: tournament.deployTxHash ?? "",
+        contractId: updated.contractId,
+        status: updated.status,
+        explorerUrl: explorerContractUrl(tournament.contractId),
+      };
+    }
   }
 
   const result = await submitSignedXdr(input.signedXdr, input.intent);

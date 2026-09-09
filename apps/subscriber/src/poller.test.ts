@@ -82,10 +82,16 @@ describe("pollTournament", () => {
       return 10000000n;
     });
     const callsBefore = applyEvent.mock.calls.length;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
     await pollTournament(tournament);
 
     expect(applyEvent).toHaveBeenCalledTimes(callsBefore);
+    expect(warn).toHaveBeenCalledWith(
+      "[subscriber] dropped undecodable event",
+      expect.objectContaining({ txHash: "tx-reg-1", eventId: "event-reg-1", ledger: 105 }),
+    );
+    warn.mockRestore();
   });
 
   it("decodes cancellation availability and refund-claim events", async () => {

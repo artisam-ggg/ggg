@@ -1,9 +1,7 @@
-import { StrKey } from "@stellar/stellar-sdk";
+import { stellarPublicKey } from "../stellar/validation";
 import { z } from "zod";
 
-export const stellarAddressSchema = z
-  .string()
-  .refine(StrKey.isValidEd25519PublicKey, "Invalid Stellar public key");
+export const stellarAddressSchema = stellarPublicKey;
 
 export const refundClaimPayloadSchema = z.object({
   player: stellarAddressSchema,

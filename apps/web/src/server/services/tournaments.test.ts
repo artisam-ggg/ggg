@@ -327,4 +327,44 @@ describe("submitTournamentTx", () => {
     });
     expect(updateMock).not.toHaveBeenCalled();
   });
+
+  it("recovers a confirmed initialize after its read-back failed", async () => {
+    const deadline = new Date("2026-09-10T00:00:00.000Z");
+    const deadlineSeconds = BigInt(Math.floor(deadline.getTime() / 1000));
+    vi.setSystemTime(new Date("2026-09-09T00:00:00.000Z"));
+    findUniqueMock.mockResolvedValue({
+      id: "t_1",
+      organizerId: "user_1",
+      organizerAddr: "GORG",
+      refereeAddr: "GREF",
+      tokenAddr: "CTOKEN",
+      entryFee: 10n,
+      firstBps: 6000,
+      secondBps: 3000,
+      thirdBps: 1000,
+      settlementDeadline: deadline,
+      status: "DRAFT",
+      contractId: "CDEPLOYED",
+      deployTxHash: "TX_DEPLOY",
+    });
+    submitMock.mockResolvedValue({ hash: "TX_INIT", status: "SUCCESS" });
+    readSettlementDeadlineMock
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("RPC lag"))
+      .mockResolvedValueOnce(deadlineSeconds);
+    updateMock.mockResolvedValue({ contractId: "CDEPLOYED", status: "ACTIVE" });
+
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "initialize" }, "user_1"),
+    ).rejects.toThrow("RPC lag");
+
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "initialize" }, "user_1"),
+    ).resolves.toMatchObject({ status: "ACTIVE", contractId: "CDEPLOYED" });
+    expect(submitMock).toHaveBeenCalledTimes(1);
+    expect(updateMock).toHaveBeenCalledWith({
+      where: { id: "t_1" },
+      data: { status: "ACTIVE", deadlineConfirmedAt: expect.any(Date) },
+    });
+  });
 });
