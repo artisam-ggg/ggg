@@ -25,7 +25,14 @@ beforeEach(() => {
   getEvents.mockResolvedValue({
     latestLedger: 300,
     events: [
-      { type: "contract", ledger: 105, txHash: "tx-reg-1", topic: ["REG", "PLY"], value: "VAL" },
+      {
+        eventId: "event-reg-1",
+        type: "contract",
+        ledger: 105,
+        txHash: "tx-reg-1",
+        topic: ["REG", "PLY"],
+        value: "VAL",
+      },
     ],
   });
   // topic[0] → the "registered" symbol, topic[1] → the player address; the value
@@ -71,8 +78,16 @@ describe("pollTournament", () => {
     getEvents.mockResolvedValue({
       latestLedger: 300,
       events: [
-        { type: "contract", ledger: 105, txHash: "tx-can", topic: ["CAN"], value: "COUNT" },
         {
+          eventId: "event-can",
+          type: "contract",
+          ledger: 105,
+          txHash: "tx-can",
+          topic: ["CAN"],
+          value: "COUNT",
+        },
+        {
+          eventId: "event-ref",
           type: "contract",
           ledger: 106,
           txHash: "tx-ref",

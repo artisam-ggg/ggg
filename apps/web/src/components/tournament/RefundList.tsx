@@ -16,10 +16,12 @@ export function RefundList({
   participants,
   entryFee,
   asset,
+  claimedPlayers = [],
 }: {
   participants: Participant[];
   entryFee: string;
   asset: "XLM" | "USDC";
+  claimedPlayers?: string[];
 }) {
   if (participants.length === 0) {
     return (
@@ -37,18 +39,23 @@ export function RefundList({
         wallet.
       </p>
       <ul className="mt-3 flex flex-col gap-2" aria-label="Refund claims">
-        {participants.map((p) => (
-          <li
-            key={p.playerAddr}
-            data-testid="refund-row"
-            className="flex items-center justify-between gap-4"
-          >
-            <span className="data-mono text-on-surface">{trunc(p.playerAddr)}</span>
-            <span className="data-mono text-error">
-              {formatStroops(entryFee)} {asset}
-            </span>
-          </li>
-        ))}
+        {participants.map((p) => {
+          const claimed = claimedPlayers.includes(p.playerAddr);
+          return (
+            <li
+              key={p.playerAddr}
+              data-testid="refund-row"
+              className="flex items-center justify-between gap-4"
+            >
+              <span className="data-mono text-on-surface">{trunc(p.playerAddr)}</span>
+              <span
+                className={claimed ? "data-mono text-on-surface-variant" : "data-mono text-error"}
+              >
+                {claimed ? "Claimed" : `${formatStroops(entryFee)} ${asset}`}
+              </span>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

@@ -5,6 +5,7 @@ interface EventRow {
   type: string;
   ledger: number;
   txHash: string;
+  eventId: string | null;
   payload: unknown;
 }
 const events: EventRow[] = [];
@@ -17,9 +18,25 @@ const tournaments: Record<string, Record<string, unknown>> = {
 const txClient = {
   contractEvent: {
     findUnique: vi.fn(
-      async ({ where }: { where: { txHash_type?: { txHash: string; type: string } } }) =>
+      async ({ where }: { where: { txHash_eventId?: { txHash: string; eventId: string } } }) =>
         events.find(
-          (e) => e.txHash === where.txHash_type?.txHash && e.type === where.txHash_type?.type,
+          (e) =>
+            e.txHash === where.txHash_eventId?.txHash &&
+            e.eventId === where.txHash_eventId?.eventId,
+        ) ?? null,
+    ),
+    findFirst: vi.fn(
+      async ({
+        where,
+      }: {
+        where: { tournamentId: string; txHash: string; type: string; eventId: null };
+      }) =>
+        events.find(
+          (event) =>
+            event.tournamentId === where.tournamentId &&
+            event.txHash === where.txHash &&
+            event.type === where.type &&
+            event.eventId === where.eventId,
         ) ?? null,
     ),
     create: vi.fn(async ({ data }: { data: EventRow }) => {
@@ -78,11 +95,13 @@ describe("applyEvent", () => {
       type: "REGISTERED",
       ledger: 10,
       txHash: "tx-reg-1",
+      eventId: "event-reg-1",
       data: { player: "GPLAYER1", poolAfter: "10000000" },
     });
     expect(events).toHaveLength(1);
     expect(participants).toHaveLength(1);
     expect(participants[0]?.playerAddr).toBe("GPLAYER1");
+    expect(events[0]?.eventId).toBe("event-reg-1");
     expect(change).toEqual({
       type: "REGISTERED",
       txHash: "tx-reg-1",
@@ -95,6 +114,7 @@ describe("applyEvent", () => {
       type: "REGISTERED" as const,
       ledger: 10,
       txHash: "tx-reg-1",
+      eventId: "event-reg-1",
       data: { player: "GPLAYER1", poolAfter: "10000000" },
     };
     await applyEvent(tournament, evt);
@@ -104,11 +124,35 @@ describe("applyEvent", () => {
     expect(second).toBeNull();
   });
 
+  it("does not replay an event persisted before event IDs were recorded", async () => {
+    events.push({
+      tournamentId: "t1",
+      type: "REFUND_CLAIMED",
+      ledger: 31,
+      txHash: "tx-ref-legacy",
+      eventId: null,
+      payload: { player: "GPLAYER1", amount: "10000000" },
+    });
+
+    await expect(
+      applyEvent(tournament, {
+        type: "REFUND_CLAIMED",
+        ledger: 31,
+        txHash: "tx-ref-legacy",
+        eventId: "event-ref-legacy",
+        data: { player: "GPLAYER1", amount: "10000000" },
+      }),
+    ).resolves.toBeNull();
+
+    expect(events).toHaveLength(1);
+  });
+
   it("ingests a finalized event → 3 Payout rows + FINISHED", async () => {
     await applyEvent(tournament, {
       type: "FINALIZED",
       ledger: 20,
       txHash: "tx-fin-1",
+      eventId: "event-fin-1",
       data: { first: "GA", second: "GB", third: "GC", amounts: ["6000000", "3000000", "1000000"] },
     });
     expect(payouts).toHaveLength(3);
@@ -122,6 +166,7 @@ describe("applyEvent", () => {
       type: "CANCELLED",
       ledger: 30,
       txHash: "tx-can-1",
+      eventId: "event-can-1",
       data: { claimableCount: 4 },
     });
     expect(tournaments.t1?.status).toBe("CANCELLED");
@@ -134,6 +179,7 @@ describe("applyEvent", () => {
       type: "REFUND_CLAIMED",
       ledger: 31,
       txHash: "tx-ref-1",
+      eventId: "event-ref-1",
       data: { player: "GPLAYER1", amount: "10000000" },
     });
     expect(events).toHaveLength(1);
@@ -147,6 +193,7 @@ describe("applyEvent", () => {
         type: "REFUND_CLAIMED",
         ledger: 31,
         txHash: "tx-ref-invalid",
+        eventId: "event-ref-invalid",
         data: { player: "GPLAYER1", amount: "not-a-number" },
       }),
     ).resolves.toBeNull();

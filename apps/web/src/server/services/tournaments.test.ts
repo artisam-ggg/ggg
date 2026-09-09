@@ -55,6 +55,7 @@ describe("getTournamentDetail", () => {
       organizerAddr: "GORG",
       refereeAddr: "GREF",
       settlementDeadline: null,
+      deadlineConfirmedAt: null,
       participants: [
         { playerAddr: "GA", joinedAt: new Date(), joinTxHash: null },
         { playerAddr: "GB", joinedAt: new Date(), joinTxHash: null },
@@ -70,6 +71,8 @@ describe("getTournamentDetail", () => {
     await expect(getTournamentDetail("t_1")).resolves.toMatchObject({
       pool: "20000000",
       refundClaimedPlayers: ["GA"],
+      settlementDeadline: null,
+      contractVersion: "LEGACY",
     });
   });
 
@@ -96,6 +99,118 @@ describe("getTournamentDetail", () => {
     });
 
     await expect(getTournamentDetail("t_1")).resolves.toMatchObject({ pool: "0" });
+  });
+
+  it("does not present a draft deadline as confirmed", async () => {
+    findUniqueMock.mockResolvedValue({
+      id: "t_1",
+      name: "Tournament",
+      gameTitle: "Game",
+      status: "DRAFT",
+      asset: "XLM",
+      entryFee: 10_000_000n,
+      firstBps: 6000,
+      secondBps: 3000,
+      thirdBps: 1000,
+      contractId: null,
+      tokenAddr: "CTOKEN",
+      organizerId: "user_1",
+      organizerAddr: "GORG",
+      refereeAddr: "GREF",
+      settlementDeadline: new Date("2026-10-01T00:00:00.000Z"),
+      deadlineConfirmedAt: null,
+      participants: [],
+      payouts: [],
+      events: [],
+    });
+
+    await expect(getTournamentDetail("t_1")).resolves.toMatchObject({
+      settlementDeadline: null,
+      contractVersion: "PENDING",
+    });
+  });
+
+  it("keeps a pre-deadline contract with an unconfirmed stored value in legacy state", async () => {
+    findUniqueMock.mockResolvedValue({
+      id: "t_1",
+      name: "Tournament",
+      gameTitle: "Game",
+      status: "ACTIVE",
+      asset: "XLM",
+      entryFee: 10_000_000n,
+      firstBps: 6000,
+      secondBps: 3000,
+      thirdBps: 1000,
+      contractId: "CLEGACY",
+      tokenAddr: "CTOKEN",
+      organizerId: "user_1",
+      organizerAddr: "GORG",
+      refereeAddr: "GREF",
+      settlementDeadline: new Date("2026-10-01T00:00:00.000Z"),
+      deadlineConfirmedAt: null,
+      participants: [],
+      payouts: [],
+      events: [],
+    });
+    await expect(getTournamentDetail("t_1")).resolves.toMatchObject({
+      settlementDeadline: null,
+      contractVersion: "LEGACY",
+    });
+  });
+
+  it("does not make expired legacy active contracts refundable", async () => {
+    findUniqueMock.mockResolvedValue({
+      id: "t_1",
+      name: "Tournament",
+      gameTitle: "Game",
+      status: "ACTIVE",
+      asset: "XLM",
+      entryFee: 10_000_000n,
+      firstBps: 6000,
+      secondBps: 3000,
+      thirdBps: 1000,
+      contractId: "CLEGACY",
+      tokenAddr: "CTOKEN",
+      organizerId: "user_1",
+      organizerAddr: "GORG",
+      refereeAddr: "GREF",
+      settlementDeadline: new Date("2020-01-01T00:00:00.000Z"),
+      deadlineConfirmedAt: null,
+      participants: [],
+      payouts: [],
+      events: [],
+    });
+
+    await expect(getTournamentDetail("t_1")).resolves.toMatchObject({
+      contractVersion: "LEGACY",
+      refundsClaimable: false,
+    });
+  });
+
+  it("keeps refunds immediately claimable for cancelled contracts", async () => {
+    findUniqueMock.mockResolvedValue({
+      id: "t_1",
+      name: "Tournament",
+      gameTitle: "Game",
+      status: "CANCELLED",
+      asset: "XLM",
+      entryFee: 10_000_000n,
+      firstBps: 6000,
+      secondBps: 3000,
+      thirdBps: 1000,
+      contractId: "CLEGACY",
+      tokenAddr: "CTOKEN",
+      organizerId: "user_1",
+      organizerAddr: "GORG",
+      refereeAddr: "GREF",
+      settlementDeadline: null,
+      deadlineConfirmedAt: null,
+      participants: [],
+      payouts: [],
+      events: [],
+    });
+
+    await expect(getTournamentDetail("t_1")).resolves.toMatchObject({ refundsClaimable: true });
   });
 });
 

@@ -197,7 +197,10 @@ describe("POST /api/tournaments/[id]/submit", () => {
     expect(json.data.status).toBe("ACTIVE");
     expect(updateMock).toHaveBeenCalledWith({
       where: { id: "t_1" },
-      data: { status: "ACTIVE" },
+      data: expect.objectContaining({
+        status: "ACTIVE",
+        deadlineConfirmedAt: expect.any(Date),
+      }),
     });
     expect(validateInitializeMock).toHaveBeenCalledWith(
       VALID_XDR,

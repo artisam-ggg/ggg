@@ -146,6 +146,7 @@ describe("buildDeployInitializeTx", () => {
       tokenAddr: C,
       entryFee: 10000000n,
       distributionBps: [6000, 3000, 1000],
+      settlementDeadline: 1_800_000_000n,
     });
     expect(res).toEqual({ xdr: "DEPLOY_XDR", network: "testnet" });
   });
@@ -158,6 +159,7 @@ describe("buildDeployInitializeTx", () => {
         tokenAddr: C,
         entryFee: 1n,
         distributionBps: [6000, 3000, 1000],
+        settlementDeadline: 1_800_000_000n,
       }),
     ).rejects.toMatchObject({ code: "INVALID_INPUT" });
   });
@@ -170,6 +172,7 @@ describe("buildDeployInitializeTx", () => {
         tokenAddr: C,
         entryFee: 1n,
         distributionBps: [6000, 3000, 999],
+        settlementDeadline: 1_800_000_000n,
       }),
     ).rejects.toMatchObject({ code: "INVALID_INPUT" });
   });
@@ -182,6 +185,7 @@ describe("buildDeployInitializeTx", () => {
         tokenAddr: C,
         entryFee: 0n,
         distributionBps: [6000, 3000, 1000],
+        settlementDeadline: 1_800_000_000n,
       }),
     ).rejects.toMatchObject({ code: "INVALID_INPUT" });
   });

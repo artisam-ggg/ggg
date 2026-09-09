@@ -72,6 +72,14 @@ export default async function TournamentDetailPage({
         <StatusChip status={t.status} />
       </header>
 
+      <p className="data-mono mt-3 text-sm text-on-surface-variant">
+        {t.settlementDeadline
+          ? `Settlement deadline (UTC): ${new Date(t.settlementDeadline * 1000).toISOString()}`
+          : t.contractVersion === "LEGACY"
+            ? "Legacy contract: no settlement deadline was recorded."
+            : "Settlement deadline pending contract initialization."}
+      </p>
+
       {t.refundsClaimable && (
         <section
           aria-labelledby="cancelled-heading"
@@ -83,8 +91,19 @@ export default async function TournamentDetailPage({
               : "The settlement deadline has passed."}{" "}
             Registered players may now claim their refund.
           </p>
-          <RefundList participants={t.participants} entryFee={t.entryFee} asset={t.asset} />
-          {t.contractId && <ClaimRefundButton tournamentId={t.id} passphrase={passphrase} />}
+          <RefundList
+            participants={t.participants}
+            entryFee={t.entryFee}
+            asset={t.asset}
+            claimedPlayers={t.refundClaimedPlayers}
+          />
+          {t.contractId && (
+            <ClaimRefundButton
+              tournamentId={t.id}
+              passphrase={passphrase}
+              confirmedClaimedPlayers={t.refundClaimedPlayers}
+            />
+          )}
         </section>
       )}
 

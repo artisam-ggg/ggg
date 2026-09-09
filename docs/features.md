@@ -2,6 +2,10 @@
 
 Running log of shipped features (append one entry per change), per the auto-dev workflow.
 
+## Issue #217 — Deadline reference-app wiring
+
+Tournament creation now accepts UTC Unix-second deadlines, applies the one-hour minimum and #215's 90-day Testnet-safe horizon in the shared client/server schema, persists the exact instant, and sends the exact seconds to contract initialization. The API/UI expose confirmed deadlines and explicit legacy-contract state without inventing deadlines for pre-deadline deployments. Subscriber replay identity now uses the stable Soroban RPC event id with the transaction hash; confirmed `refund_claimed` events remain the source of per-player refund state.
+
 ## Phase 0 — Foundation
 
 Stood up the GGG pnpm 10 monorepo skeleton with zero business logic, so every later phase has a proven foundation:

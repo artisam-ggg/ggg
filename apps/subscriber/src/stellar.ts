@@ -3,6 +3,7 @@ import { z } from "zod";
 import { env } from "./env";
 
 const eventSchema = z.object({
+  eventId: z.string().min(1),
   type: z.string(),
   ledger: z.number().int(),
   txHash: z.string(),
@@ -85,6 +86,9 @@ async function fetchEvents(contractId: string, startLedger: number): Promise<Dec
   const normalized = {
     latestLedger: res.latestLedger,
     events: res.events.map((e) => ({
+      // Soroban RPC's opaque event id is stable across replay and distinguishes
+      // multiple contract events in one transaction.
+      eventId: e.id,
       type: String(e.type),
       ledger: e.ledger,
       txHash: e.txHash,

@@ -20,6 +20,7 @@ const TOPIC_TO_TYPE: Record<string, EventType> = {
 const SAFETY_LAG = 100;
 
 function decodeEvent(raw: {
+  eventId: string;
   ledger: number;
   txHash: string;
   topic: string[];
@@ -54,7 +55,7 @@ function decodeEvent(raw: {
       amount: String((value as { amount: bigint }).amount),
     };
   }
-  return { type, ledger: raw.ledger, txHash: raw.txHash, data };
+  return { type, ledger: raw.ledger, txHash: raw.txHash, eventId: raw.eventId, data };
 }
 
 /**

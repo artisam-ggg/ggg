@@ -137,12 +137,14 @@ export async function buildDeployInitializeTx(params: {
   tokenAddr: string;
   entryFee: bigint;
   distributionBps: [number, number, number];
+  settlementDeadline: bigint;
 }): Promise<{ xdr: string; network: string }> {
   parse(stellarPublicKey, params.organizerAddress, "organizerAddress");
   parse(stellarPublicKey, params.refereeAddress, "refereeAddress");
   parse(stellarContractId, params.tokenAddr, "tokenAddr");
   parse(i128Amount, params.entryFee, "entryFee");
   parse(bpsSchema, params.distributionBps, "distributionBps");
+  parse(u64Timestamp, params.settlementDeadline, "settlementDeadline");
   if (params.organizerAddress === params.refereeAddress) {
     throw new StellarError("INVALID_INPUT", "organizer must differ from referee");
   }
