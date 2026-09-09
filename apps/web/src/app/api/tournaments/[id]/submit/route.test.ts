@@ -5,16 +5,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // vi.hoisted is used so that submitMock is available inside the hoisted vi.mock call.
 // ---------------------------------------------------------------------------
 
-const { submitMock, buildInitializeMock, validateInitializeMock, readSettlementDeadlineMock } = vi.hoisted(() => ({
-  submitMock: vi.fn(async () => ({
-    hash: "TX1" as string,
-    contractId: "CDEPLOYED" as string | undefined,
-    status: "SUCCESS" as "SUCCESS" | "FAILED",
-  })),
-  buildInitializeMock: vi.fn(async () => ({ xdr: "INITIALIZE_XDR", network: "testnet" })),
-  validateInitializeMock: vi.fn(),
-  readSettlementDeadlineMock: vi.fn(),
-}));
+const { submitMock, buildInitializeMock, validateInitializeMock, readSettlementDeadlineMock } =
+  vi.hoisted(() => ({
+    submitMock: vi.fn(async () => ({
+      hash: "TX1" as string,
+      contractId: "CDEPLOYED" as string | undefined,
+      status: "SUCCESS" as "SUCCESS" | "FAILED",
+    })),
+    buildInitializeMock: vi.fn(async () => ({ xdr: "INITIALIZE_XDR", network: "testnet" })),
+    validateInitializeMock: vi.fn(),
+    readSettlementDeadlineMock: vi.fn(),
+  }));
 
 vi.mock("@/lib/stellar", async (orig) => {
   const actual = await orig<typeof import("@/lib/stellar")>();
