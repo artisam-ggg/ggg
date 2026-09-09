@@ -13,6 +13,7 @@ export default function Page() {
       </p>
       <Link
         href="/tournaments/new"
+        prefetch={false}
         className="brutalist-border label-caps mt-10 inline-block bg-electric-violet-strong px-8 py-4 italic text-background transition-transform hover:-translate-y-0.5 active:translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acid-yellow"
       >
         Create Tournament

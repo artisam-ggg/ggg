@@ -1,14 +1,21 @@
 import { getEvents, decodeScVal } from "./stellar";
 import { getCursor, setCursor } from "./cursor";
 import { applyEvent, type DecodedEvent, type EventType, type Change } from "./reconcile";
-import { reconcileSep7Deposits } from "./horizon-sep7";
 import { publishChange } from "./publish";
+import { z } from "zod";
+import {
+  refundClaimPayloadSchema,
+  stellarAddressSchema,
+} from "web/src/lib/validation/refund-claim";
 
 const TOPIC_TO_TYPE: Record<string, EventType> = {
   registered: "REGISTERED",
   finalized: "FINALIZED",
   cancelled: "CANCELLED",
+  refund_claimed: "REFUND_CLAIMED",
 };
+
+const amountSchema = z.bigint().nonnegative();
 
 // How many ledgers behind the reported tip to keep the cursor, so freshly-closed
 // ledgers whose events aren't queryable yet get re-scanned on later polls rather
@@ -20,38 +27,52 @@ const TOPIC_TO_TYPE: Record<string, EventType> = {
 const SAFETY_LAG = 100;
 
 function decodeEvent(raw: {
+  eventId: string;
   ledger: number;
   txHash: string;
   topic: string[];
   value: string;
 }): DecodedEvent | null {
-  const symbol = String(decodeScVal(raw.topic[0]!));
-  const type = TOPIC_TO_TYPE[symbol];
-  if (!type) return null;
-  const value = decodeScVal(raw.value) as unknown;
-  let data: Record<string, unknown>;
-  if (type === "REGISTERED") {
-    // Contract emits `(symbol "registered", player)` as the topic and the
-    // post-join pool total as the value — the player address is in topic[1],
-    // NOT the value (which is a bare i128).
-    const player = String(decodeScVal(raw.topic[1]!));
-    const poolAfter = value as bigint;
-    data = { player, poolAfter: poolAfter.toString() };
-  } else if (type === "FINALIZED") {
-    // Topic is `(symbol "finalized", first, second, third)`; the value is the
-    // `Vec<i128>` of payout amounts. Winners come from the topic, amounts from
-    // the value.
-    const first = String(decodeScVal(raw.topic[1]!));
-    const second = String(decodeScVal(raw.topic[2]!));
-    const third = String(decodeScVal(raw.topic[3]!));
-    const amounts = value as bigint[];
-    data = { first, second, third, amounts: amounts.map((a) => a.toString()) };
-  } else {
-    // CANCELLED: topic is `(symbol "cancelled",)`; value is the refunded count.
-    const refundedCount = Number(value as bigint | number);
-    data = { refundedCount };
+  try {
+    const symbol = String(decodeScVal(raw.topic[0]!));
+    const type = TOPIC_TO_TYPE[symbol];
+    if (!type) return null;
+    const value = decodeScVal(raw.value) as unknown;
+    let data: Record<string, unknown>;
+    if (type === "REGISTERED") {
+      // Contract emits `(symbol "registered", player)` as the topic and the
+      // post-join pool total as the value — the player address is in topic[1],
+      // NOT the value (which is a bare i128).
+      const player = stellarAddressSchema.parse(String(decodeScVal(raw.topic[1]!)));
+      const poolAfter = amountSchema.parse(value);
+      data = { player, poolAfter: poolAfter.toString() };
+    } else if (type === "FINALIZED") {
+      // Topic is `(symbol "finalized", first, second, third)`; the value is the
+      // `Vec<i128>` of payout amounts. Winners come from the topic, amounts from
+      // the value.
+      const first = stellarAddressSchema.parse(String(decodeScVal(raw.topic[1]!)));
+      const second = stellarAddressSchema.parse(String(decodeScVal(raw.topic[2]!)));
+      const third = stellarAddressSchema.parse(String(decodeScVal(raw.topic[3]!)));
+      const amounts = z.array(amountSchema).length(3).parse(value);
+      data = { first, second, third, amounts: amounts.map((a) => a.toString()) };
+    } else if (type === "CANCELLED") {
+      data = { claimableCount: z.coerce.number().int().nonnegative().parse(value) };
+    } else {
+      data = refundClaimPayloadSchema.parse({
+        player: String(decodeScVal(raw.topic[1]!)),
+        amount: String(z.object({ amount: z.bigint().positive() }).parse(value).amount),
+      });
+    }
+    return { type, ledger: raw.ledger, txHash: raw.txHash, eventId: raw.eventId, data };
+  } catch (err) {
+    console.warn("[subscriber] dropped undecodable event", {
+      txHash: raw.txHash,
+      eventId: raw.eventId,
+      ledger: raw.ledger,
+      err,
+    });
+    return null;
   }
-  return { type, ledger: raw.ledger, txHash: raw.txHash, data };
 }
 
 /**
@@ -79,12 +100,6 @@ export async function pollTournament(tournament: {
     }
   }
 
-  const sep7 = await reconcileSep7Deposits(tournament, cursor.hzCursor);
-  for (const change of sep7.changes) {
-    await publishChange(tournament.id, change);
-    changes.push(change);
-  }
-
   // Advance the cursor to just behind the tip rather than past it. Soroban RPC's
   // reported `latestLedger` runs a little ahead of when a closed ledger's events
   // are queryable, so jumping the cursor straight to `latestLedger + 1` can step
@@ -93,6 +108,6 @@ export async function pollTournament(tournament: {
   // applyEvent dedupes on txHash, so re-seeing an already-ingested event is a
   // no-op. (Never regress below the current cursor.)
   const nextLedger = Math.max(cursor.ledger, res.latestLedger + 1 - SAFETY_LAG);
-  await setCursor(tournament.contractId, nextLedger, sep7.nextCursor ?? undefined);
+  await setCursor(tournament.contractId, nextLedger);
   return changes;
 }

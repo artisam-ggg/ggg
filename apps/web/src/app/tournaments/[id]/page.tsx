@@ -12,6 +12,7 @@ import { RefereePanel } from "@/components/tournament/RefereePanel";
 import { WinnersPanel } from "@/components/tournament/WinnersPanel";
 import { RefundList } from "@/components/tournament/RefundList";
 import { CancelButton } from "@/components/tournament/CancelButton";
+import { ClaimRefundButton } from "@/components/tournament/ClaimRefundButton";
 import { BackButton } from "@/components/ui/BackButton";
 
 export const revalidate = 0;
@@ -28,10 +29,10 @@ export default async function TournamentDetailPage({
   if (!t) notFound();
 
   const passphrase = env.NETWORK_PASSPHRASE;
-  const assetIssuer: string | null = t.asset === "USDC" ? (env.USDC_ISSUER ?? null) : null;
+  const joinUrl = new URL(`/tournaments/${t.id}`, env.APP_URL).toString();
 
   const isOrganiser = currentUser?.id === t.organizerId;
-  const canCancel = isOrganiser && t.status === "ACTIVE";
+  const canCancel = isOrganiser && t.status === "ACTIVE" && !t.refundsClaimable;
 
   // Extract participant wallet addresses for the counter
   const participantAddresses = t.participants.map((p) => p.playerAddr);
@@ -71,15 +72,40 @@ export default async function TournamentDetailPage({
         <StatusChip status={t.status} />
       </header>
 
-      {t.status === "CANCELLED" && (
+      <p className="data-mono mt-3 text-sm text-on-surface-variant">
+        {t.settlementDeadline
+          ? `Settlement deadline (UTC): ${new Date(t.settlementDeadline * 1000).toISOString()}`
+          : t.contractVersion === "LEGACY"
+            ? "Legacy contract: no settlement deadline was recorded."
+            : "Settlement deadline pending contract initialization."}
+      </p>
+
+      {t.refundsClaimable && (
         <section
           aria-labelledby="cancelled-heading"
           className="mt-8 rounded-2xl border-2 border-error bg-error-container p-6"
         >
           <p id="cancelled-heading" className="label-caps text-error" role="alert">
-            This tournament has been cancelled. All participants have been refunded.
+            {t.status === "CANCELLED"
+              ? "This tournament has been cancelled."
+              : "The settlement deadline has passed."}{" "}
+            Registered players may now claim their refund.
           </p>
-          <RefundList participants={t.participants} entryFee={t.entryFee} asset={t.asset} />
+          <RefundList
+            participants={t.participants}
+            entryFee={t.entryFee}
+            asset={t.asset}
+            claimedPlayers={t.refundClaimedPlayers}
+          />
+          {t.contractId && (
+            <ClaimRefundButton
+              tournamentId={t.id}
+              passphrase={passphrase}
+              entryFee={t.entryFee}
+              asset={t.asset}
+              confirmedClaimedPlayers={t.refundClaimedPlayers}
+            />
+          )}
         </section>
       )}
 
@@ -92,15 +118,15 @@ export default async function TournamentDetailPage({
             participantCount={t.participants.length}
             entryFee={t.entryFee}
             initialParticipants={participantAddresses}
+            initialRefundPlayers={t.refundClaimedPlayers}
           />
 
-          {t.status === "ACTIVE" && t.contractId && (
+          {t.status === "ACTIVE" && !t.refundsClaimable && t.contractId && (
             <JoinCard
               tournamentId={t.id}
               contractId={t.contractId}
               entryFee={t.entryFee}
-              asset={t.asset}
-              assetIssuer={assetIssuer}
+              joinUrl={joinUrl}
               passphrase={passphrase}
             />
           )}
@@ -127,7 +153,7 @@ export default async function TournamentDetailPage({
 
         <aside aria-label="Tournament tools" className="flex flex-col gap-8 lg:col-span-4">
           <LiveFeed tournamentId={t.id} />
-          {t.status === "ACTIVE" && (
+          {t.status === "ACTIVE" && !t.refundsClaimable && (
             <RefereePanel tournamentId={t.id} refereeAddr={t.refereeAddr} passphrase={passphrase} />
           )}
           {canCancel && (

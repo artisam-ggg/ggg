@@ -26,8 +26,7 @@ const baseProps = {
   tournamentId: "t_1",
   contractId: "CONTRACTCONTRACTCONTRACTCONTRACTCONTRACTCONTRACTCONTRACTAB",
   entryFee: "10000000",
-  asset: "XLM" as const,
-  assetIssuer: null,
+  joinUrl: "https://ggg.quest/tournaments/t_1",
   passphrase: "P",
 };
 
@@ -41,30 +40,18 @@ describe("JoinCard", () => {
     mockedUseRouter.mockReturnValue({ refresh: vi.fn() });
   });
 
-  it("encodes the exact SEP-7 pay URI for XLM (no asset_issuer)", () => {
+  it("encodes the tournament join URL instead of a direct payment URI", () => {
     render(<JoinCard {...baseProps} />);
-    const uri = screen.getByTestId("qr").getAttribute("data-value");
-    expect(uri).toBe(
-      "web+stellar:pay?destination=CONTRACTCONTRACTCONTRACTCONTRACTCONTRACTCONTRACTCONTRACTAB&amount=10000000&memo=t_1&asset_code=XLM",
-    );
-  });
-
-  it("includes asset_issuer for non-native assets", () => {
-    render(
-      <JoinCard
-        {...baseProps}
-        asset="USDC"
-        assetIssuer="GISSUERISSUERISSUERISSUERISSUERISSUERISSUERISSUERISSUERIS"
-      />,
-    );
-    expect(screen.getByTestId("qr").getAttribute("data-value")).toContain(
-      "&asset_code=USDC&asset_issuer=GISSUERISSUERISSUERISSUERISSUERISSUERISSUERISSUERISSUERIS",
+    expect(screen.getByTestId("qr")).toHaveAttribute("data-value", baseProps.joinUrl);
+    expect(screen.getByRole("link", { name: /open tournament join page/i })).toHaveAttribute(
+      "href",
+      baseProps.joinUrl,
     );
   });
 
   it("QR tile has accessible aria-label", () => {
     render(<JoinCard {...baseProps} />);
-    expect(screen.getByRole("img", { name: /sep-7 join qr/i })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /tournament join qr/i })).toBeInTheDocument();
   });
 
   it("shows Connect Wallet button initially and Join Tournament is disabled", () => {

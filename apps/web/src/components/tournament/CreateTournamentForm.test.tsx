@@ -17,6 +17,13 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 import { CreateTournamentForm } from "./CreateTournamentForm";
 import { ensureWallet, signAndSubmit } from "@/lib/wallet";
 
+function fillSettlementDeadline() {
+  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
+  fireEvent.change(screen.getByLabelText(/settlement deadline/i), {
+    target: { value: tomorrow },
+  });
+}
+
 describe("CreateTournamentForm", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -35,6 +42,7 @@ describe("CreateTournamentForm", () => {
     expect(screen.getByLabelText(/game title/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/entry fee/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/referee/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/settlement deadline/i)).toBeInTheDocument();
   });
 
   it("shows bps summary for default 60/30/10 split", () => {
@@ -101,6 +109,7 @@ describe("CreateTournamentForm", () => {
     fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
     fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1.5" } });
     fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
 
     // Connect wallet
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
@@ -132,6 +141,7 @@ describe("CreateTournamentForm", () => {
     expect(body.gameTitle).toBe("SF6");
     expect(body.organizerAddress).toBe(MOCK_ORGANIZER);
     expect(body.refereeAddress).toBe(REF);
+    expect(body.settlementDeadline).toBeGreaterThan(Math.floor(Date.now() / 1000));
     // default splits 60/30/10 → bps [6000,3000,1000]
     expect(body.distributionBps).toEqual([6000, 3000, 1000]);
 
@@ -165,6 +175,7 @@ describe("CreateTournamentForm", () => {
     fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
     fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
     fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
 
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
@@ -198,6 +209,7 @@ describe("CreateTournamentForm", () => {
     fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
     fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
     fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
 
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
@@ -245,6 +257,7 @@ describe("CreateTournamentForm", () => {
     fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
     fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
     fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
 
     // Upload a cover image
     const file = new File(["img bytes"], "cover.png", { type: "image/png" });
@@ -306,6 +319,7 @@ describe("CreateTournamentForm", () => {
     fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
     fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
     fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
 
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
@@ -339,6 +353,7 @@ describe("CreateTournamentForm", () => {
     fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
     fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
     fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
 
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
@@ -374,6 +389,7 @@ describe("CreateTournamentForm", () => {
     fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
     fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "0.5" } });
     fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
 
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
@@ -412,6 +428,7 @@ describe("CreateTournamentForm", () => {
       fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
       fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: feeValue } });
       fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+      fillSettlementDeadline();
 
       // Connect wallet so the submit button is enabled
       fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
@@ -441,6 +458,7 @@ describe("CreateTournamentForm", () => {
     fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
     fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1.12345678" } });
     fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
 
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
@@ -474,6 +492,7 @@ describe("CreateTournamentForm", () => {
     // 1.1234567 XLM → 11234567 stroops
     fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1.1234567" } });
     fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
 
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     await waitFor(() => expect(ensureWallet).toHaveBeenCalled());

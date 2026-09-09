@@ -4,12 +4,15 @@ import {
   buildCancelTx,
   buildDeployInitializeTx,
   buildInitializeTx,
+  readSettlementDeadline,
   buildFinalizeTx,
+  buildClaimRefundTx,
   buildJoinTx,
   explorerContractUrl,
   explorerTxUrl,
   resolveSacAddress,
   submitSignedXdr,
+  validateInitializeXdr,
 } from "@/lib/stellar";
 import type {
   CreateTournamentInput,
@@ -36,6 +39,7 @@ export async function createTournament(
       organizerId: userId,
       organizerAddr: input.organizerAddress,
       refereeAddr: input.refereeAddress,
+      settlementDeadline: new Date(input.settlementDeadline * 1000),
       tokenAddr,
       coverImageKey: input.coverImageKey ?? null,
       status: "DRAFT",
@@ -48,6 +52,7 @@ export async function createTournament(
     tokenAddr,
     entryFee: input.entryFee,
     distributionBps: input.distributionBps,
+    settlementDeadline: BigInt(input.settlementDeadline),
   });
 
   return { tournamentId: tournament.id, unsignedXdr, network: env.STELLAR_NETWORK };
@@ -67,10 +72,20 @@ export interface SubmitTxResult {
   initializeXdr?: string;
 }
 
+function requireFutureSettlementDeadline(deadline: Date | null): Date {
+  if (!deadline) {
+    throw Object.assign(new Error("Tournament is missing a settlement deadline"), { status: 409 });
+  }
+  if (deadline.getTime() <= Date.now()) {
+    throw Object.assign(new Error("Settlement deadline has expired"), { status: 409 });
+  }
+  return deadline;
+}
+
 /**
  * Builds the unsigned `initialize` XDR for a deployed tournament contract from
- * its persisted parameters. Returns undefined if the record is missing the
- * fields needed to initialise (e.g. tokenAddr), so callers can degrade safely.
+ * its persisted parameters. Missing or expired deadlines fail closed: the
+ * contract must never be presented as active without a valid initialization.
  */
 async function buildInitXdrFor(
   tournament: {
@@ -81,10 +96,14 @@ async function buildInitXdrFor(
     firstBps: number;
     secondBps: number;
     thirdBps: number;
+    settlementDeadline: Date | null;
   },
   contractId: string,
-): Promise<string | undefined> {
-  if (!tournament.tokenAddr) return undefined;
+): Promise<string> {
+  const settlementDeadline = requireFutureSettlementDeadline(tournament.settlementDeadline);
+  if (!tournament.tokenAddr) {
+    throw Object.assign(new Error("Tournament is missing its escrow token"), { status: 409 });
+  }
   const { xdr } = await buildInitializeTx({
     contractId,
     organizerAddress: tournament.organizerAddr,
@@ -92,6 +111,7 @@ async function buildInitXdrFor(
     tokenAddr: tournament.tokenAddr,
     entryFee: tournament.entryFee,
     distributionBps: [tournament.firstBps, tournament.secondBps, tournament.thirdBps],
+    settlementDeadline: BigInt(Math.floor(settlementDeadline.getTime() / 1000)),
   });
   return xdr;
 }
@@ -124,21 +144,71 @@ export async function submitTournamentTx(
     throw Object.assign(new Error("Forbidden"), { status: 403 });
   }
 
-  // Guard against re-submitting an already-confirmed deploy (spec §5: dedupe on
-  // confirmed state). contractId has a @unique constraint in the Prisma schema,
-  // so a second Prisma update with the same value would also throw a unique
-  // violation — but we short-circuit before hitting Stellar at all. We still
-  // hand back a fresh initialize XDR so an interrupted deploy→initialize flow
-  // can complete the second leg on retry.
-  if (input.intent === "deploy" && tournament.status === "ACTIVE" && tournament.contractId) {
+  // Guard against re-submitting an already-confirmed deploy. contractId has a
+  // @unique constraint in the Prisma schema, so return a fresh initialize XDR
+  // for an interrupted deploy→initialize flow instead of submitting again.
+  if (input.intent === "deploy" && tournament.contractId) {
     const initializeXdr = await buildInitXdrFor(tournament, tournament.contractId);
     return {
       txHash: tournament.deployTxHash ?? "",
       contractId: tournament.contractId,
       status: tournament.status,
       explorerUrl: explorerTxUrl(tournament.deployTxHash ?? ""),
-      ...(initializeXdr ? { initializeXdr } : {}),
+      initializeXdr,
     };
+  }
+
+  if (input.intent === "deploy") {
+    requireFutureSettlementDeadline(tournament.settlementDeadline);
+  }
+
+  if (input.intent === "initialize") {
+    if (tournament.status !== "DRAFT" || !tournament.contractId) {
+      throw Object.assign(new Error("Tournament is not ready for initialization"), { status: 409 });
+    }
+    const settlementDeadline = requireFutureSettlementDeadline(tournament.settlementDeadline);
+    if (!tournament.tokenAddr) {
+      throw Object.assign(new Error("Tournament is missing its escrow token"), { status: 409 });
+    }
+    validateInitializeXdr(input.signedXdr, {
+      contractId: tournament.contractId,
+      organizerAddress: tournament.organizerAddr,
+      refereeAddress: tournament.refereeAddr,
+      tokenAddr: tournament.tokenAddr,
+      entryFee: tournament.entryFee,
+      distributionBps: [tournament.firstBps, tournament.secondBps, tournament.thirdBps],
+      settlementDeadline: BigInt(Math.floor(settlementDeadline.getTime() / 1000)),
+    });
+
+    // A previous initialize may have succeeded while its read-back failed. Avoid
+    // re-submitting it: initialize is one-time on the contract.
+    let confirmedDeadline: bigint | undefined;
+    try {
+      confirmedDeadline = await readSettlementDeadline({
+        contractId: tournament.contractId,
+        sourceAddress: tournament.organizerAddr,
+      });
+    } catch {
+      // An uninitialized contract and transient RPC failures both proceed to submit.
+    }
+    if (confirmedDeadline !== undefined) {
+      if (confirmedDeadline !== BigInt(Math.floor(settlementDeadline.getTime() / 1000))) {
+        throw Object.assign(
+          new Error("On-chain settlement deadline does not match this tournament"),
+          { status: 502 },
+        );
+      }
+      const updated = await prisma.tournament.update({
+        where: { id },
+        data: { status: "ACTIVE", deadlineConfirmedAt: new Date() },
+      });
+      return {
+        txHash: tournament.deployTxHash ?? "",
+        contractId: updated.contractId,
+        status: updated.status,
+        explorerUrl: explorerContractUrl(tournament.contractId),
+      };
+    }
   }
 
   const result = await submitSignedXdr(input.signedXdr, input.intent);
@@ -154,32 +224,56 @@ export async function submitTournamentTx(
       where: { id },
       data: {
         contractId: result.contractId ?? null,
-        status: "ACTIVE",
         deployTxHash: result.hash,
       },
     });
-    // The contract is deployed but not yet initialised — hand the organiser the
-    // second (initialize) XDR to sign so the contract becomes joinable.
-    const initializeXdr = updated.contractId
-      ? await buildInitXdrFor(updated, updated.contractId)
-      : undefined;
+    // The contract is deployed but remains DRAFT until initialize confirms.
+    if (!updated.contractId) {
+      throw Object.assign(new Error("Deployment succeeded without a contract ID"), { status: 502 });
+    }
+    const initializeXdr = await buildInitXdrFor(updated, updated.contractId);
     return {
       txHash: result.hash,
       contractId: updated.contractId,
       status: updated.status,
       explorerUrl: explorerTxUrl(result.hash),
-      ...(initializeXdr ? { initializeXdr } : {}),
+      initializeXdr,
     };
   }
 
-  // initialize: confirms the contract's state-setting transaction. No DB
-  // mutation — the tournament is already ACTIVE from the deploy leg; this just
-  // verifies the on-chain initialise landed so join/finalize won't panic.
+  // initialize: a confirmed state-setting transaction makes the tournament
+  // joinable.
   if (input.intent === "initialize") {
+    const settlementDeadline = requireFutureSettlementDeadline(tournament.settlementDeadline);
+    const expectedDeadline = BigInt(Math.floor(settlementDeadline.getTime() / 1000));
+    let confirmedDeadline: bigint | undefined;
+    let deadlineReadFailed = false;
+    try {
+      confirmedDeadline = await readSettlementDeadline({
+        contractId: tournament.contractId!,
+        sourceAddress: tournament.organizerAddr,
+      });
+    } catch {
+      deadlineReadFailed = true;
+    }
+    if (!deadlineReadFailed && confirmedDeadline !== expectedDeadline) {
+      throw Object.assign(
+        new Error("On-chain settlement deadline does not match this tournament"),
+        {
+          status: 502,
+        },
+      );
+    }
+    const updated = await prisma.tournament.update({
+      where: { id },
+      data: deadlineReadFailed
+        ? { status: "ACTIVE" }
+        : { status: "ACTIVE", deadlineConfirmedAt: new Date() },
+    });
     return {
       txHash: result.hash,
-      contractId: tournament.contractId,
-      status: tournament.status,
+      contractId: updated.contractId,
+      status: updated.status,
       explorerUrl: explorerTxUrl(result.hash),
     };
   }
@@ -262,6 +356,30 @@ export async function buildJoin(
   return { unsignedXdr: xdr, network };
 }
 
+export async function buildRefundClaim(
+  id: string,
+  playerAddress: string,
+  submitterAddress: string,
+): Promise<{ unsignedXdr: string; network: string }> {
+  const t = await prisma.tournament.findUnique({ where: { id } });
+  if (!t) throw Object.assign(new Error("Tournament not found"), { status: 404 });
+  const deadlineReached =
+    t.deadlineConfirmedAt != null &&
+    t.settlementDeadline != null &&
+    t.settlementDeadline.getTime() <= Date.now();
+  if ((t.status !== "CANCELLED" && !(t.status === "ACTIVE" && deadlineReached)) || !t.contractId) {
+    throw Object.assign(new Error("Tournament is not available for refund claims"), {
+      status: 409,
+    });
+  }
+  const { xdr, network } = await buildClaimRefundTx({
+    contractId: t.contractId,
+    playerAddress,
+    submitterAddress,
+  });
+  return { unsignedXdr: xdr, network };
+}
+
 export async function buildFinalize(
   id: string,
   input: FinalizeInput,
@@ -329,12 +447,27 @@ export async function getTournamentDetail(id: string) {
     include: {
       participants: { orderBy: { joinedAt: "asc" } },
       payouts: { orderBy: { rank: "asc" } },
+      events: {
+        where: { type: "REFUND_CLAIMED" },
+        select: { payload: true },
+      },
     },
   });
 
   if (!t) return null;
 
-  const pool = (t.entryFee * BigInt(t.participants.length)).toString();
+  const refundClaims = t.events.flatMap((event) => {
+    const payload = event.payload;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return [];
+    const { player, amount } = payload as Record<string, unknown>;
+    return typeof player === "string" && typeof amount === "string" && /^[1-9]\d*$/.test(amount)
+      ? [{ player, amount }]
+      : [];
+  });
+  const refunded = refundClaims.reduce((total, claim) => total + BigInt(claim.amount), 0n);
+  const grossPool = t.entryFee * BigInt(t.participants.length);
+  const pool = (grossPool > refunded ? grossPool - refunded : 0n).toString();
+  const confirmedSettlementDeadline = t.deadlineConfirmedAt ? t.settlementDeadline : null;
 
   return {
     id: t.id,
@@ -345,12 +478,21 @@ export async function getTournamentDetail(id: string) {
     entryFee: t.entryFee.toString(),
     distributionBps: [t.firstBps, t.secondBps, t.thirdBps] as const,
     contractId: t.contractId,
+    settlementDeadline: confirmedSettlementDeadline
+      ? Math.floor(confirmedSettlementDeadline.getTime() / 1000)
+      : null,
+    contractVersion: confirmedSettlementDeadline
+      ? "DEADLINE"
+      : t.status === "DRAFT"
+        ? "PENDING"
+        : "LEGACY",
     contractUrl: t.contractId ? explorerContractUrl(t.contractId) : null,
     tokenAddr: t.tokenAddr,
     organizerId: t.organizerId,
     organizerAddr: t.organizerAddr,
     refereeAddr: t.refereeAddr,
     pool,
+    refundClaimedPlayers: refundClaims.map((claim) => claim.player),
     participants: t.participants.map((p) => ({
       playerAddr: p.playerAddr,
       joinedAt: p.joinedAt.toISOString(),
@@ -363,5 +505,11 @@ export async function getTournamentDetail(id: string) {
       txHash: p.txHash,
       explorerUrl: p.txHash ? explorerTxUrl(p.txHash) : null,
     })),
+    refundsClaimable:
+      t.status === "CANCELLED" ||
+      (t.status === "ACTIVE" &&
+        t.deadlineConfirmedAt != null &&
+        t.settlementDeadline != null &&
+        t.settlementDeadline.getTime() <= Date.now()),
   };
 }

@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
 
 concurrency:
@@ -90,7 +90,34 @@ jobs:
         run: pnpm --filter web build
 
       - name: Audit (high+)
-        run: pnpm audit --audit-level high
+        run: |
+          # pnpm retries a single audit request, but the npm advisory endpoint
+          # can still time out transiently on GitHub-hosted runners. Retry one
+          # fresh request only for that network failure; audit findings fail
+          # immediately and remain merge-blocking.
+          attempts=2
+          for attempt in $(seq 1 "$attempts"); do
+            set +e
+            output="$(pnpm audit --audit-level high 2>&1)"
+            status=$?
+            set -e
+            printf '%s\n' "$output"
+
+            if [ "$status" -eq 0 ]; then
+              exit 0
+            fi
+
+            if ! printf '%s\n' "$output" | grep -q 'ERR_SOCKET_TIMEOUT'; then
+              exit "$status"
+            fi
+
+            if [ "$attempt" -lt "$attempts" ]; then
+              echo "Audit request timed out; retrying once in 30 seconds."
+              sleep 30
+            fi
+          done
+
+          exit "$status"
 
   contract:
     runs-on: ubuntu-latest
@@ -129,6 +156,18 @@ jobs:
 
       - name: Contract build
         run: cd contracts/escrow && stellar contract build
+
+      - name: Verify generated contract bindings
+        run: |
+          stellar contract bindings typescript \
+            --wasm contracts/escrow/target/wasm32v1-none/release/ggg_escrow.wasm \
+            --output-dir /tmp/ggg-escrow-bindings \
+            --overwrite
+          sed -i '1i// @ts-nocheck -- Stellar CLI generated binding includes unused SDK template imports.' \
+            /tmp/ggg-escrow-bindings/src/index.ts
+          diff -u \
+            apps/web/src/contract-client/src/index.ts \
+            /tmp/ggg-escrow-bindings/src/index.ts
 
       - name: Contract tests
         run: cd contracts/escrow && cargo test

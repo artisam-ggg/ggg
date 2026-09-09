@@ -2,6 +2,10 @@
 
 Running log of shipped features (append one entry per change), per the auto-dev workflow.
 
+## Issue #217 — Deadline reference-app wiring
+
+Tournament creation now accepts UTC Unix-second deadlines, applies the one-hour minimum and #215's 90-day Testnet-safe horizon in the shared client/server schema, persists the exact instant, and sends the exact seconds to contract initialization. The API/UI expose confirmed deadlines and explicit legacy-contract state without inventing deadlines for pre-deadline deployments. Subscriber replay identity now uses the stable Soroban RPC event id with the transaction hash; confirmed `refund_claimed` events remain the source of per-player refund state.
+
 ## Phase 0 — Foundation
 
 Stood up the GGG pnpm 10 monorepo skeleton with zero business logic, so every later phase has a proven foundation:
@@ -26,9 +30,9 @@ Implemented the trustless tournament prize-escrow contract (`contracts/escrow`) 
 - `initialize` (organizer-only) with validation of distribution bps, entry fee, and organizer≠referee.
 - `join_tournament` (player-auth) pulls entry fee, dedupes players, emits `registered` event.
 - `finalize_results` (referee-only) pays 60/30/10 with deterministic dust to 1st place; emits `finalized` event.
-- `cancel_tournament` (organizer-only) refunds all players; emits `cancelled` event.
+- `cancel_tournament` (organizer-only) records cancellation; registered players claim refunds individually.
 - Read-only `get_pool`, `get_reward`, `is_finished`.
-- Exhaustive `#[cfg(test)]` suite (28 tests) covering happy paths and all reverts.
+- Exhaustive `#[cfg(test)]` suite (49 tests) covering happy paths and all reverts.
 - Built, optimized, and uploaded WASM to Testnet; recorded `ESCROW_WASM_HASH` in `apps/web/.env.example`.
 - Generated TypeScript bindings under `apps/web/src/contract-client` for Phase 2/4 consumption.
 
@@ -42,7 +46,7 @@ Built the server-side Stellar integration module (`apps/web/src/lib/stellar/`) t
 - Network-aware Stellar.Expert URL builders for transactions and contracts.
 - Shared Vitest fakes for RPC/Horizon plus canned simulation/transaction responses.
 - `simulateAndAssemble` pipeline that always simulates before returning XDR, and `submitSignedXdr` that submits a Freighter-signed XDR and polls `getTransaction` with bounded retries/timeouts.
-- Unsigned-XDR builders for `join_tournament`, `finalize_results`, `cancel_tournament`, and `deploy` (the generated Phase 1 binding deploys the contract; initialize is a known follow-up once the contract/binding supports constructor-style deploy or a manual multi-op transaction).
+- Unsigned-XDR builders for `join_tournament`, `claim_refund`, `finalize_results`, `cancel_tournament`, and `deploy` (the generated Phase 1 binding deploys the contract; initialize is a known follow-up once the contract/binding supports constructor-style deploy or a manual multi-op transaction).
 - Public barrel (`index.ts`) exporting the exact Phase-4 contract surface.
 - Gated Testnet integration test (`RUN_STELLAR_IT=1`) proving a deploy XDR simulates successfully against Testnet.
 - Added `@stellar/stellar-sdk` 15 to `apps/web` and adjusted the generated contract-client package for strict TypeScript/ESLint compatibility.
@@ -53,10 +57,9 @@ Built the server-side Stellar integration module (`apps/web/src/lib/stellar/`) t
 Stood up the standalone `apps/subscriber` worker that ingests on-chain activity into Postgres and publishes it to Redis, and wired the Phase 4 detail page to a live SSE feed so joins/finalisations/cancellations propagate without a refresh:
 
 - `SubscriberCursor` model + migration (per-contract ledger cursor) and a `ContractEvent @@unique([txHash, type])` migration backing idempotent dedupe.
-- `apps/subscriber` package: Zod-validated `getEvents`/Horizon `payments` wrapper, fail-closed env loader, Prisma singleton reusing the web-generated client through the `web` workspace dependency.
+- `apps/subscriber` package: Zod-validated `getEvents` wrapper, fail-closed env loader, Prisma singleton reusing the web-generated client through the `web` workspace dependency.
 - Per-contract ledger cursor with restart recovery (`getCursor`/`setCursor`), advanced only after a successful ingest+publish pass (at-least-once).
-- Idempotent reconciliation of `registered`/`finalized`/`cancelled` events into `ContractEvent`/`Participant`/`Payout`/`Tournament` inside one transaction, deduped on `txHash` (replays are no-ops); money handled as `BigInt`.
-- SEP-7 deposit reconciliation: untrusted Horizon payments become registrations only when `memo == tournamentId` and the destination is the contract address.
+- Idempotent reconciliation of `registered`/`finalized`/`cancelled`/`refund_claimed` events into `ContractEvent`/`Participant`/`Payout`/`Tournament` inside one transaction, deduped on `txHash` (replays are no-ops); money handled as `BigInt`.
 - Redis publish to `tournament:<id>` + `pollTournament` orchestration; service loop polls every `ACTIVE` tournament with a `contractId`, isolates per-tournament failures, and shuts down gracefully on SIGTERM/SIGINT.
 - `GET /api/tournaments/[id]/events` SSE route: replays recent confirmed `ContractEvent` rows from Postgres (source of truth) then streams the Redis channel, with heartbeats and a `?fallback=poll` mode.
 - `useTournamentEvents` EventSource hook with auto-reconnect; `<PrizePoolCounter>` ticks up off the stream (key-driven `pool-pop` keyframe, reduced-motion aware) and `<LiveFeed>` renders a human-readable gloss ticker (reduced-motion aware).
@@ -79,3 +82,49 @@ Wrapping the Phase 0–5 app in test, CI, security, and deployment layers (no ne
 - **E2E acceptance specs + verification (P6.2/P6.3, #83/#84):** fixed the auth fixture to the real NextAuth credentials flow (`/api/auth/csrf` → `/api/auth/callback/credentials` → `ggg.session`; there is no `/api/auth/login`) — verified end-to-end against a local dev server. Wired the `data-testid` hooks the specs query into the real components (`join-qr`, `participant-row`, `payout-row`, `explorer-link`, `status-chip`, `cancel-button`, `confirm-cancel`) and added a `RefundList` that derives one `refund-row` per refunded player at the entry-fee amount (the `cancelled` event only carries a count); all verified to render via `wired-selectors.test.tsx`. Added `e2e/demo-path.spec.ts` (create → join ×3 → finalize → 3 payouts) and `e2e/cancel-refund.spec.ts` (create → join ×2 → cancel → 2 refunds) plus PASS/FAIL runner wrappers (`scripts/verify-demo-path.ts`, `scripts/verify-cancel-refund.ts`) and a manual guide (`docs/verification/e2e-acceptance.md`). The on-chain run itself is operator-gated on a live Testnet deploy (#88).
 - **Acceptance + DoD docs (P6.8/P6.10, #89/#91):** `docs/acceptance-spec-15.md` (the six §15 criteria with commands/expected/where-to-check/status) and `docs/definition-of-done.md` (full ship-gate audit). Updated RUNBOOK §8 outcomes. Local gates verified green (typecheck, lint, `pnpm -r test`, `pnpm audit --audit-level high`, `cargo test`, no-secrets grep, docker compose); the sweep surfaced that production `next build` fails (uncaught because CI does not build) → filed #126. Verdict: **BLOCKED** on the build fix + live deploy.
 - **Production build fix (#126):** `pnpm --filter web build` was failing (Turbopack) — uncaught because CI ran tests but never a production build, which would have failed the Railway deploy. Fixed three root causes: (1) `apps/web/src/contract-client/package.json` had only an `exports` field with no `main`, so the `@/contract-client` path alias didn't resolve under Turbopack — added `"main": "./src/index.ts"`; (2) `argon2` (native, pulls `fs`) leaked into the browser bundle because the client `register/page.tsx` → `auth-schemas.ts` → `password.ts` import chain dragged in the hasher — split the client-safe `passwordSchema` into `lib/password-schema.ts` (no argon2) and pointed `auth-schemas.ts` at it (`password.ts` re-exports it for back-compat); (3) `globals.css` placed the Google-Fonts `@import url(...)` after `@import "tailwindcss"`, which the Tailwind plugin inlines into ~1300 rules, so the font imports landed after rules and CSS rejected them — moved them to the top. Added a **`Production build`** step to the CI `app` job so this stays caught. Build now passes and emits all routes; typecheck/lint/tests/format unchanged.
+
+## Issue #179 — Add MIT LICENSE file to repo root
+
+Added a root `LICENSE` file containing the full MIT license text, with the copyright line `Copyright © 2026 Artisam Labs` matching the README attribution. No functional changes.
+
+## Audit fix — resolve high-severity transitive advisories
+
+Added `pnpm.overrides` in root `package.json` to force patched versions of transitive dependencies flagged by `pnpm audit --audit-level high`: `brace-expansion`, `js-yaml`, `fast-uri`, and `sharp`. Audit now exits clean at the high level (4 moderate remain below the gate), matching the precedent set in Phase 6.5 for `axios`.
+
+## CI — run workflow on develop pushes
+
+Added `develop` to the CI `push` trigger in `.github/workflows/ci.yml` so merge commits into `develop` display CI status checkmarks on the GitHub repo page. No functional or deployment changes.
+
+## Issue #181 — Public deployment health endpoint
+
+Added a dedicated `/api/health` route that returns a 200 JSON payload with service status and timestamp, and updated `apps/web/railway.json` to use `/health` as the Railway healthcheck path. Includes a unit test. Note: resolving the reported HTTP 403 / stale-deployment behavior for `https://ggg.quest` requires a Railway redeploy by someone with project access.
+
+## Issue #208 — Pin remaining Prisma transitive audit fixes
+
+Added narrowly scoped, temporary pnpm overrides for the final Prisma-transitive audit findings. They are retained only until Prisma releases compatible dependency versions; the dependency-only change is covered by the full quality gate suite.
+
+## Issue #191 — Fix unused middleware parameter
+
+Removed the unused request parameter from the authenticated middleware callback. Authentication remains enforced by the `withAuth` authorization callback and security headers are applied unchanged.
+
+## Issue #229 — Contract-backed tournament join QR
+
+Changed active-tournament QR codes from raw SEP-7 payment URIs to the public tournament URL. Scanning now opens the existing wallet-backed `join_tournament` flow, ensuring the contract records every player and that displayed pool, eligibility, and payouts remain aligned.
+
+## Fix — avoid stale login redirects on tournament creation links
+
+Disabled client prefetching for `/tournaments/new` CTAs. This prevents a prefetch made before authentication has settled from caching the protected route's login redirect and replaying it when the organiser clicks to create a tournament.
+
+## Issue #198 — Clean up SSE subscribers on disconnect and setup failure
+
+The tournament SSE endpoint now uses one idempotent cleanup path for request aborts, stream cancellation, failed setup, and failed writes. Redis subscribers and heartbeat intervals are released in every path; focused tests cover cancellation and replay/subscription failures.
+
+## Issue #233 — Restore settlement deadline integration and TTL safety
+
+Threaded the organiser-selected UTC settlement deadline through tournament creation, persistence, the Stellar transaction builder, and regenerated contract bindings. The conservative 90-day maximum settlement horizon is Testnet-safe and deliberately enforced uniformly on every supported network, so client and contract validation cannot diverge. Contract mutations are responsible for keeping instance and code TTL at 120 days, covering that horizon plus a 30-day margin; if either entry is nevertheless archived, the transaction submitter must restore it before invoking the contract. A CI regenerate-and-diff check guards against future contract/binding ABI drift; legacy tournament rows retain a nullable deadline for forward-migration compatibility and cannot generate a new initialize transaction without one.
+
+Deploy confirmation now keeps a tournament in `DRAFT` until its separate `initialize` transaction confirms. A missing or expired settlement deadline fails closed before activation; a regression test covers expiry during deploy confirmation, ensuring no initialization XDR is returned for an unusable escrow.
+
+## Issue #216 — Permissionless claimant refunds
+
+`claim_refund(player)` is permissionless: after the inclusive settlement deadline, or immediately after cancellation, any caller can submit a claim but the entry fee is always transferred only to that registered player. Each player can claim once; unknown players and finalized escrows are rejected. Cancellation now only records its terminal state, so no transaction loops over participants; individual refund claims are O(1) and preserve transfer atomicity. The contract enforces a Testnet-simulated `MAX_PLAYERS` ceiling of 100 registrations, with tests at the limit and one-over-limit, while refund tests cover deadline/state boundaries, arbitrary callers, exact events, failed transfers, and conservation.

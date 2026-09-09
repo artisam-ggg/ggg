@@ -5,19 +5,26 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // vi.hoisted is used so that submitMock is available inside the hoisted vi.mock call.
 // ---------------------------------------------------------------------------
 
-const { submitMock } = vi.hoisted(() => ({
-  submitMock: vi.fn(async () => ({
-    hash: "TX1" as string,
-    contractId: "CDEPLOYED" as string | undefined,
-    status: "SUCCESS" as "SUCCESS" | "FAILED",
-  })),
-}));
+const { submitMock, buildInitializeMock, validateInitializeMock, readSettlementDeadlineMock } =
+  vi.hoisted(() => ({
+    submitMock: vi.fn(async () => ({
+      hash: "TX1" as string,
+      contractId: "CDEPLOYED" as string | undefined,
+      status: "SUCCESS" as "SUCCESS" | "FAILED",
+    })),
+    buildInitializeMock: vi.fn(async () => ({ xdr: "INITIALIZE_XDR", network: "testnet" })),
+    validateInitializeMock: vi.fn(),
+    readSettlementDeadlineMock: vi.fn(),
+  }));
 
 vi.mock("@/lib/stellar", async (orig) => {
   const actual = await orig<typeof import("@/lib/stellar")>();
   return {
     ...actual,
+    buildInitializeTx: buildInitializeMock,
     submitSignedXdr: submitMock,
+    validateInitializeXdr: validateInitializeMock,
+    readSettlementDeadline: readSettlementDeadlineMock,
     explorerTxUrl: (_hash: string) => `https://stellar.expert/tx/${_hash}`,
   };
 });
@@ -66,7 +73,20 @@ vi.mock("@/server/services/idempotency", () => ({
   }),
 }));
 
-const dbTournament = { id: "t_1", organizerId: "user_1", status: "DRAFT", contractId: null };
+const dbTournament = {
+  id: "t_1",
+  organizerId: "user_1",
+  organizerAddr: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+  refereeAddr: "GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBGPB",
+  tokenAddr: "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4",
+  entryFee: 10n,
+  firstBps: 6000,
+  secondBps: 3000,
+  thirdBps: 1000,
+  settlementDeadline: new Date("2099-01-01T00:00:00.000Z"),
+  status: "DRAFT",
+  contractId: null,
+};
 vi.mock("@/lib/db", () => ({
   prisma: {
     tournament: {
@@ -126,6 +146,12 @@ describe("POST /api/tournaments/[id]/submit", () => {
     vi.clearAllMocks();
     store.clear();
     submitMock.mockResolvedValue({ hash: "TX1", contractId: "CDEPLOYED", status: "SUCCESS" });
+    buildInitializeMock.mockResolvedValue({ xdr: "INITIALIZE_XDR", network: "testnet" });
+    validateInitializeMock.mockReturnValue(undefined);
+    readSettlementDeadlineMock
+      .mockReset()
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValue(4_070_908_800n);
     assertSameOriginMock.mockReturnValue(undefined);
     requireUserMock.mockResolvedValue({ id: "user_1", username: "organizer", role: "ORGANIZER" });
     rateLimitMock.mockResolvedValue({ ok: true, remaining: 19 });
@@ -137,10 +163,10 @@ describe("POST /api/tournaments/[id]/submit", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Happy path: deploy persists contractId + ACTIVE
+  // Happy path: deploy persists contractId but remains DRAFT until initialize.
   // ---------------------------------------------------------------------------
 
-  it("submits deploy and persists contractId + ACTIVE (200)", async () => {
+  it("submits deploy and returns initialize XDR while tournament remains DRAFT (200)", async () => {
     const res = await POST(makeReq("k1") as Parameters<typeof POST>[0], ctx);
     const json = await res.json();
 
@@ -148,18 +174,87 @@ describe("POST /api/tournaments/[id]/submit", () => {
     expect(json.ok).toBe(true);
     expect(json.data.txHash).toBe("TX1");
     expect(json.data.contractId).toBe("CDEPLOYED");
-    expect(json.data.status).toBe("ACTIVE");
+    expect(json.data.status).toBe("DRAFT");
+    expect(json.data.initializeXdr).toBe("INITIALIZE_XDR");
     expect(json.data.explorerUrl).toContain("TX1");
   });
 
-  it("calls prisma.tournament.update with contractId, status=ACTIVE, deployTxHash on deploy", async () => {
+  it("calls prisma.tournament.update with contractId and deployTxHash on deploy", async () => {
     await POST(makeReq("k1") as Parameters<typeof POST>[0], ctx);
 
     expect(updateMock).toHaveBeenCalledOnce();
     const updateData = updateMock.mock.calls[0]![0].data;
     expect(updateData.contractId).toBe("CDEPLOYED");
-    expect(updateData.status).toBe("ACTIVE");
+    expect(updateData.status).toBeUndefined();
     expect(updateData.deployTxHash).toBe("TX1");
+  });
+
+  it("sets ACTIVE only after initialize succeeds", async () => {
+    findUniqueMock.mockResolvedValueOnce({ ...dbTournament, contractId: "CDEPLOYED" });
+
+    const res = await POST(
+      makeReq("k_initialize", { signedXdr: VALID_XDR, intent: "initialize" }) as Parameters<
+        typeof POST
+      >[0],
+      ctx,
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.data.status).toBe("ACTIVE");
+    expect(updateMock).toHaveBeenCalledWith({
+      where: { id: "t_1" },
+      data: expect.objectContaining({
+        status: "ACTIVE",
+        deadlineConfirmedAt: expect.any(Date),
+      }),
+    });
+    expect(validateInitializeMock).toHaveBeenCalledWith(
+      VALID_XDR,
+      expect.objectContaining({ contractId: "CDEPLOYED" }),
+    );
+  });
+
+  it("rejects initialize before an escrow contract has been deployed", async () => {
+    const res = await POST(
+      makeReq("k_initialize_undeployed", {
+        signedXdr: VALID_XDR,
+        intent: "initialize",
+      }) as Parameters<typeof POST>[0],
+      ctx,
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(json.ok).toBe(false);
+    expect(json.error.code).toBe("CONFLICT");
+    expect(validateInitializeMock).not.toHaveBeenCalled();
+    expect(submitMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects initialize for a cancelled tournament", async () => {
+    findUniqueMock.mockResolvedValueOnce({
+      ...dbTournament,
+      contractId: "CDEPLOYED",
+      status: "CANCELLED",
+    });
+
+    const res = await POST(
+      makeReq("k_initialize_cancelled", {
+        signedXdr: VALID_XDR,
+        intent: "initialize",
+      }) as Parameters<typeof POST>[0],
+      ctx,
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(json.ok).toBe(false);
+    expect(json.error.code).toBe("CONFLICT");
+    expect(validateInitializeMock).not.toHaveBeenCalled();
+    expect(submitMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
   });
 
   // ---------------------------------------------------------------------------
@@ -181,12 +276,10 @@ describe("POST /api/tournaments/[id]/submit", () => {
   // Fix 2: confirmed-state dedupe — already ACTIVE deploy must NOT re-submit
   // ---------------------------------------------------------------------------
 
-  it("returns existing contractId WITHOUT calling submitSignedXdr when tournament is already ACTIVE", async () => {
-    // Simulate an already-deployed (ACTIVE) tournament.
+  it("returns existing contractId WITHOUT calling submitSignedXdr when tournament is already deployed", async () => {
+    // Simulate an already-deployed, not-yet-initialized tournament.
     findUniqueMock.mockResolvedValueOnce({
-      id: "t_1",
-      organizerId: "user_1",
-      status: "ACTIVE",
+      ...dbTournament,
       contractId: "C_EXISTING",
       deployTxHash: "TX_EXISTING",
     });
@@ -198,7 +291,8 @@ describe("POST /api/tournaments/[id]/submit", () => {
     expect(json.ok).toBe(true);
     expect(json.data.contractId).toBe("C_EXISTING");
     expect(json.data.txHash).toBe("TX_EXISTING");
-    expect(json.data.status).toBe("ACTIVE");
+    expect(json.data.status).toBe("DRAFT");
+    expect(json.data.initializeXdr).toBe("INITIALIZE_XDR");
     // The key assertion: on-chain submission must NOT happen.
     expect(submitMock).not.toHaveBeenCalled();
   });

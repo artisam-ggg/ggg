@@ -1,18 +1,15 @@
 "use client";
 import { useMemo } from "react";
 import { useTournamentEvents } from "@/hooks/use-tournament-events";
+import { formatStroops } from "@/lib/format-stroops";
 
-/** Convert a stroop string to human-readable decimal (7 decimal places). */
-function fmt(stroops: string) {
-  const n = BigInt(stroops);
-  return `${n / 10_000_000n}.${(n % 10_000_000n).toString().padStart(7, "0")}`;
-}
+const EMPTY_PLAYERS: string[] = [];
 
 /**
  * Live prize-pool counter. Seeds from the server snapshot (initialPool /
  * participantCount) then derives the live total off the SSE stream: every
- * confirmed REGISTERED event advances the pool to its `poolAfter` (or, for SEP-7
- * deposits with no poolAfter, by one entry fee). Each advance bumps a key that
+ * confirmed REGISTERED event advances the pool to its contract-emitted
+ * `poolAfter`. Each advance bumps a key that
  * replays the `pool-pop` scale animation — `motion-safe:` disables it under
  * prefers-reduced-motion (BRAND §6).
  */
@@ -22,7 +19,8 @@ export function PrizePoolCounter({
   asset,
   participantCount,
   entryFee,
-  initialParticipants = [], // new prop
+  initialParticipants = EMPTY_PLAYERS, // new prop
+  initialRefundPlayers = EMPTY_PLAYERS,
 }: {
   tournamentId: string;
   initialPool: string;
@@ -30,11 +28,13 @@ export function PrizePoolCounter({
   participantCount: number;
   entryFee: string;
   initialParticipants?: string[]; // addresses already counted
+  initialRefundPlayers?: string[];
 }) {
   const { events } = useTournamentEvents(tournamentId);
 
   // Build a Set of initial participant addresses for quick lookup
   const initialSet = useMemo(() => new Set(initialParticipants), [initialParticipants]);
+  const initialRefundSet = useMemo(() => new Set(initialRefundPlayers), [initialRefundPlayers]);
 
   // Pool + count are derived state — computed during render, not stored.
   const { pool, count, bumps } = useMemo(() => {
@@ -44,8 +44,26 @@ export function PrizePoolCounter({
 
     // Track addresses already counted from the stream
     const countedInStream = new Set<string>();
+    const refundedPlayers = new Set(initialRefundSet);
 
     for (const ev of events) {
+      if (ev.type === "REFUND_CLAIMED") {
+        const playerAddr = ev.data.player;
+        const amount = ev.data.amount;
+        if (
+          typeof playerAddr !== "string" ||
+          refundedPlayers.has(playerAddr) ||
+          typeof amount !== "string" ||
+          !/^\d+$/.test(amount)
+        ) {
+          continue;
+        }
+
+        refundedPlayers.add(playerAddr);
+        p -= BigInt(amount);
+        continue;
+      }
+
       if (ev.type !== "REGISTERED") continue;
 
       // Cast player to string (it's a Stellar address)
@@ -57,18 +75,18 @@ export function PrizePoolCounter({
         continue;
       }
 
-      // New player → increment count
+      const after = ev.data.poolAfter;
+      if (typeof after !== "string") continue;
+
       countedInStream.add(playerAddr);
       c += 1;
-
-      const after = ev.data.poolAfter;
-      const next = typeof after === "string" ? BigInt(after) : p + BigInt(entryFee);
+      const next = BigInt(after);
       if (next > p) b += 1;
       p = next;
     }
 
     return { pool: p, count: c, bumps: b };
-  }, [events, initialPool, participantCount, entryFee, initialSet]);
+  }, [events, initialPool, participantCount, initialSet, initialRefundSet]);
 
   return (
     <div className="high-contrast-card acid-glow rounded-none p-8">
@@ -81,14 +99,14 @@ export function PrizePoolCounter({
           aria-atomic="true"
           className="data-mono text-[96px] font-extrabold leading-none text-acid-yellow motion-safe:animate-pool-pop"
         >
-          {fmt(pool.toString())}
+          {formatStroops(pool.toString())}
         </span>
         <span className="label-caps mb-3 text-on-surface-variant">{asset}</span>
       </p>
       <div className="data-mono mt-4 flex gap-6 text-on-surface-variant">
         <span>{count} players</span>
         <span>
-          entry {fmt(entryFee)} {asset}
+          entry {formatStroops(entryFee)} {asset}
         </span>
       </div>
     </div>

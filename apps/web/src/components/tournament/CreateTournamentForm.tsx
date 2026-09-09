@@ -65,6 +65,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   const [asset, setAsset] = useState<"XLM" | "USDC">("XLM");
   const [refereeAddress, setRefereeAddress] = useState("");
   const [organizerAddress, setOrganizerAddress] = useState("");
+  const [settlementDeadline, setSettlementDeadline] = useState("");
   const [splits, setSplits] = useState<[number, number, number]>([60, 30, 10]);
   const [coverImageKey, setCoverImageKey] = useState<string | undefined>();
 
@@ -115,6 +116,11 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
 
     try {
       const entryFeeStroops = xlmToStroops(entryFee);
+      const deadlineMs = Date.parse(settlementDeadline);
+      if (!Number.isFinite(deadlineMs)) {
+        setError("Settlement deadline is required");
+        return;
+      }
 
       const payload = {
         name,
@@ -123,6 +129,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         asset,
         refereeAddress,
         organizerAddress,
+        settlementDeadline: Math.floor(deadlineMs / 1000),
         distributionBps: bps,
         coverImageKey,
       };
@@ -179,7 +186,8 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   const labelClass = "label-caps block mb-2 text-on-surface-variant";
   const monoFieldClass = `${fieldClass} data-mono text-acid-yellow`;
 
-  const isSubmittable = !!organizerAddress && splitValid && phase === "idle";
+  const isSubmittable =
+    !!organizerAddress && !!settlementDeadline && splitValid && phase === "idle";
 
   return (
     <form
@@ -285,6 +293,26 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
           placeholder="G…"
           required
         />
+      </div>
+
+      {/* Settlement Deadline */}
+      <div className="mt-6">
+        <label className={labelClass} htmlFor="settlementDeadline">
+          Settlement Deadline
+        </label>
+        <input
+          id="settlementDeadline"
+          type="datetime-local"
+          className={fieldClass}
+          value={settlementDeadline}
+          onChange={(e) => setSettlementDeadline(e.target.value)}
+          required
+          aria-describedby="settlement-deadline-help"
+        />
+        <p id="settlement-deadline-help" className="mt-1 text-sm text-on-surface-variant">
+          Choose a time at least one hour and no more than 90 days away. It is stored on-chain as
+          UTC.
+        </p>
       </div>
 
       {/* Prize Split */}

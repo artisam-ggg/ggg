@@ -33,6 +33,7 @@ export default async function TournamentsPage({ searchParams }: PageProps) {
         <div className="flex items-center gap-4">
           <Link
             href="/tournaments/new"
+            prefetch={false}
             className="label-caps rounded-lg bg-primary px-5 py-2.5 font-bold text-on-primary transition hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-acid-yellow"
           >
             New Tournament
@@ -46,6 +47,7 @@ export default async function TournamentsPage({ searchParams }: PageProps) {
           <p className="text-lg text-on-surface-variant">No tournaments yet.</p>
           <Link
             href="/tournaments/new"
+            prefetch={false}
             className="label-caps mt-4 inline-block text-primary hover:underline"
           >
             Create your first tournament →

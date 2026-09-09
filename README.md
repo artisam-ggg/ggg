@@ -4,19 +4,35 @@
 
 GGG solves a problem every paid competitive-gaming event has: someone has to hold the prize pool between "entry fees collected" and "winners paid," and that custodian — an organiser, a Discord admin, a third-party platform — can skim funds, delay payouts, or vanish with the pot. GGG removes the custodian entirely. An **organiser** deploys a dedicated Soroban smart contract per tournament with an entry fee (XLM or USDC) and a payout split (default 60/30/10); **players** join by paying the fee straight into the contract from their own wallet, no account required; a **referee** submits the final standings; and the contract itself — not any person or platform — pays the winners in a single on-chain transaction. Every registration, payout, and refund is a public, independently verifiable Stellar transaction.
 
-For the Stellar ecosystem, GGG is a concrete, non-financial-services use case for Soroban: it turns a real-world trust problem (escrow for competitive gaming, a market of millions of grassroots and community tournaments with no affordable neutral third party) into recurring on-chain transaction volume — contract deployments, entry-fee payments, and multi-payout settlements — while giving both XLM and Circle's USDC-on-Stellar a natural, repeatable consumer flow beyond payments or DeFi. It also doubles as a reference implementation of the "client signs, server never holds keys" pattern (Freighter + unsigned-XDR building) that other consumer-facing Soroban apps can copy.
+For the Stellar ecosystem, GGG is a concrete use case for Soroban: it turns paid tournament escrow into on-chain transaction volume — deployments, entry fees, and payouts — while giving XLM and USDC-on-Stellar a natural consumer flow. It also serves as a reference implementation of the "client signs, server never holds keys" pattern.
+
+---
+
+## Demo
+
+- **Live app:** https://ggg.quest/
+- **Demo video:** https://drive.google.com/drive/u/2/folders/14AP_jPxcJG1TzICtBd9eY2c2q2hIwYh0
+- **Screenshot:**
+  <img width="1904" height="763" alt="Screenshot 2026-07-15 at 11 47 43 PM" src="https://github.com/user-attachments/assets/a72908d3-f0dc-476a-a4bf-f7830af3c1bb" />
+  <img width="1920" height="838" alt="Screenshot 2026-07-09 at 5 22 39 PM" src="https://github.com/user-attachments/assets/0682487e-1cf7-4528-bd5d-97b006772dcf" />
+  <img width="1920" height="900" alt="Screenshot 2026-07-15 at 11 48 08 PM" src="https://github.com/user-attachments/assets/327be1b5-1061-4d78-a781-c500926c70b0" />
+  <img width="1920" height="901" alt="Screenshot 2026-07-15 at 11 48 52 PM" src="https://github.com/user-attachments/assets/32a00850-7d7c-45e1-a87d-69f40da028fd" />
+  <img width="1920" height="902" alt="Screenshot 2026-07-15 at 11 48 28 PM" src="https://github.com/user-attachments/assets/b96a2af2-c109-4d23-b3e6-64f8671000b9" />
+  <img width="1913" height="900" alt="Screenshot 2026-07-15 at 11 49 28 PM" src="https://github.com/user-attachments/assets/6b06d549-a5b3-4dd0-b4eb-5928842dc4dc" />
+  <img width="1908" height="900" alt="Screenshot 2026-07-15 at 11 53 39 PM" src="https://github.com/user-attachments/assets/d1d90de8-43d0-4b5e-ac3e-e71eda827cbc" />
+  <img width="1906" height="902" alt="Screenshot 2026-07-15 at 11 55 19 PM" src="https://github.com/user-attachments/assets/80e31dbb-0cb7-47c5-a543-93a367b4ebfe" />
+  <img width="1908" height="899" alt="Screenshot 2026-07-15 at 11 56 20 PM" src="https://github.com/user-attachments/assets/f3938a63-ed7d-4252-b7fd-d8670a4fb97c" />
+  <img width="1920" height="903" alt="Screenshot 2026-07-15 at 11 55 47 PM" src="https://github.com/user-attachments/assets/2ebc5c9e-16ac-4062-8e7c-6541cf946b83" />
 
 ---
 
 ## Status / License
 
-| | |
-|---|---|
-| **Version** | `0.0.0` (workspace manifests) · contract crate `ggg-escrow` `0.1.0` |
-| **Status** | All 7 build phases (0–6) shipped; **zero open issues** as of this writing. Verified locally against Stellar **Testnet** — all 6 SPEC §15 acceptance criteria pass. **No live public deployment yet** — Railway configs are committed but not confirmed running. [inferred: see Deployment] |
-| **Default network** | Stellar Testnet (`STELLAR_NETWORK=testnet`) |
-| **Uploaded escrow WASM hash** | `c6952e467e6a5a7c7599db3276fb98fcb7e97d2fb438670c649e8340830cd818` (committed in `apps/web/.env.example`) |
-| **License** | `[PLACEHOLDER: no LICENSE file found in repo — add one]` |
+- **Version:** `0.0.0` (workspace manifests) · contract crate `ggg-escrow` `0.1.0`
+- **Status:** Live on Stellar Testnet at https://ggg.quest
+- **Default network:** Stellar Testnet (`STELLAR_NETWORK=testnet`)
+- **Escrow WASM hash:** `56faadf3395536f14b10c263c6369dda77dd2bc3ec9c24c6ce39fada518986ac` (recorded in `apps/web/.env.example`).
+- **License:** Released under the MIT License. Copyright © 2026 Artisam Labs.
 
 ---
 
@@ -46,7 +62,7 @@ GGG removes the custodian: **no party holds the funds — the contract does.** M
 - **Players / competitors** — want provable, on-chain payouts and no app account required to join.
 - **Referees** — submit final rankings; their authority is enforced on-chain by wallet address.
 - **Platform admins** — oversee users and tournaments across the whole platform (role hierarchy: `ADMIN` outranks `ORGANIZER`).
-- **Gaming guilds / communities / LAN & arcade events** — run frequent paid brackets that can't justify a custodial platform. [inferred]
+- **Gaming guilds / communities / LAN & arcade events** — run frequent paid brackets that can't justify a custodial platform.
 
 ---
 
@@ -61,15 +77,15 @@ GGG removes the custodian: **no party holds the funds — the contract does.** M
 **On-chain money rails (Soroban)**
 - One WASM escrow contract deployed per tournament; entry fees pulled into escrow on join.
 - Referee-signed finalisation pays the configured split in a single transaction, with rounding dust deterministically assigned to 1st place.
-- Organiser-signed cancellation refunds every registered player before finalisation.
+- Organiser-signed cancellation makes one permissionless refund claim available per registered player.
 - Tournament creation is a **two-transaction flow**: the organiser signs a `deploy`, then a second `initialize` transaction that sets the entry fee, referee, and split (see [Known deviations from SPEC.md](#known-deviations-from-specmd) below).
 
 **Wallet + funding**
 - Client-side signing via **Freighter** (`@stellar/freighter-api`); server never sees a key.
-- **SEP-7 QR** code + payment URI on every active tournament so any SEP-7 wallet can scan and fund ([`SPEC.md`](./SPEC.md) §8).
+- **Tournament join QR** on every active tournament; scanning opens GGG's signed `join_tournament` flow, so only registered players fund the escrow ([`SPEC.md`](./SPEC.md) §8).
 
 **Live state**
-- Background **event subscriber** polls Soroban RPC events + reconciles Horizon payments, then pushes updates over **Server-Sent Events (SSE)** — pool and participants update without a refresh.
+- Background **event subscriber** polls confirmed Soroban contract events, then pushes updates over **Server-Sent Events (SSE)** — pool and participants update without a refresh.
 
 **Admin (beyond original SPEC.md scope)**
 - Full user management: list, view detail, change role, reset password, delete (self-delete/self-demote blocked).
@@ -124,7 +140,6 @@ flowchart TD
     TX -->|"build · simulate · submit"| RPC
     RPC --> ESC
     SUB -->|"getEvents"| RPC
-    SUB -->|"payments"| HZ
     SUB --> PG
     SUB -->|"publish tournament:id"| RD
     RH -->|"SSE subscribe"| RD
@@ -159,14 +174,15 @@ sequenceDiagram
     UI->>SUB: POST /submit (intent=deploy)
     SUB->>RPC: submit + poll getTransaction
     RPC-->>SUB: contractId (deployed, not yet initialized)
-    SUB->>DB: Persist contractId, status ACTIVE
+    SUB->>DB: Persist contractId, status DRAFT
     SUB-->>UI: { initializeXdr }
     UI->>FR: signTransaction(initializeXdr)
     FR-->>UI: signedXdr
     UI->>SUB: POST /submit (intent=initialize)
     SUB->>RPC: submit + poll getTransaction
     RPC-->>SUB: initialize confirmed (entry fee, referee, split set)
-    SUB-->>UI: ok → QR + payment URI shown
+    SUB->>DB: Set status ACTIVE
+    SUB-->>UI: ok → tournament join QR shown
 ```
 
 ### 2. Auth / signing flow (Freighter + credentials)
@@ -230,22 +246,19 @@ sequenceDiagram
 
 Contract crates found in the repo:
 
-| Crate | Path | Purpose (inferred from source) |
+| Crate | Path | Purpose |
 |---|---|---|
-| `ggg-escrow` | [`contracts/escrow`](./contracts/escrow) | Per-tournament prize escrow: `initialize`, `join_tournament`, `finalize_results`, `cancel_tournament`, and read-only `get_pool` / `get_reward` / `is_finished`. Emits `registered` / `finalized` / `cancelled` events. Built with `soroban-sdk` 26. 28 unit tests. |
+| `ggg-escrow` | [`contracts/escrow`](./contracts/escrow) | Per-tournament prize escrow: `initialize`, `join_tournament`, `finalize_results`, `cancel_tournament`, `claim_refund`, and read-only `get_pool` / `get_reward` / `is_finished`. Emits `registered` / `finalized` / `cancelled` / `refund_claimed` events. Built with `soroban-sdk` 26. 49 unit tests. |
 
-<!-- PLACEHOLDER: Soroban smart contracts — document each contract's purpose, public functions, parameters, and deployment/upload process here. -->
-
-> Reference for filling in the placeholder: function signatures, storage model, events, and security invariants are specified in [`SPEC.md`](./SPEC.md) §4; the source of truth is `contracts/escrow/src/lib.rs` with 28 tests in `contracts/escrow/src/test.rs`.
+Function signatures, storage model, events, and security invariants are specified in [`SPEC.md`](./SPEC.md) §4; the source of truth is `contracts/escrow/src/lib.rs` with 49 tests in `contracts/escrow/src/test.rs`.
 
 ---
 
 ## Known deviations from SPEC.md
 
-- **Two-signature tournament creation**, not one. [`SPEC.md`](./SPEC.md) §6 describes `POST /api/tournaments` as building "the deploy + initialize transaction" as a single unit. The shipped implementation cannot do this atomically — see the TODO in [`apps/web/src/lib/stellar/builders.ts`](./apps/web/src/lib/stellar/builders.ts) — so it is two organiser-signed transactions (`deploy`, then `initialize`) instead of one. Functionally complete; the wallet just prompts twice.
+- **Two-signature tournament creation**, not one. [`SPEC.md`](./SPEC.md) §6 describes `POST /api/tournaments` as building "the deploy + initialize transaction" as a single unit. The current implementation cannot do this atomically — see the TODO in [`apps/web/src/lib/stellar/builders.ts`](./apps/web/src/lib/stellar/builders.ts) — so it is two organiser-signed transactions (`deploy`, then `initialize`) instead of one. This is being addressed in the current sprint.
 - **Admin scope grew beyond SPEC.md.** §5 originally described `/admin` as "user management, platform overview." The shipped admin surface also includes full tournament oversight (list/detail/edit/force-cancel) and a role hierarchy (`ADMIN` ⊇ `ORGANIZER`) — a superset of spec, not a gap.
-- **USDC is fully wired but environment-gated.** Asset selector, SAC resolution, SEP-7 `asset_issuer`, and all UI surfaces branch correctly on `"XLM" | "USDC"` — but resolving USDC requires `USDC_ISSUER` / `USDC_SAC_ADDRESS` to be set per network; without them, only XLM resolves.
-- **No live deployment yet.** Railway configs exist for all three services, but there is no confirmed running public URL as of this writing.
+- **USDC is fully wired but environment-gated.** Asset selector, SAC resolution, and all UI surfaces branch correctly on `"XLM" | "USDC"` — but resolving USDC requires `USDC_ISSUER` / `USDC_SAC_ADDRESS` to be set per network; without them, only XLM resolves.
 
 ---
 
@@ -322,8 +335,8 @@ cargo test
 `APP_URL`, `SESSION_SECRET` (≥32), `CSRF_SECRET` (≥32), `DATABASE_URL`, `REDIS_URL`, `ADMIN_USERNAME`, `ADMIN_PASSWORD` (≥8), `STELLAR_NETWORK` (`testnet`|`public`), `SOROBAN_RPC_URL`, `HORIZON_URL`, `NETWORK_PASSPHRASE`, `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`.
 
 **`apps/web` — optional:** `ESCROW_WASM_HASH`, `NATIVE_SAC_ADDRESS`, `USDC_ISSUER`, `USDC_SAC_ADDRESS`, `S3_FORCE_PATH_STYLE` (default `false`), `NODE_ENV` (default `development`).
-- Without `ESCROW_WASM_HASH` / `NATIVE_SAC_ADDRESS`, contract deploy/XLM asset resolution can't be performed. [inferred]
-- Without `USDC_ISSUER` / `USDC_SAC_ADDRESS`, only XLM entry fees resolve; USDC is unavailable. [inferred]
+- Without `ESCROW_WASM_HASH` / `NATIVE_SAC_ADDRESS`, contract deploy/XLM asset resolution can't be performed.
+- Without `USDC_ISSUER` / `USDC_SAC_ADDRESS`, only XLM entry fees resolve; USDC is unavailable.
 
 **`apps/subscriber`** (validated by `apps/subscriber/src/env.ts`): `DATABASE_URL`, `REDIS_URL`, `SOROBAN_RPC_URL`, `HORIZON_URL`, `NETWORK_PASSPHRASE` (all required); `POLL_INTERVAL_MS` (optional, default `5000`), `NODE_ENV` (default `development`).
 
@@ -343,18 +356,8 @@ Root `package.json` also exposes `build`/`start` scripts (`pnpm --filter web bui
 
 **CI** ([`.github/workflows/ci.yml`](./.github/workflows/ci.yml)): the `app` and `contract` jobs run on pushes to `main` and on pull requests; they must pass before merge, though branch protection enforcing that is a one-time maintainer step not yet enabled (see `RUNBOOK.md`). Playwright E2E runs out-of-band against Testnet, not on the merge gate.
 
-- **Live web URL:** `[PLACEHOLDER: Live app URL]`
+- **Live web URL:** https://ggg.quest
 - **RPC / network:** Testnet by default; switch to `public` (Mainnet) via env.
-
----
-
-## Demo
-
-- **Live app:** `[PLACEHOLDER: Live app URL]`
-- **Demo video:** `[PLACEHOLDER: Demo video URL]`
-- **Screenshot:** `[PLACEHOLDER: screenshot]`
-
-See [`docs/pitch-deck.md`](./docs/pitch-deck.md) for the full pitch and the sub-two-minute demo walkthrough.
 
 ---
 
@@ -362,17 +365,14 @@ See [`docs/pitch-deck.md`](./docs/pitch-deck.md) for the full pitch and the sub-
 
 | Name | Role | Contact |
 |---|---|---|
-| Julyza Peña | `[PLACEHOLDER: role]` | `[PLACEHOLDER: contact]` |
-| Mark Hugh Neri | `[PLACEHOLDER: role]` | `[PLACEHOLDER: contact]` |
-| `[PLACEHOLDER: name]` | `[PLACEHOLDER: role]` | `[PLACEHOLDER: contact]` |
+| Neil John E. Rivera | Lead Developer | neiljohn.rivera.work@gmail.com |
 
-> [inferred] Contributor names are taken from git history; roles/contacts are placeholders.
 
 ---
 
 ## License
 
-`[PLACEHOLDER: no LICENSE file found in the repository — add a LICENSE and name it here.]`
+`Released under the MIT License. Copyright © 2026 Artisam Labs.`
 
 ---
 
