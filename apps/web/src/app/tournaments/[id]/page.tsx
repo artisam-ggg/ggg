@@ -101,6 +101,8 @@ export default async function TournamentDetailPage({
             <ClaimRefundButton
               tournamentId={t.id}
               passphrase={passphrase}
+              entryFee={t.entryFee}
+              asset={t.asset}
               confirmedClaimedPlayers={t.refundClaimedPlayers}
             />
           )}

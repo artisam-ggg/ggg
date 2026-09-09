@@ -1,13 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { findUniqueMock, updateMock, submitMock, buildInitializeMock, validateInitializeMock } =
-  vi.hoisted(() => ({
-    findUniqueMock: vi.fn(),
-    updateMock: vi.fn(),
-    submitMock: vi.fn(),
-    buildInitializeMock: vi.fn(),
-    validateInitializeMock: vi.fn(),
-  }));
+const {
+  findUniqueMock,
+  updateMock,
+  submitMock,
+  buildInitializeMock,
+  validateInitializeMock,
+  readSettlementDeadlineMock,
+} = vi.hoisted(() => ({
+  findUniqueMock: vi.fn(),
+  updateMock: vi.fn(),
+  submitMock: vi.fn(),
+  buildInitializeMock: vi.fn(),
+  validateInitializeMock: vi.fn(),
+  readSettlementDeadlineMock: vi.fn(),
+}));
 
 vi.mock("@/lib/db", () => ({
   prisma: {
@@ -31,6 +38,7 @@ vi.mock("@/lib/stellar", () => ({
   resolveSacAddress: vi.fn(),
   submitSignedXdr: submitMock,
   validateInitializeXdr: validateInitializeMock,
+  readSettlementDeadline: readSettlementDeadlineMock,
 }));
 
 import { getTournamentDetail, submitTournamentTx } from "./tournaments";
@@ -288,6 +296,35 @@ describe("submitTournamentTx", () => {
 
     expect(validateInitializeMock).not.toHaveBeenCalled();
     expect(submitMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("does not activate a contract whose confirmed deadline differs from the persisted value", async () => {
+    const deadline = new Date("2026-09-10T00:00:00.000Z");
+    vi.setSystemTime(new Date("2026-09-09T00:00:00.000Z"));
+    findUniqueMock.mockResolvedValue({
+      id: "t_1",
+      organizerId: "user_1",
+      organizerAddr: "GORG",
+      refereeAddr: "GREF",
+      tokenAddr: "CTOKEN",
+      entryFee: 10n,
+      firstBps: 6000,
+      secondBps: 3000,
+      thirdBps: 1000,
+      settlementDeadline: deadline,
+      status: "DRAFT",
+      contractId: "CDEPLOYED",
+    });
+    submitMock.mockResolvedValue({ hash: "TX_INIT", status: "SUCCESS" });
+    readSettlementDeadlineMock.mockResolvedValue(1_800_000_000n);
+
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "initialize" }, "user_1"),
+    ).rejects.toMatchObject({
+      message: "On-chain settlement deadline does not match this tournament",
+      status: 502,
+    });
     expect(updateMock).not.toHaveBeenCalled();
   });
 });

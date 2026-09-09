@@ -4,6 +4,7 @@ import {
   buildCancelTx,
   buildDeployInitializeTx,
   buildInitializeTx,
+  readSettlementDeadline,
   buildFinalizeTx,
   buildClaimRefundTx,
   buildJoinTx,
@@ -213,6 +214,19 @@ export async function submitTournamentTx(
   // initialize: a confirmed state-setting transaction makes the tournament
   // joinable.
   if (input.intent === "initialize") {
+    const settlementDeadline = requireFutureSettlementDeadline(tournament.settlementDeadline);
+    const confirmedDeadline = await readSettlementDeadline({
+      contractId: tournament.contractId!,
+      sourceAddress: tournament.organizerAddr,
+    });
+    if (confirmedDeadline !== BigInt(Math.floor(settlementDeadline.getTime() / 1000))) {
+      throw Object.assign(
+        new Error("On-chain settlement deadline does not match this tournament"),
+        {
+          status: 502,
+        },
+      );
+    }
     const updated = await prisma.tournament.update({
       where: { id },
       data: { status: "ACTIVE", deadlineConfirmedAt: new Date() },

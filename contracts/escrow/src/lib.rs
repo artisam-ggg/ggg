@@ -150,6 +150,11 @@ impl Escrow {
             .unwrap_or(0)
     }
 
+    /// Returns the initialized UTC Unix settlement deadline for state reconciliation.
+    pub fn get_settlement_deadline(env: Env) -> Option<u64> {
+        env.storage().instance().get(&DataKey::SettlementDeadline)
+    }
+
     pub fn is_finished(env: Env) -> bool {
         env.storage()
             .instance()

@@ -4,11 +4,11 @@ import { env } from "./env";
 
 const eventSchema = z.object({
   eventId: z.string().min(1),
-  type: z.string(),
-  ledger: z.number().int(),
-  txHash: z.string(),
-  topic: z.array(z.string()),
-  value: z.string(),
+  type: z.string().min(1),
+  ledger: z.number().int().positive(),
+  txHash: z.string().min(1),
+  topic: z.array(z.string().min(1)).min(1),
+  value: z.string().min(1),
 });
 const eventsResponseSchema = z.object({
   latestLedger: z.number().int(),

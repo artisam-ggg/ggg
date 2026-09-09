@@ -26,7 +26,9 @@ describe("ClaimRefundButton", () => {
   });
 
   it("keeps the claim disabled until subscriber confirmation reaches the component", async () => {
-    const { rerender } = render(<ClaimRefundButton tournamentId="t1" passphrase="P" />);
+    const { rerender } = render(
+      <ClaimRefundButton tournamentId="t1" passphrase="Testnet" entryFee="10000000" asset="XLM" />,
+    );
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     fireEvent.click(screen.getByRole("button", { name: /claim refund/i }));
 
@@ -37,7 +39,13 @@ describe("ClaimRefundButton", () => {
     expect(screen.queryByText("SETTLED")).not.toBeInTheDocument();
 
     rerender(
-      <ClaimRefundButton tournamentId="t1" passphrase="P" confirmedClaimedPlayers={["GPLAYER"]} />,
+      <ClaimRefundButton
+        tournamentId="t1"
+        passphrase="Testnet"
+        entryFee="10000000"
+        asset="XLM"
+        confirmedClaimedPlayers={["GPLAYER"]}
+      />,
     );
 
     expect(screen.getByRole("status")).toHaveTextContent(/refund confirmed/i);

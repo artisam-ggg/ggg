@@ -110,6 +110,8 @@ export const refundClaimSchema = z.object({
 });
 export type RefundClaimInput = z.infer<typeof refundClaimSchema>;
 
+export const tournamentParamsSchema = z.object({ id: z.string().cuid() });
+
 // --- finalizeSchema ---
 
 export const finalizeSchema = z

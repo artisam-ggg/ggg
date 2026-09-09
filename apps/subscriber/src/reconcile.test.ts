@@ -180,10 +180,16 @@ describe("applyEvent", () => {
       ledger: 31,
       txHash: "tx-ref-1",
       eventId: "event-ref-1",
-      data: { player: "GPLAYER1", amount: "10000000" },
+      data: {
+        player: "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI",
+        amount: "10000000",
+      },
     });
     expect(events).toHaveLength(1);
-    expect(events[0]?.payload).toEqual({ player: "GPLAYER1", amount: "10000000" });
+    expect(events[0]?.payload).toEqual({
+      player: "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI",
+      amount: "10000000",
+    });
     expect(tournaments.t1?.status).toBe("CANCELLED");
   });
 

@@ -3,7 +3,7 @@ import { ok, err } from "@/lib/api";
 import { assertSameOrigin, CsrfError } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
 import { StellarError } from "@/lib/stellar";
-import { refundClaimSchema } from "@/lib/validation/tournament";
+import { refundClaimSchema, tournamentParamsSchema } from "@/lib/validation/tournament";
 import { buildRefundClaim } from "@/server/services/tournaments";
 
 /** Build an unsigned claim for the named player; the contract always pays that player. */
@@ -18,7 +18,9 @@ export async function POST(
     throw e;
   }
 
-  const { id } = await ctx.params;
+  const params = tournamentParamsSchema.safeParse(await ctx.params);
+  if (!params.success) return err("INVALID_REQUEST", "Invalid tournament id", 400);
+  const { id } = params.data;
   const rl = await rateLimit(`refund:${id}`, { limit: 30, windowSec: 60 });
   if (!rl.ok) return err("TOO_MANY_REQUESTS", "Too many requests. Try again later.", 429);
 

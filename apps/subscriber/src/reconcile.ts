@@ -1,4 +1,5 @@
 import { Prisma } from "web/src/generated/prisma/client";
+import { refundClaimPayloadSchema } from "web/src/lib/validation/refund-claim";
 import { prisma } from "./db";
 
 export type EventType = "REGISTERED" | "FINALIZED" | "CANCELLED" | "REFUND_CLAIMED";
@@ -19,12 +20,7 @@ export interface Change {
 }
 
 function isRefundClaim(data: Record<string, unknown>): data is { player: string; amount: string } {
-  return (
-    typeof data.player === "string" &&
-    data.player.length > 0 &&
-    typeof data.amount === "string" &&
-    /^[1-9]\d*$/.test(data.amount)
-  );
+  return refundClaimPayloadSchema.safeParse(data).success;
 }
 
 /**

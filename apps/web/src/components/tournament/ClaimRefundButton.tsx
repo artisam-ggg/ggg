@@ -5,16 +5,21 @@ import { useRouter } from "next/navigation";
 import { WalletButton } from "./WalletButton";
 import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
 import { signAndSubmit } from "@/lib/wallet";
+import { formatStroops } from "@/lib/format-stroops";
 
 type Phase = "idle" | "signing" | "submitting" | "awaitingConfirmation" | "success" | "error";
 
 export function ClaimRefundButton({
   tournamentId,
   passphrase,
+  entryFee,
+  asset,
   confirmedClaimedPlayers = [],
 }: {
   tournamentId: string;
   passphrase: string;
+  entryFee: string;
+  asset: "XLM" | "USDC";
   confirmedClaimedPlayers?: string[];
 }) {
   const router = useRouter();
@@ -69,6 +74,11 @@ export function ClaimRefundButton({
   return (
     <div className="mt-4 flex flex-wrap items-center gap-3">
       <WalletButton expectedPassphrase={passphrase} onConnected={setPlayer} />
+      {player && (
+        <p className="text-sm text-on-surface-variant">
+          You will sign a {formatStroops(entryFee)} {asset} refund to {player} on {passphrase}.
+        </p>
+      )}
       <button
         type="button"
         onClick={claim}

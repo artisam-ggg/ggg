@@ -643,6 +643,22 @@ fn cancellation_transitions_without_batch_refunds() {
 }
 
 #[test]
+fn reads_the_initialized_settlement_deadline() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().with_mut(|ledger| ledger.timestamp = 1_000);
+    let admin = Address::generate(&env);
+    let (token_addr, _sac, _token) = create_token(&env, &admin);
+    let organizer = Address::generate(&env);
+    let referee = Address::generate(&env);
+    let escrow = create_escrow(&env);
+
+    init_with_deadline(&env, &escrow, &token_addr, &organizer, &referee, 1_001);
+
+    assert_eq!(escrow.get_settlement_deadline(), Some(1_001));
+}
+
+#[test]
 fn join_accepts_testnet_simulated_max_players() {
     let env = Env::default();
     env.mock_all_auths();

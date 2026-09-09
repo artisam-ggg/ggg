@@ -38,6 +38,20 @@ export async function buildJoinTx(params: {
   return { xdr: assembled.toXDR(), network: networkName() };
 }
 
+/** Reads the deadline stored in a deployed deadline-aware escrow contract. */
+export async function readSettlementDeadline(params: {
+  contractId: string;
+  sourceAddress: string;
+}): Promise<bigint | undefined> {
+  parse(stellarContractId, params.contractId, "contractId");
+  parse(stellarPublicKey, params.sourceAddress, "sourceAddress");
+  const assembled = await clientFor(
+    params.contractId,
+    params.sourceAddress,
+  ).get_settlement_deadline();
+  return assembled.result;
+}
+
 /** Builds a permissionless refund claim which always pays the registered player. */
 export async function buildClaimRefundTx(params: {
   contractId: string;
