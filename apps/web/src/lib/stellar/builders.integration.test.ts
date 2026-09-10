@@ -8,6 +8,7 @@ d("Testnet integration", () => {
   it("deploys, initializes, and reads the active escrow state", async () => {
     const organizer = Keypair.random();
     const referee = Keypair.random();
+    const player = Keypair.random();
     const settlementDeadline = BigInt(Math.floor(Date.now() / 1000) + 24 * 60 * 60);
     // fund organizer via Friendbot
     const res = await fetch(
@@ -18,6 +19,7 @@ d("Testnet integration", () => {
     const {
       buildDeployInitializeTx,
       buildInitializeTx,
+      buildJoinTx,
       readSettlementDeadline,
       resolveSacAddress,
       submitSignedXdr,
@@ -77,5 +79,19 @@ d("Testnet integration", () => {
         sourceAddress: organizer.publicKey(),
       }),
     ).resolves.toBe(settlementDeadline);
+
+    const playerFunding = await fetch(
+      `https://friendbot.stellar.org/?addr=${encodeURIComponent(player.publicKey())}`,
+    );
+    expect(playerFunding.ok).toBe(true);
+    const join = await buildJoinTx({
+      contractId: deployed.contractId!,
+      playerAddress: player.publicKey(),
+    });
+    const signedJoin = TransactionBuilder.fromXDR(join.xdr, "Test SDF Network ; September 2015");
+    signedJoin.sign(player);
+    await expect(submitSignedXdr(signedJoin.toXDR(), "join", { attempts: 60 })).resolves.toMatchObject({
+      status: "SUCCESS",
+    });
   }, 120_000);
 });
