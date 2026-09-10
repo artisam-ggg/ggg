@@ -1,6 +1,13 @@
+import { z } from "zod";
+
 export type ApiError = { code: string; message: string };
 
 export type ApiEnvelope<T> = { ok: true; data: T } | { ok: false; error: ApiError };
+
+export const apiEnvelopeSchema = z.union([
+  z.object({ ok: z.literal(true), data: z.unknown() }),
+  z.object({ ok: z.literal(false), error: z.object({ code: z.string(), message: z.string() }) }),
+]);
 
 /** Success envelope. Defaults to HTTP 200. */
 export function ok<T>(data: T, status = 200): Response {

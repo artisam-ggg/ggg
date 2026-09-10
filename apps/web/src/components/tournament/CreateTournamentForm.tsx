@@ -5,6 +5,7 @@ import { WalletButton } from "./WalletButton";
 import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
 import { signAndSubmit } from "@/lib/wallet";
 import { createTournamentSchema } from "@/lib/validation/tournament";
+import { apiEnvelopeSchema } from "@/lib/api";
 
 // 1 XLM = 10,000,000 stroops (7 decimal places)
 const STROOP_FACTOR = 10_000_000n;
@@ -148,18 +149,43 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const created = (await createRes.json()) as {
-        ok: boolean;
-        data?: { tournamentId: string; unsignedXdr: string; network: string };
-        error?: string;
-      };
-      if (!created.ok) throw new Error(created.error ?? "Failed to create tournament");
+      const raw = await createRes.text();
+      let created: { tournamentId: string; unsignedXdr: string; network: string };
+      try {
+        const envelope = apiEnvelopeSchema.safeParse(JSON.parse(raw));
+        if (!envelope.success) throw new Error("Invalid API response");
+        if (!envelope.data.ok) throw new Error(envelope.data.error.message);
+        const data = envelope.data.data;
+        if (
+          typeof data !== "object" ||
+          data === null ||
+          typeof (data as { tournamentId?: unknown }).tournamentId !== "string" ||
+          typeof (data as { unsignedXdr?: unknown }).unsignedXdr !== "string"
+        )
+          throw new Error("Invalid API response");
+        created = data as typeof created;
+      } catch (error) {
+        if (
+          createRes.status !== 401 &&
+          createRes.status !== 403 &&
+          error instanceof Error &&
+          error.message !== "Invalid API response"
+        )
+          throw error;
+        throw new Error(
+          createRes.status === 401 || createRes.status === 403
+            ? "Your session has ended. Please log in again."
+            : "Tournament creation failed. Please try again.",
+        );
+      }
+      if (createRes.status === 401 || createRes.status === 403)
+        throw new Error("Your session has ended. Please log in again.");
 
       setPhase("signing");
 
-      const submitUrl = `/api/tournaments/${created.data!.tournamentId}/submit`;
+      const submitUrl = `/api/tournaments/${created.tournamentId}/submit`;
       const deployRes = await signAndSubmit(
-        created.data!.unsignedXdr,
+        created.unsignedXdr,
         "deploy",
         submitUrl,
         expectedPassphrase,
@@ -174,7 +200,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       }
 
       setPhase("success");
-      router.push(`/tournaments/${created.data!.tournamentId}`);
+      router.push(`/tournaments/${created.tournamentId}`);
     } catch (e: unknown) {
       setPhase("error");
       setError(e instanceof Error ? e.message : "An unexpected error occurred");

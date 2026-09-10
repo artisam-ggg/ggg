@@ -163,10 +163,16 @@ describe("CreateTournamentForm", () => {
 
   it("shows error and does NOT redirect when POST /api/tournaments returns ok:false", async () => {
     const mockFetch = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ ok: false, error: "Name already taken" }), {
-        status: 422,
-        headers: { "content-type": "application/json" },
-      }),
+      new Response(
+        JSON.stringify({
+          ok: false,
+          error: { code: "INVALID_REQUEST", message: "Name already taken" },
+        }),
+        {
+          status: 422,
+          headers: { "content-type": "application/json" },
+        },
+      ),
     );
     vi.stubGlobal("fetch", mockFetch);
 
@@ -539,6 +545,34 @@ describe("CreateTournamentForm", () => {
     );
     expect(screen.queryByText(/Uploaded:/i)).not.toBeInTheDocument();
 
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("stale authenticated form", () => {
+  it("shows a login message instead of parsing a non-JSON 401 response", async () => {
+    vi.clearAllMocks();
+    (ensureWallet as ReturnType<typeof vi.fn>).mockResolvedValue(MOCK_ORGANIZER);
+    (signAndSubmit as ReturnType<typeof vi.fn>).mockResolvedValue({ txHash: "TX123" });
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue(new Response("METHOD NOT ALLOWED", { status: 401 }));
+    vi.stubGlobal("fetch", mockFetch);
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/tournament name/i), { target: { value: "Cup" } });
+    fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
+    fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: /deploy soroban contract/i }));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Your session has ended. Please log in again.",
+      ),
+    );
+    expect(signAndSubmit).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
 });

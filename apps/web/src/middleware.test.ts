@@ -75,6 +75,13 @@ describe("middleware", () => {
       const res = await middleware(req);
       expect(res.status).toBe(200);
     });
+
+    it("does not cache authenticated /tournaments/new", async () => {
+      const req = new NextRequest(new URL("http://localhost/tournaments/new"));
+      req.headers.set("x-test-token", "valid-token");
+      const res = await middleware(req);
+      expect(res.headers.get("Cache-Control")).toBe("no-store, max-age=0");
+    });
   });
 
   describe("public paths", () => {

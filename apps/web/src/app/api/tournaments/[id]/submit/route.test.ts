@@ -364,16 +364,14 @@ describe("POST /api/tournaments/[id]/submit", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Auth: NEXT_REDIRECT propagates (unauthenticated)
+  // Auth: expired session returns the standard envelope
   // ---------------------------------------------------------------------------
 
-  it("re-throws NEXT_REDIRECT when unauthenticated", async () => {
-    const redirectError = Object.assign(new Error("NEXT_REDIRECT"), { digest: "NEXT_REDIRECT" });
-    requireUserMock.mockRejectedValueOnce(redirectError);
-
-    await expect(POST(makeReq("k6") as Parameters<typeof POST>[0], ctx)).rejects.toThrow(
-      "NEXT_REDIRECT",
-    );
+  it("returns 401 when the session has ended", async () => {
+    requireUserMock.mockRejectedValueOnce(new AuthError("Authentication required", 401));
+    const res = await POST(makeReq("k6") as Parameters<typeof POST>[0], ctx);
+    expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toMatchObject({ ok: false, error: { code: "UNAUTHORIZED" } });
     expect(submitMock).not.toHaveBeenCalled();
   });
 

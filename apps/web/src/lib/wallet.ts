@@ -1,5 +1,6 @@
 "use client";
 import freighter from "@stellar/freighter-api";
+import { apiEnvelopeSchema } from "@/lib/api";
 
 export type SubmitResult = {
   txHash: string;
@@ -56,11 +57,26 @@ export async function signAndSubmit(
     body: JSON.stringify({ signedXdr: signedTxXdr, intent }),
   });
 
-  // Guard against non-JSON error responses (e.g. a 5xx HTML error page from a proxy)
-  // before attempting res.json(), which would throw a raw SyntaxError on non-JSON bodies.
-  if (!res.ok) throw new Error(`Submit failed: ${res.status}`);
-
-  const json = (await res.json()) as { ok: boolean; data?: SubmitResult; error?: string };
-  if (!json.ok) throw new Error(json.error ?? "Submission failed");
-  return json.data as SubmitResult;
+  const raw = await res.text();
+  let json: ReturnType<typeof apiEnvelopeSchema.safeParse>;
+  try {
+    json = apiEnvelopeSchema.safeParse(JSON.parse(raw));
+  } catch {
+    if (res.status === 401 || res.status === 403)
+      throw new Error("Your session has ended. Please log in again.");
+    throw new Error("Transaction submission failed. Please try again.");
+  }
+  if (!json.success || !res.ok || !json.data.ok) {
+    if (res.status === 401 || res.status === 403)
+      throw new Error("Your session has ended. Please log in again.");
+    throw new Error(json.success && !json.data.ok ? json.data.error.message : "Submission failed");
+  }
+  const data = json.data.data;
+  if (
+    typeof data !== "object" ||
+    data === null ||
+    typeof (data as { txHash?: unknown }).txHash !== "string"
+  )
+    throw new Error("Transaction submission failed. Please try again.");
+  return data as SubmitResult;
 }
