@@ -154,3 +154,7 @@ Wallet controls now let a user re-check Freighter after changing accounts and ex
 ## Issue #246 — Secure tournament cover uploads
 
 Cover image uploads now pass through the authenticated server route, which accepts only PNG, JPEG, and WEBP files up to 5 MB after MIME and file-signature validation. Rejected uploads are not written to object storage, and the creation form displays the safe API error message rather than an error object.
+
+## Issue #244 - Persist tournament creation drafts
+
+The create-tournament form now restores a validated `ggg:tournament-create-draft` browser draft after reload and offers Clear Draft. It stores only serializable public form fields; the connected organizer wallet and cover-image upload state are intentionally fetched live and never persisted.

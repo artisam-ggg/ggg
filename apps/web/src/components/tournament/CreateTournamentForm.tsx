@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { WalletButton } from "./WalletButton";
 import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
@@ -26,6 +26,46 @@ const createTournamentResponseSchema = apiResponseSchema(
     network: z.string(),
   }),
 );
+
+const DRAFT_STORAGE_KEY = "ggg:tournament-create-draft";
+
+const draftSchema = z.object({
+  name: z.string().max(120),
+  gameTitle: z.string().max(120),
+  entryFee: z.string().max(32),
+  asset: z.enum(["XLM", "USDC"]),
+  refereeAddress: z.string().max(56),
+  settlementDeadline: z.string().max(32),
+  splits: z.tuple([
+    z.number().int().min(0).max(100),
+    z.number().int().min(0).max(100),
+    z.number().int().min(0).max(100),
+  ]),
+});
+
+type TournamentDraft = z.infer<typeof draftSchema>;
+
+const emptyDraft: TournamentDraft = {
+  name: "",
+  gameTitle: "",
+  entryFee: "",
+  asset: "XLM",
+  refereeAddress: "",
+  settlementDeadline: "",
+  splits: [60, 30, 10],
+};
+
+function loadDraft(): TournamentDraft {
+  if (typeof window === "undefined") return emptyDraft;
+  try {
+    const parsed = draftSchema.safeParse(
+      JSON.parse(localStorage.getItem(DRAFT_STORAGE_KEY) ?? "null"),
+    );
+    return parsed.success ? parsed.data : emptyDraft;
+  } catch {
+    return emptyDraft;
+  }
+}
 
 /**
  * Validate an entry-fee string. Returns an error message or null if valid.
@@ -74,16 +114,17 @@ interface CreateTournamentFormProps {
 
 export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFormProps) {
   const router = useRouter();
+  const [initialDraft] = useState(loadDraft);
 
   // Form state
-  const [name, setName] = useState("");
-  const [gameTitle, setGameTitle] = useState("");
-  const [entryFee, setEntryFee] = useState("");
-  const [asset, setAsset] = useState<"XLM" | "USDC">("XLM");
-  const [refereeAddress, setRefereeAddress] = useState("");
+  const [name, setName] = useState(initialDraft.name);
+  const [gameTitle, setGameTitle] = useState(initialDraft.gameTitle);
+  const [entryFee, setEntryFee] = useState(initialDraft.entryFee);
+  const [asset, setAsset] = useState<"XLM" | "USDC">(initialDraft.asset);
+  const [refereeAddress, setRefereeAddress] = useState(initialDraft.refereeAddress);
   const [organizerAddress, setOrganizerAddress] = useState("");
-  const [settlementDeadline, setSettlementDeadline] = useState("");
-  const [splits, setSplits] = useState<[number, number, number]>([60, 30, 10]);
+  const [settlementDeadline, setSettlementDeadline] = useState(initialDraft.settlementDeadline);
+  const [splits, setSplits] = useState<[number, number, number]>(initialDraft.splits);
   const [coverImageKey, setCoverImageKey] = useState<string | undefined>();
   const [coverUploadStatus, setCoverUploadStatus] = useState<CoverUploadStatus>("idle");
   const coverUploadRequest = useRef(0);
@@ -95,6 +136,35 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   const [errorTxHash, setErrorTxHash] = useState<string | null>(null);
   const [entryFeeError, setEntryFeeError] = useState<string | null>(null);
   const [refereeError, setRefereeError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Wallet and upload state are deliberately excluded; both must be fetched live.
+    const draft = { name, gameTitle, entryFee, asset, refereeAddress, settlementDeadline, splits };
+    if (
+      !name &&
+      !gameTitle &&
+      !entryFee &&
+      !refereeAddress &&
+      !settlementDeadline &&
+      asset === "XLM" &&
+      splits.join(",") === "60,30,10"
+    ) {
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
+    } else {
+      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    }
+  }, [asset, entryFee, gameTitle, name, refereeAddress, settlementDeadline, splits]);
+
+  function clearDraft() {
+    localStorage.removeItem(DRAFT_STORAGE_KEY);
+    setName("");
+    setGameTitle("");
+    setEntryFee("");
+    setAsset("XLM");
+    setRefereeAddress("");
+    setSettlementDeadline("");
+    setSplits([60, 30, 10]);
+  }
 
   // Derived values
   const bps = splits.map((s) => s * 100) as [number, number, number];
@@ -272,6 +342,13 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       <p className="mt-2 text-sm text-on-surface-variant">
         Deploy a Soroban escrow contract for your tournament.
       </p>
+      <button
+        type="button"
+        onClick={clearDraft}
+        className="label-caps mt-3 text-sm text-on-surface-variant focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+      >
+        Clear Draft
+      </button>
 
       {/* Tournament Name */}
       <div className="mt-8">

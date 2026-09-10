@@ -36,6 +36,7 @@ function fillSettlementDeadline() {
 describe("CreateTournamentForm", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     (ensureWallet as ReturnType<typeof vi.fn>).mockResolvedValue(MOCK_ORGANIZER);
     (signAndSubmit as ReturnType<typeof vi.fn>).mockResolvedValue({
       txHash: "TX123",
@@ -43,6 +44,52 @@ describe("CreateTournamentForm", () => {
       status: "ACTIVE",
     });
     push.mockReset();
+  });
+
+  it("restores a saved draft after reload without persisting the organizer wallet", async () => {
+    localStorage.setItem(
+      "ggg:tournament-create-draft",
+      JSON.stringify({
+        name: "Saved Cup",
+        gameTitle: "SF6",
+        entryFee: "1.5",
+        asset: "USDC",
+        refereeAddress: REF,
+        settlementDeadline: "2026-10-01T12:00",
+        splits: [50, 30, 20],
+        organizerAddress: MOCK_ORGANIZER,
+      }),
+    );
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+
+    expect(await screen.findByDisplayValue("Saved Cup")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("SF6")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("1.5")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("USDC")).toBeInTheDocument();
+    expect(screen.getByDisplayValue(REF)).toBeInTheDocument();
+    expect(screen.getByDisplayValue("50")).toBeInTheDocument();
+    expect(localStorage.getItem("ggg:tournament-create-draft")).not.toContain(MOCK_ORGANIZER);
+  });
+
+  it("ignores malformed browser storage", () => {
+    localStorage.setItem("ggg:tournament-create-draft", "not-json");
+
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+
+    expect(screen.getByLabelText(/tournament name/i)).toHaveValue("");
+  });
+
+  it("clears the saved draft and form values on request", async () => {
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/tournament name/i), { target: { value: "Saved Cup" } });
+    await waitFor(() =>
+      expect(localStorage.getItem("ggg:tournament-create-draft")).toContain("Saved Cup"),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /clear draft/i }));
+
+    expect(screen.getByLabelText(/tournament name/i)).toHaveValue("");
+    expect(localStorage.getItem("ggg:tournament-create-draft")).toBeNull();
   });
 
   it("renders all required fields", () => {
