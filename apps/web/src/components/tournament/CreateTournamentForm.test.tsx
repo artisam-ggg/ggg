@@ -250,6 +250,7 @@ describe("CreateTournamentForm", () => {
 
     // Redirect on success
     await waitFor(() => expect(push).toHaveBeenCalledWith("/tournaments/t_1"));
+    expect(localStorage.getItem("ggg:tournament-create-draft")).toBeNull();
 
     vi.unstubAllGlobals();
   });

@@ -67,6 +67,14 @@ function loadDraft(): TournamentDraft {
   }
 }
 
+function removeStoredDraft() {
+  try {
+    localStorage.removeItem(DRAFT_STORAGE_KEY);
+  } catch {
+    // Browser storage is unavailable.
+  }
+}
+
 /**
  * Validate an entry-fee string. Returns an error message or null if valid.
  * Rejects: empty, non-numeric, negative, zero, >7 decimal places.
@@ -114,17 +122,16 @@ interface CreateTournamentFormProps {
 
 export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFormProps) {
   const router = useRouter();
-  const [initialDraft] = useState(loadDraft);
 
   // Form state
-  const [name, setName] = useState(initialDraft.name);
-  const [gameTitle, setGameTitle] = useState(initialDraft.gameTitle);
-  const [entryFee, setEntryFee] = useState(initialDraft.entryFee);
-  const [asset, setAsset] = useState<"XLM" | "USDC">(initialDraft.asset);
-  const [refereeAddress, setRefereeAddress] = useState(initialDraft.refereeAddress);
+  const [name, setName] = useState(emptyDraft.name);
+  const [gameTitle, setGameTitle] = useState(emptyDraft.gameTitle);
+  const [entryFee, setEntryFee] = useState(emptyDraft.entryFee);
+  const [asset, setAsset] = useState<"XLM" | "USDC">(emptyDraft.asset);
+  const [refereeAddress, setRefereeAddress] = useState(emptyDraft.refereeAddress);
   const [organizerAddress, setOrganizerAddress] = useState("");
-  const [settlementDeadline, setSettlementDeadline] = useState(initialDraft.settlementDeadline);
-  const [splits, setSplits] = useState<[number, number, number]>(initialDraft.splits);
+  const [settlementDeadline, setSettlementDeadline] = useState(emptyDraft.settlementDeadline);
+  const [splits, setSplits] = useState<[number, number, number]>(emptyDraft.splits);
   const [coverImageKey, setCoverImageKey] = useState<string | undefined>();
   const [coverUploadStatus, setCoverUploadStatus] = useState<CoverUploadStatus>("idle");
   const coverUploadRequest = useRef(0);
@@ -136,8 +143,22 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   const [errorTxHash, setErrorTxHash] = useState<string | null>(null);
   const [entryFeeError, setEntryFeeError] = useState<string | null>(null);
   const [refereeError, setRefereeError] = useState<string | null>(null);
+  const [draftReady, setDraftReady] = useState(false);
 
   useEffect(() => {
+    const draft = loadDraft();
+    setName(draft.name);
+    setGameTitle(draft.gameTitle);
+    setEntryFee(draft.entryFee);
+    setAsset(draft.asset);
+    setRefereeAddress(draft.refereeAddress);
+    setSettlementDeadline(draft.settlementDeadline);
+    setSplits(draft.splits);
+    setDraftReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!draftReady) return;
     // Wallet and upload state are deliberately excluded; both must be fetched live.
     const draft = { name, gameTitle, entryFee, asset, refereeAddress, settlementDeadline, splits };
     if (
@@ -149,14 +170,18 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       asset === "XLM" &&
       splits.join(",") === "60,30,10"
     ) {
-      localStorage.removeItem(DRAFT_STORAGE_KEY);
+      removeStoredDraft();
     } else {
-      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+      try {
+        localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+      } catch {
+        // Browser storage is unavailable.
+      }
     }
-  }, [asset, entryFee, gameTitle, name, refereeAddress, settlementDeadline, splits]);
+  }, [asset, draftReady, entryFee, gameTitle, name, refereeAddress, settlementDeadline, splits]);
 
   function clearDraft() {
-    localStorage.removeItem(DRAFT_STORAGE_KEY);
+    removeStoredDraft();
     setName("");
     setGameTitle("");
     setEntryFee("");
@@ -305,6 +330,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         await signAndSubmit(deployRes.initializeXdr, "initialize", submitUrl, expectedPassphrase);
       }
 
+      removeStoredDraft();
       setPhase("success");
       router.push(`/tournaments/${created.tournamentId}`);
     } catch (e: unknown) {
@@ -345,7 +371,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       <button
         type="button"
         onClick={clearDraft}
-        className="label-caps mt-3 text-sm text-on-surface-variant focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+        className="brutalist-border label-caps mt-3 px-3 py-2 text-sm text-on-surface-variant transition-colors hover:bg-surface-container-high focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
       >
         Clear Draft
       </button>
