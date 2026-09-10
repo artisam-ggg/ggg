@@ -1,5 +1,5 @@
 import { Client } from "@/contract-client";
-import { TransactionBuilder } from "@stellar/stellar-sdk";
+import { TransactionBuilder, type Transaction } from "@stellar/stellar-sdk";
 import { env } from "@/lib/env";
 import { networkName, networkPassphrase } from "./client";
 import { simulateAndAssemble } from "./pipeline";
@@ -107,7 +107,7 @@ export async function buildInitializeTx(params: {
     settlement_deadline: params.settlementDeadline,
   });
   const prepared = await simulateAndAssemble(
-    TransactionBuilder.fromXDR(assembled.toXDR(), networkPassphrase()),
+    TransactionBuilder.fromXDR(assembled.toXDR(), networkPassphrase()) as Transaction,
   );
   return { xdr: prepared.toXDR(), network: networkName() };
 }
