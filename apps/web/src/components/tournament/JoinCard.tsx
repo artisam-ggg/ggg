@@ -37,6 +37,7 @@ export function JoinCard(props: JoinCardProps) {
   const [player, setPlayer] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const isPending = phase === "signing" || phase === "submitting";
 
@@ -84,6 +85,11 @@ export function JoinCard(props: JoinCardProps) {
     setErrorMsg(null);
   }
 
+  async function copyJoinLink() {
+    await navigator.clipboard.writeText(props.joinUrl);
+    setLinkCopied(true);
+  }
+
   return (
     <div className="kinetic-glass rounded-2xl p-6">
       <p className="label-caps text-on-surface-variant">Scan to join</p>
@@ -93,7 +99,13 @@ export function JoinCard(props: JoinCardProps) {
 
         <ContractAddress value={props.contractId} />
 
-        <code className="data-mono break-all text-xs text-on-surface-variant">{props.joinUrl}</code>
+        <button
+          type="button"
+          onClick={() => copyJoinLink().catch(() => setErrorMsg("Could not copy tournament link"))}
+          className="label-caps text-sm text-on-surface-variant focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+        >
+          {linkCopied ? "Link Copied" : "Copy Link"}
+        </button>
 
         <div className="flex flex-wrap items-center gap-3">
           <WalletButton expectedPassphrase={props.passphrase} onConnected={setPlayer} />
@@ -110,7 +122,7 @@ export function JoinCard(props: JoinCardProps) {
       </div>
 
       {/* Error display — role="alert" for screen readers */}
-      {errorMsg && phase === "error" && (
+      {errorMsg && (
         <p role="alert" className="mt-3 text-sm text-error">
           {errorMsg}
         </p>

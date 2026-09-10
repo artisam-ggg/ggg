@@ -49,6 +49,27 @@ describe("JoinCard", () => {
     );
   });
 
+  it("hides the full URL until the user explicitly copies it", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    render(<JoinCard {...baseProps} />);
+
+    expect(screen.queryByText(baseProps.joinUrl)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /copy link/i }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(baseProps.joinUrl));
+  });
+
+  it("shows an inline error when copying the link fails", async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error("Clipboard unavailable"));
+    Object.assign(navigator, { clipboard: { writeText } });
+    render(<JoinCard {...baseProps} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /copy link/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not copy tournament link");
+  });
+
   it("QR tile has accessible aria-label", () => {
     render(<JoinCard {...baseProps} />);
     expect(screen.getByRole("img", { name: /tournament join qr/i })).toBeInTheDocument();
