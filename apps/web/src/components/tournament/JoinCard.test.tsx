@@ -147,6 +147,37 @@ describe("JoinCard", () => {
     expect(mockRefresh).not.toHaveBeenCalled();
   });
 
+  it("renders the duplicate-participant message from the API error envelope", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              ok: false,
+              error: {
+                code: "CONFLICT",
+                message: "You are already a participant in this tournament.",
+              },
+            }),
+            { status: 409, headers: { "content-type": "application/json" } },
+          ),
+      ),
+    );
+
+    render(<JoinCard {...baseProps} />);
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await screen.findByText(/GPLAYE…AYERP/);
+    fireEvent.click(screen.getByRole("button", { name: /join tournament/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "You are already a participant in this tournament.",
+      ),
+    );
+    expect(mockedSignAndSubmit).not.toHaveBeenCalled();
+  });
+
   it("Join button is disabled while pending (no double-click)", async () => {
     let resolveFetch!: (v: unknown) => void;
     vi.stubGlobal(

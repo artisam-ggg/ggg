@@ -215,6 +215,11 @@ export async function submitTournamentTx(
 
   if (result.status === "FAILED") {
     // Do NOT mutate tournament to any success state.
+    if (input.intent === "join" && result.contractErrorCode === 9) {
+      throw Object.assign(new Error("You are already a participant in this tournament."), {
+        status: 409,
+      });
+    }
     throw Object.assign(new Error(`Transaction failed on-chain (${result.hash})`), { status: 502 });
   }
 
@@ -348,6 +353,14 @@ export async function buildJoin(
   }
   if (t.status !== "ACTIVE" || !t.contractId) {
     throw Object.assign(new Error("Tournament is not open for joining"), { status: 409 });
+  }
+  const participant = await prisma.participant.findUnique({
+    where: { tournamentId_playerAddr: { tournamentId: id, playerAddr: playerAddress } },
+  });
+  if (participant) {
+    throw Object.assign(new Error("You are already a participant in this tournament."), {
+      status: 409,
+    });
   }
   const { xdr, network } = await buildJoinTx({
     contractId: t.contractId,

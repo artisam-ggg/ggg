@@ -65,6 +65,36 @@ describe("submitSignedXdr", () => {
     const res = await submitSignedXdr("AAAAAgAAAAA=", "join");
     expect(res.status).toBe("FAILED");
   });
+  it("returns the contract error code from a failed diagnostic event", async () => {
+    rpcRef.current = makeFakeRpc({
+      getTransaction: vi.fn().mockResolvedValue({
+        status: "FAILED",
+        diagnosticEventsXdr: [
+          {
+            event: () => ({
+              body: () => ({
+                v0: () => ({
+                  data: () => ({
+                    switch: () => ({ name: "scvError" }),
+                    error: () => ({
+                      switch: () => ({ name: "sceContract" }),
+                      contractCode: () => 9,
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          },
+        ],
+      }) as never,
+    });
+    const { submitSignedXdr } = await import("./pipeline");
+
+    await expect(submitSignedXdr("AAAAAgAAAAA=", "join")).resolves.toMatchObject({
+      status: "FAILED",
+      contractErrorCode: 9,
+    });
+  });
   it("throws SUBMIT_FAILED when sendTransaction errors", async () => {
     rpcRef.current = makeFakeRpc({
       sendTransaction: vi.fn().mockResolvedValue({ status: "ERROR", errorResult: "nope" }),

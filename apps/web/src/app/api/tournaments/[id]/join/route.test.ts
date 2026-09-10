@@ -38,6 +38,7 @@ vi.mock("@/lib/db", () => ({
         tokenAddr: "CSAC",
       })),
     },
+    participant: { findUnique: vi.fn() },
   },
 }));
 
@@ -53,6 +54,7 @@ const G = "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI";
 const ctx = { params: Promise.resolve({ id: "t_1" }) };
 
 const findUniqueMock = prisma.tournament.findUnique as ReturnType<typeof vi.fn>;
+const findParticipantMock = prisma.participant.findUnique as ReturnType<typeof vi.fn>;
 const buildJoinTxMock = buildJoinTx as ReturnType<typeof vi.fn>;
 const assertSameOriginMock = assertSameOrigin as ReturnType<typeof vi.fn>;
 const rateLimitMock = rateLimit as ReturnType<typeof vi.fn>;
@@ -75,6 +77,7 @@ describe("POST /api/tournaments/[id]/join", () => {
       entryFee: 10n,
       tokenAddr: "CSAC",
     });
+    findParticipantMock.mockResolvedValue(null);
     buildJoinTxMock.mockResolvedValue({ xdr: "JOIN_XDR", network: "testnet" });
     assertSameOriginMock.mockImplementation(() => undefined);
     rateLimitMock.mockResolvedValue({ ok: true, remaining: 29 });
@@ -113,6 +116,23 @@ describe("POST /api/tournaments/[id]/join", () => {
 
     expect(res.status).toBe(409);
     expect(json.ok).toBe(false);
+  });
+
+  it("returns a clear conflict before building a second join for the same wallet", async () => {
+    findParticipantMock.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: "participant_1" });
+
+    const first = await POST(makeReq({ playerAddress: G }), ctx);
+    expect(first.status).toBe(200);
+
+    const res = await POST(makeReq({ playerAddress: G }), ctx);
+    const json = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(json).toMatchObject({
+      ok: false,
+      error: { code: "CONFLICT", message: "You are already a participant in this tournament." },
+    });
+    expect(buildJoinTxMock).toHaveBeenCalledOnce();
   });
 
   it("returns 404 when tournament does not exist", async () => {
