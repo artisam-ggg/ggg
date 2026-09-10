@@ -86,7 +86,7 @@ describe("submitSignedXdr", () => {
       code: "SUBMIT_FAILED",
     });
   });
-  it("classifies a bad-auth submission result as a network mismatch", async () => {
+  it("classifies a bad-auth submission result as a signature failure", async () => {
     rpcRef.current = makeFakeRpc({
       sendTransaction: vi.fn().mockResolvedValue({
         status: "ERROR",
@@ -95,9 +95,29 @@ describe("submitSignedXdr", () => {
     });
     const { submitSignedXdr } = await import("./pipeline");
     await expect(submitSignedXdr("AAAAAgAAAAA=", "join")).rejects.toMatchObject({
-      code: "NETWORK_MISMATCH",
+      code: "TX_BAD_AUTH",
       retryable: false,
     });
+  });
+  it("fails closed when the RPC rejection result has an unexpected shape", async () => {
+    const logRejected = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    rpcRef.current = makeFakeRpc({
+      sendTransaction: vi.fn().mockResolvedValue({
+        status: "ERROR",
+        errorResult: { result: () => ({ switch: () => ({ name: 1 }) }) },
+      }),
+    });
+    const { submitSignedXdr } = await import("./pipeline");
+    await expect(submitSignedXdr("AAAAAgAAAAA=", "join")).rejects.toMatchObject({
+      code: "SUBMIT_FAILED",
+      message: "Stellar rejected join (unknown)",
+      retryable: false,
+    });
+    expect(logRejected).toHaveBeenCalledWith("Stellar transaction rejected", {
+      intent: "join",
+      result: "unknown",
+    });
+    logRejected.mockRestore();
   });
   it("identifies a protocol-malformed envelope without treating it as an RPC outage", async () => {
     const logMalformed = vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -117,6 +137,36 @@ describe("submitSignedXdr", () => {
     expect(logMalformed).toHaveBeenCalledWith("Stellar transaction rejected as malformed", {
       intent: "initialize",
       result: "txMalformed",
+    });
+    logMalformed.mockRestore();
+  });
+  it("accepts the direct result field returned by the Stellar SDK XDR object", async () => {
+    const logMalformed = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    rpcRef.current = makeFakeRpc({
+      sendTransaction: vi.fn().mockResolvedValue({
+        status: "ERROR",
+        errorResult: { result: { switch: () => ({ name: "txMalformed" }) } },
+      }),
+    });
+    const { submitSignedXdr } = await import("./pipeline");
+    await expect(submitSignedXdr("AAAAAgAAAAA=", "initialize")).rejects.toMatchObject({
+      code: "TX_MALFORMED",
+    });
+    logMalformed.mockRestore();
+  });
+  it("reads the SDK XDR result representation without inspecting unvalidated fields", async () => {
+    const logMalformed = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    rpcRef.current = makeFakeRpc({
+      sendTransaction: vi.fn().mockResolvedValue({
+        status: "ERROR",
+        errorResult: {
+          _attributes: { result: { _switch: { name: "txMalformed" } } },
+        },
+      }),
+    });
+    const { submitSignedXdr } = await import("./pipeline");
+    await expect(submitSignedXdr("AAAAAgAAAAA=", "initialize")).rejects.toMatchObject({
+      code: "TX_MALFORMED",
     });
     logMalformed.mockRestore();
   });

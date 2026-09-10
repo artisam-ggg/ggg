@@ -527,6 +527,25 @@ describe("POST /api/tournaments/[id]/submit", () => {
     expect(json.error).toMatchObject({ code: "TX_MALFORMED", retryable: false });
   });
 
+  it("returns a clear 400 for a rejected transaction signature", async () => {
+    const { StellarError } = await import("@/lib/stellar");
+    submitMock.mockRejectedValueOnce(
+      new StellarError(
+        "TX_BAD_AUTH",
+        "Transaction signature was rejected. Reconnect Freighter and sign again.",
+        {
+          retryable: false,
+        },
+      ),
+    );
+
+    const res = await POST(makeReq("k14-bad-auth") as Parameters<typeof POST>[0], ctx);
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error).toMatchObject({ code: "TX_BAD_AUTH", retryable: false });
+  });
+
   it("maps StellarError SIMULATION_FAILED to 422", async () => {
     const { StellarError } = await import("@/lib/stellar");
     submitMock.mockRejectedValueOnce(new StellarError("SIMULATION_FAILED", "simulation failed"));

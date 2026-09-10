@@ -8,6 +8,14 @@ import {
 import { getRpc, networkPassphrase } from "./client";
 import { signedXdr as signedXdrSchema } from "./validation";
 import { StellarError } from "./errors";
+import { z } from "zod";
+
+const rpcErrorResultSchema = z.object({ result: z.unknown() });
+const transactionResultSchema = z.object({ switch: z.unknown() });
+const transactionResultSwitchSchema = z.object({ name: z.string() });
+const xdrTransactionResultSchema = z.object({
+  _attributes: z.object({ result: z.object({ _switch: z.object({ name: z.string() }) }) }),
+});
 
 export async function simulateAndAssemble(tx: Transaction): Promise<Transaction> {
   const server = getRpc();
@@ -131,14 +139,15 @@ export async function submitSignedXdr(
     });
   }
   if (sent.status === "ERROR") {
-    if (isNetworkMismatch(sent.errorResult)) {
+    const rejectionCode = transactionResultCode(sent.errorResult);
+    if (rejectionCode === "txBadAuth") {
       throw new StellarError(
-        "NETWORK_MISMATCH",
-        "Transaction signature does not match the tournament network",
+        "TX_BAD_AUTH",
+        "Transaction signature was rejected. Reconnect Freighter and sign again.",
         { retryable: false },
       );
     }
-    if (isTransactionMalformed(sent.errorResult)) {
+    if (rejectionCode === "txMalformed") {
       console.error("Stellar transaction rejected as malformed", { intent, result: "txMalformed" });
       throw new StellarError(
         "TX_MALFORMED",
@@ -146,7 +155,12 @@ export async function submitSignedXdr(
         { retryable: false },
       );
     }
-    throw new StellarError("SUBMIT_FAILED", `Submit rejected (${intent})`);
+    console.error("Stellar transaction rejected", { intent, result: rejectionCode ?? "unknown" });
+    throw new StellarError(
+      "SUBMIT_FAILED",
+      `Stellar rejected ${intent} (${rejectionCode ?? "unknown"})`,
+      { retryable: false },
+    );
   }
   const hash = sent.hash;
 
@@ -175,22 +189,25 @@ export async function submitSignedXdr(
   });
 }
 
-function isNetworkMismatch(errorResult: unknown): boolean {
-  return transactionResultCode(errorResult) === "txBadAuth";
-}
-
-function isTransactionMalformed(errorResult: unknown): boolean {
-  return transactionResultCode(errorResult) === "txMalformed";
-}
-
 function transactionResultCode(errorResult: unknown): string | undefined {
-  if (!errorResult || typeof errorResult !== "object" || !("result" in errorResult))
-    return undefined;
-  const result = (errorResult as { result?: unknown }).result;
-  if (typeof result !== "function") return undefined;
+  const parsedXdrResult = xdrTransactionResultSchema.safeParse(errorResult);
+  if (parsedXdrResult.success) return parsedXdrResult.data._attributes.result._switch.name;
+
+  const parsedError = rpcErrorResultSchema.safeParse(errorResult);
+  if (!parsedError.success) return undefined;
   try {
-    const code = (result as () => { switch?: () => { name?: string } })().switch;
-    return code?.().name;
+    const result =
+      typeof parsedError.data.result === "function"
+        ? parsedError.data.result()
+        : parsedError.data.result;
+    const parsedResult = transactionResultSchema.safeParse(result);
+    if (!parsedResult.success) return undefined;
+    const resultSwitch =
+      typeof parsedResult.data.switch === "function"
+        ? parsedResult.data.switch()
+        : parsedResult.data.switch;
+    const parsedSwitch = transactionResultSwitchSchema.safeParse(resultSwitch);
+    return parsedSwitch.success ? parsedSwitch.data.name : undefined;
   } catch {
     return undefined;
   }

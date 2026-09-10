@@ -5,6 +5,7 @@ export type StellarErrorCode =
   | "TX_TIMEOUT"
   | "TX_FAILED"
   | "TX_MALFORMED"
+  | "TX_BAD_AUTH"
   | "NETWORK_MISMATCH"
   | "UNKNOWN_ASSET";
 
