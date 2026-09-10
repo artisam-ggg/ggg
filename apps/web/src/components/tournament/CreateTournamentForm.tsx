@@ -93,6 +93,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   const [error, setError] = useState<string | null>(null);
   const [errorTxHash, setErrorTxHash] = useState<string | null>(null);
   const [entryFeeError, setEntryFeeError] = useState<string | null>(null);
+  const [refereeError, setRefereeError] = useState<string | null>(null);
 
   // Derived values
   const bps = splits.map((s) => s * 100) as [number, number, number];
@@ -125,6 +126,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   async function handleDeploy() {
     setError(null);
     setErrorTxHash(null);
+    setRefereeError(null);
 
     // Validate entry fee BEFORE any conversion or network call
     const feeError = validateEntryFee(entryFee);
@@ -157,7 +159,14 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       // Client-side validation
       const parsed = createTournamentSchema.safeParse(payload);
       if (!parsed.success) {
-        setError(parsed.error.issues[0]?.message ?? "Invalid form input");
+        const refereeIssue = parsed.error.issues.find(
+          (issue) => issue.path[0] === "refereeAddress",
+        );
+        if (refereeIssue) {
+          setRefereeError(refereeIssue.message);
+        } else {
+          setError(parsed.error.issues[0]?.message ?? "Invalid form input");
+        }
         return;
       }
 
@@ -316,12 +325,22 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         <input
           id="refereeAddress"
           type="text"
-          className={monoFieldClass}
+          className={`${monoFieldClass}${refereeError ? " border-error" : ""}`}
           value={refereeAddress}
-          onChange={(e) => setRefereeAddress(e.target.value)}
+          onChange={(e) => {
+            setRefereeAddress(e.target.value);
+            setRefereeError(null);
+          }}
           placeholder="G…"
           required
+          aria-invalid={refereeError ? true : undefined}
+          aria-describedby={refereeError ? "referee-address-error" : undefined}
         />
+        {refereeError && (
+          <p id="referee-address-error" role="alert" className="mt-1 text-sm text-error">
+            {refereeError}
+          </p>
+        )}
       </div>
 
       {/* Settlement Deadline */}

@@ -66,6 +66,25 @@ describe("CreateTournamentForm", () => {
     expect(screen.getByText(/must sum to 100/i)).toBeInTheDocument();
   });
 
+  it("renders an invalid referee wallet error beside the input with accessible feedback", async () => {
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/tournament name/i), { target: { value: "Cup" } });
+    fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
+    fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: "1" } });
+    fillSettlementDeadline();
+
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: /deploy soroban contract/i }));
+
+    const input = screen.getByLabelText(/referee wallet address/i);
+    const feedback = await screen.findByText(/invalid stellar public key/i);
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input).toHaveAttribute("aria-describedby", feedback.id);
+    expect(feedback).toHaveAttribute("role", "alert");
+  });
+
   it("clears split-sum error when percentages sum to 100 again", () => {
     render(<CreateTournamentForm expectedPassphrase="P" />);
     // Break the sum
