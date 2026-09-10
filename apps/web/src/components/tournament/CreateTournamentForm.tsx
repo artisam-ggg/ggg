@@ -427,7 +427,10 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
 
       {/* Wallet + Deploy */}
       <div className="mt-8 flex flex-wrap items-center gap-4">
-        <WalletButton expectedPassphrase={expectedPassphrase} onConnected={setOrganizerAddress} />
+        <WalletButton
+          expectedPassphrase={expectedPassphrase}
+          onConnected={(address) => setOrganizerAddress(address ?? "")}
+        />
         <button
           type="submit"
           disabled={!isSubmittable}

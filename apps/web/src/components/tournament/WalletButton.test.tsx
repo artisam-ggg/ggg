@@ -55,6 +55,48 @@ describe("WalletButton", () => {
     );
   });
 
+  it("updates the connected address when switching wallets", async () => {
+    const onConnected = vi.fn();
+    mockedEnsureWallet
+      .mockResolvedValueOnce("GABCDEFGHIJABCDEFGHIJ")
+      .mockResolvedValueOnce("GNEWADDRESSNEWADDRESS");
+    render(<WalletButton onConnected={onConnected} expectedPassphrase="P" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await screen.findByRole("button", { name: /switch wallet/i });
+    fireEvent.click(screen.getByRole("button", { name: /switch wallet/i }));
+
+    await waitFor(() => expect(onConnected).toHaveBeenLastCalledWith("GNEWADDRESSNEWADDRESS"));
+    expect(screen.getByLabelText("Wallet GNEWADDRESSNEWADDRESS")).toBeInTheDocument();
+  });
+
+  it("keeps the current wallet and shows an error when switching fails", async () => {
+    const onConnected = vi.fn();
+    mockedEnsureWallet
+      .mockResolvedValueOnce("GABCDEFGHIJABCDEFGHIJ")
+      .mockRejectedValueOnce(new Error("Freighter access denied"));
+    render(<WalletButton onConnected={onConnected} expectedPassphrase="P" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await screen.findByRole("button", { name: /switch wallet/i });
+    fireEvent.click(screen.getByRole("button", { name: /switch wallet/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Freighter access denied");
+    expect(screen.getByLabelText("Wallet GABCDEFGHIJABCDEFGHIJ")).toBeInTheDocument();
+  });
+
+  it("clears the connected address when disconnecting", async () => {
+    const onConnected = vi.fn();
+    render(<WalletButton onConnected={onConnected} expectedPassphrase="P" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await screen.findByRole("button", { name: /disconnect wallet/i });
+    fireEvent.click(screen.getByRole("button", { name: /disconnect wallet/i }));
+
+    expect(onConnected).toHaveBeenLastCalledWith(null);
+    expect(screen.getByRole("button", { name: /connect wallet/i })).toBeInTheDocument();
+  });
+
   it("shows an error message when ensureWallet throws", async () => {
     const onConnected = vi.fn();
     mockedEnsureWallet.mockRejectedValueOnce(new Error("Freighter not installed"));
@@ -66,12 +108,14 @@ describe("WalletButton", () => {
     expect(onConnected).not.toHaveBeenCalled();
   });
 
-  it("does not show connect button after address is set", async () => {
+  it("replaces connect with wallet controls after address is set", async () => {
     const onConnected = vi.fn();
     render(<WalletButton onConnected={onConnected} expectedPassphrase="P" />);
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: /connect wallet/i })).not.toBeInTheDocument(),
     );
+    expect(screen.getByRole("button", { name: /switch wallet/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /disconnect wallet/i })).toBeInTheDocument();
   });
 });

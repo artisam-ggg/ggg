@@ -6,7 +6,7 @@ import { ensureWallet } from "@/lib/wallet";
 
 interface WalletButtonProps {
   expectedPassphrase: string;
-  onConnected: (address: string) => void;
+  onConnected: (address: string | null) => void;
 }
 
 export function WalletButton({ expectedPassphrase, onConnected }: WalletButtonProps) {
@@ -16,13 +16,37 @@ export function WalletButton({ expectedPassphrase, onConnected }: WalletButtonPr
 
   if (address) {
     return (
-      <span
-        className="data-mono inline-flex items-center gap-2 rounded-full border-2 border-acid-yellow px-3 py-1 text-acid-yellow"
-        aria-label={`Wallet ${address}`}
-      >
-        <Wallet className="h-4 w-4 shrink-0 text-acid-yellow" aria-hidden="true" />
-        {address.slice(0, 6)}…{address.slice(-5)}
-      </span>
+      <div className="flex items-center gap-2">
+        <span
+          className="data-mono inline-flex items-center gap-2 rounded-full border-2 border-acid-yellow px-3 py-1 text-acid-yellow"
+          aria-label={`Wallet ${address}`}
+        >
+          <Wallet className="h-4 w-4 shrink-0 text-acid-yellow" aria-hidden="true" />
+          {address.slice(0, 6)}…{address.slice(-5)}
+        </span>
+        <button
+          type="button"
+          onClick={handleConnect}
+          className="label-caps text-sm text-acid-yellow focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+        >
+          Switch Wallet
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setAddress(null);
+            onConnected(null);
+          }}
+          className="label-caps text-sm text-on-surface-variant focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+        >
+          Disconnect Wallet
+        </button>
+        {error && (
+          <p role="alert" className="text-sm text-error">
+            {error}
+          </p>
+        )}
+      </div>
     );
   }
 
