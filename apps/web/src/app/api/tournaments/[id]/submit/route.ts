@@ -79,7 +79,9 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
           ? 504
           : e.code === "SUBMIT_FAILED"
             ? 503
-            : e.code === "INVALID_INPUT" || e.code === "NETWORK_MISMATCH"
+            : e.code === "INVALID_INPUT" ||
+                e.code === "NETWORK_MISMATCH" ||
+                e.code === "TX_MALFORMED"
               ? 400
               : 422;
       const retryable = e.retryable ?? (e.code === "TX_TIMEOUT" || e.code === "SUBMIT_FAILED");

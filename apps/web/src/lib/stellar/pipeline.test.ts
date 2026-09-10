@@ -99,6 +99,27 @@ describe("submitSignedXdr", () => {
       retryable: false,
     });
   });
+  it("identifies a protocol-malformed envelope without treating it as an RPC outage", async () => {
+    const logMalformed = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    rpcRef.current = makeFakeRpc({
+      sendTransaction: vi.fn().mockResolvedValue({
+        status: "ERROR",
+        errorResult: { result: () => ({ switch: () => ({ name: "txMalformed" }) }) },
+      }),
+    });
+    const { submitSignedXdr } = await import("./pipeline");
+    await expect(submitSignedXdr("AAAAAgAAAAA=", "initialize")).rejects.toMatchObject({
+      code: "TX_MALFORMED",
+      message:
+        "Transaction was rejected as malformed. Refresh the page and sign a newly generated transaction.",
+      retryable: false,
+    });
+    expect(logMalformed).toHaveBeenCalledWith("Stellar transaction rejected as malformed", {
+      intent: "initialize",
+      result: "txMalformed",
+    });
+    logMalformed.mockRestore();
+  });
   it("classifies an RPC submission exception as retryable", async () => {
     rpcRef.current = makeFakeRpc({
       sendTransaction: vi.fn().mockRejectedValue(new Error("RPC unavailable")),

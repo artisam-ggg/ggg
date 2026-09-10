@@ -512,6 +512,21 @@ describe("POST /api/tournaments/[id]/submit", () => {
     expect(json.error).toMatchObject({ code: "SUBMIT_FAILED", retryable: true });
   });
 
+  it("returns a clear 400 for a malformed Stellar envelope", async () => {
+    const { StellarError } = await import("@/lib/stellar");
+    submitMock.mockRejectedValueOnce(
+      new StellarError("TX_MALFORMED", "Transaction was rejected as malformed.", {
+        retryable: false,
+      }),
+    );
+
+    const res = await POST(makeReq("k14-malformed") as Parameters<typeof POST>[0], ctx);
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error).toMatchObject({ code: "TX_MALFORMED", retryable: false });
+  });
+
   it("maps StellarError SIMULATION_FAILED to 422", async () => {
     const { StellarError } = await import("@/lib/stellar");
     submitMock.mockRejectedValueOnce(new StellarError("SIMULATION_FAILED", "simulation failed"));

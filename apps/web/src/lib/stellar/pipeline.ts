@@ -138,6 +138,14 @@ export async function submitSignedXdr(
         { retryable: false },
       );
     }
+    if (isTransactionMalformed(sent.errorResult)) {
+      console.error("Stellar transaction rejected as malformed", { intent, result: "txMalformed" });
+      throw new StellarError(
+        "TX_MALFORMED",
+        "Transaction was rejected as malformed. Refresh the page and sign a newly generated transaction.",
+        { retryable: false },
+      );
+    }
     throw new StellarError("SUBMIT_FAILED", `Submit rejected (${intent})`);
   }
   const hash = sent.hash;
@@ -168,14 +176,23 @@ export async function submitSignedXdr(
 }
 
 function isNetworkMismatch(errorResult: unknown): boolean {
-  if (!errorResult || typeof errorResult !== "object" || !("result" in errorResult)) return false;
+  return transactionResultCode(errorResult) === "txBadAuth";
+}
+
+function isTransactionMalformed(errorResult: unknown): boolean {
+  return transactionResultCode(errorResult) === "txMalformed";
+}
+
+function transactionResultCode(errorResult: unknown): string | undefined {
+  if (!errorResult || typeof errorResult !== "object" || !("result" in errorResult))
+    return undefined;
   const result = (errorResult as { result?: unknown }).result;
-  if (typeof result !== "function") return false;
+  if (typeof result !== "function") return undefined;
   try {
     const code = (result as () => { switch?: () => { name?: string } })().switch;
-    return code?.().name === "txBadAuth";
+    return code?.().name;
   } catch {
-    return false;
+    return undefined;
   }
 }
 
