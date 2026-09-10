@@ -37,6 +37,23 @@ describe("ParticipantList", () => {
     expect(times[1]).toHaveAttribute("dateTime", "2025-01-01T11:30:00.000Z");
   });
 
+  it("shows timezone information and an exact UTC accessible timestamp", () => {
+    render(<ParticipantList participants={participants} />);
+    const time = document.querySelector("time");
+
+    expect(time).toHaveAccessibleName("Joined at 2025-01-01T10:00:00.000Z UTC");
+    expect(time).toHaveTextContent(
+      new Date("2025-01-01T10:00:00.000Z").toLocaleTimeString(undefined, { timeZoneName: "short" }),
+    );
+  });
+
+  it("shows a safe fallback for an invalid timestamp", () => {
+    render(<ParticipantList participants={[{ ...participants[0]!, joinedAt: "not-a-date" }]} />);
+
+    expect(screen.getByText("Time unavailable")).toBeInTheDocument();
+    expect(document.querySelector("time")).toHaveAccessibleName("Registration time unavailable");
+  });
+
   it("shows empty state message when no participants", () => {
     render(<ParticipantList participants={[]} />);
     expect(screen.getByText(/no players have joined yet/i)).toBeInTheDocument();
