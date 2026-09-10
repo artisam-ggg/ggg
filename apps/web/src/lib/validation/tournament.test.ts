@@ -167,9 +167,17 @@ describe("createTournamentSchema", () => {
   it("accepts optional coverImageKey", () => {
     const r = createTournamentSchema.safeParse({
       ...validCreate,
-      coverImageKey: "uploads/abc.png",
+      coverImageKey: "covers/00000000-0000-0000-0000-000000000000.png",
     });
     expect(r.success).toBe(true);
+  });
+
+  it("rejects legacy coverImageKey paths", () => {
+    const r = createTournamentSchema.safeParse({
+      ...validCreate,
+      coverImageKey: "uploads/abc.png",
+    });
+    expect(r.success).toBe(false);
   });
 
   it("rejects coverImageKey > 256 chars", () => {
