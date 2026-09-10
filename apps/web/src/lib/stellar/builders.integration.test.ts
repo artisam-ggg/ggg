@@ -90,7 +90,9 @@ d("Testnet integration", () => {
     });
     const signedJoin = TransactionBuilder.fromXDR(join.xdr, "Test SDF Network ; September 2015");
     signedJoin.sign(player);
-    await expect(submitSignedXdr(signedJoin.toXDR(), "join", { attempts: 60 })).resolves.toMatchObject({
+    await expect(
+      submitSignedXdr(signedJoin.toXDR(), "join", { attempts: 60 }),
+    ).resolves.toMatchObject({
       status: "SUCCESS",
     });
   }, 120_000);
