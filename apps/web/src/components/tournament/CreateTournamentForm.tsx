@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { WalletButton } from "./WalletButton";
 import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
@@ -55,16 +55,27 @@ const emptyDraft: TournamentDraft = {
   splits: [60, 30, 10],
 };
 
-function loadDraft(): TournamentDraft {
-  if (typeof window === "undefined") return emptyDraft;
+let cachedDraftRaw: string | null | undefined;
+let cachedDraft = emptyDraft;
+
+function getDraftSnapshot(): TournamentDraft {
   try {
-    const parsed = draftSchema.safeParse(
-      JSON.parse(localStorage.getItem(DRAFT_STORAGE_KEY) ?? "null"),
-    );
-    return parsed.success ? parsed.data : emptyDraft;
+    const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (raw !== cachedDraftRaw) {
+      cachedDraftRaw = raw;
+      const parsed = draftSchema.safeParse(JSON.parse(raw ?? "null"));
+      cachedDraft = parsed.success ? parsed.data : emptyDraft;
+    }
   } catch {
-    return emptyDraft;
+    cachedDraftRaw = null;
+    cachedDraft = emptyDraft;
   }
+  return cachedDraft;
+}
+
+function subscribeToDraft(onStoreChange: () => void) {
+  window.addEventListener("storage", onStoreChange);
+  return () => window.removeEventListener("storage", onStoreChange);
 }
 
 function removeStoredDraft() {
@@ -121,17 +132,32 @@ interface CreateTournamentFormProps {
 }
 
 export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFormProps) {
+  const initialDraft = useSyncExternalStore(subscribeToDraft, getDraftSnapshot, () => emptyDraft);
+
+  return (
+    <CreateTournamentFormContent
+      key={JSON.stringify(initialDraft)}
+      expectedPassphrase={expectedPassphrase}
+      initialDraft={initialDraft}
+    />
+  );
+}
+
+function CreateTournamentFormContent({
+  expectedPassphrase,
+  initialDraft,
+}: CreateTournamentFormProps & { initialDraft: TournamentDraft }) {
   const router = useRouter();
 
   // Form state
-  const [name, setName] = useState(emptyDraft.name);
-  const [gameTitle, setGameTitle] = useState(emptyDraft.gameTitle);
-  const [entryFee, setEntryFee] = useState(emptyDraft.entryFee);
-  const [asset, setAsset] = useState<"XLM" | "USDC">(emptyDraft.asset);
-  const [refereeAddress, setRefereeAddress] = useState(emptyDraft.refereeAddress);
+  const [name, setName] = useState(initialDraft.name);
+  const [gameTitle, setGameTitle] = useState(initialDraft.gameTitle);
+  const [entryFee, setEntryFee] = useState(initialDraft.entryFee);
+  const [asset, setAsset] = useState<"XLM" | "USDC">(initialDraft.asset);
+  const [refereeAddress, setRefereeAddress] = useState(initialDraft.refereeAddress);
   const [organizerAddress, setOrganizerAddress] = useState("");
-  const [settlementDeadline, setSettlementDeadline] = useState(emptyDraft.settlementDeadline);
-  const [splits, setSplits] = useState<[number, number, number]>(emptyDraft.splits);
+  const [settlementDeadline, setSettlementDeadline] = useState(initialDraft.settlementDeadline);
+  const [splits, setSplits] = useState<[number, number, number]>(initialDraft.splits);
   const [coverImageKey, setCoverImageKey] = useState<string | undefined>();
   const [coverUploadStatus, setCoverUploadStatus] = useState<CoverUploadStatus>("idle");
   const coverUploadRequest = useRef(0);
@@ -143,22 +169,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   const [errorTxHash, setErrorTxHash] = useState<string | null>(null);
   const [entryFeeError, setEntryFeeError] = useState<string | null>(null);
   const [refereeError, setRefereeError] = useState<string | null>(null);
-  const [draftReady, setDraftReady] = useState(false);
-
   useEffect(() => {
-    const draft = loadDraft();
-    setName(draft.name);
-    setGameTitle(draft.gameTitle);
-    setEntryFee(draft.entryFee);
-    setAsset(draft.asset);
-    setRefereeAddress(draft.refereeAddress);
-    setSettlementDeadline(draft.settlementDeadline);
-    setSplits(draft.splits);
-    setDraftReady(true);
-  }, []);
-
-  useEffect(() => {
-    if (!draftReady) return;
     // Wallet and upload state are deliberately excluded; both must be fetched live.
     const draft = { name, gameTitle, entryFee, asset, refereeAddress, settlementDeadline, splits };
     if (
@@ -178,7 +189,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         // Browser storage is unavailable.
       }
     }
-  }, [asset, draftReady, entryFee, gameTitle, name, refereeAddress, settlementDeadline, splits]);
+  }, [asset, entryFee, gameTitle, name, refereeAddress, settlementDeadline, splits]);
 
   function clearDraft() {
     removeStoredDraft();
