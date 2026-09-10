@@ -9,13 +9,22 @@ const REF = "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI";
 vi.mock("@/lib/wallet", () => ({
   ensureWallet: vi.fn(async () => MOCK_ORGANIZER),
   signAndSubmit: vi.fn(async () => ({ txHash: "TX123", contractId: "C1", status: "ACTIVE" })),
+  SubmissionError: class SubmissionError extends Error {
+    details: { code?: string; txHash?: string; retryable?: boolean };
+
+    constructor(message: string, details: { code?: string; txHash?: string; retryable?: boolean }) {
+      super(message);
+      this.name = "SubmissionError";
+      this.details = details;
+    }
+  },
 }));
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 
 import { CreateTournamentForm } from "./CreateTournamentForm";
-import { ensureWallet, signAndSubmit } from "@/lib/wallet";
+import { ensureWallet, signAndSubmit, SubmissionError } from "@/lib/wallet";
 
 function fillSettlementDeadline() {
   const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
@@ -226,6 +235,48 @@ describe("CreateTournamentForm", () => {
 
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent("User rejected signing"),
+    );
+    expect(push).not.toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
+  });
+
+  it("shows a structured on-chain failure and transaction explorer link", async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          data: { tournamentId: "t_failed", unsignedXdr: "XDR", network: "testnet" },
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", mockFetch);
+    (signAndSubmit as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new SubmissionError("Transaction failed on-chain", {
+        code: "TX_FAILED",
+        txHash: "TX_FAIL",
+        retryable: false,
+      }),
+    );
+
+    render(<CreateTournamentForm expectedPassphrase="Test SDF Network ; September 2015" />);
+    fireEvent.change(screen.getByLabelText(/tournament name/i), { target: { value: "Cup" } });
+    fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
+    fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
+
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: /deploy soroban contract/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent("Transaction failed on-chain"),
+    );
+    expect(screen.getByRole("link", { name: /view transaction/i })).toHaveAttribute(
+      "href",
+      "https://stellar.expert/explorer/testnet/tx/TX_FAIL",
     );
     expect(push).not.toHaveBeenCalled();
 

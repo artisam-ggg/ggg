@@ -45,6 +45,18 @@ describe("simulateAndAssemble", () => {
     const { simulateAndAssemble } = await import("./pipeline");
     await expect(simulateAndAssemble({} as never)).rejects.toMatchObject({
       code: "SIMULATION_FAILED",
+      message: "Transaction simulation failed",
+      retryable: false,
+    });
+  });
+  it("classifies an RPC simulation exception", async () => {
+    rpcRef.current = makeFakeRpc({
+      simulateTransaction: vi.fn().mockRejectedValue(new Error("RPC unavailable")),
+    });
+    const { simulateAndAssemble } = await import("./pipeline");
+    await expect(simulateAndAssemble({} as never)).rejects.toMatchObject({
+      code: "SIMULATION_FAILED",
+      retryable: true,
     });
   });
 });
@@ -74,12 +86,56 @@ describe("submitSignedXdr", () => {
       code: "SUBMIT_FAILED",
     });
   });
+  it("classifies a bad-auth submission result as a network mismatch", async () => {
+    rpcRef.current = makeFakeRpc({
+      sendTransaction: vi.fn().mockResolvedValue({
+        status: "ERROR",
+        errorResult: { result: () => ({ switch: () => ({ name: "txBadAuth" }) }) },
+      }),
+    });
+    const { submitSignedXdr } = await import("./pipeline");
+    await expect(submitSignedXdr("AAAAAgAAAAA=", "join")).rejects.toMatchObject({
+      code: "NETWORK_MISMATCH",
+      retryable: false,
+    });
+  });
+  it("classifies an RPC submission exception as retryable", async () => {
+    rpcRef.current = makeFakeRpc({
+      sendTransaction: vi.fn().mockRejectedValue(new Error("RPC unavailable")),
+    });
+    const { submitSignedXdr } = await import("./pipeline");
+    await expect(submitSignedXdr("AAAAAgAAAAA=", "join")).rejects.toMatchObject({
+      code: "SUBMIT_FAILED",
+      retryable: true,
+    });
+  });
+  it("rejects XDR that passes the schema but cannot be parsed", async () => {
+    vi.mocked(TransactionBuilder.fromXDR).mockImplementationOnce(() => {
+      throw new Error("invalid XDR");
+    });
+    const { submitSignedXdr } = await import("./pipeline");
+    await expect(submitSignedXdr("AAAAAgAAAAA=", "join")).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+    });
+  });
+  it("preserves the transaction hash when RPC confirmation polling fails", async () => {
+    rpcRef.current = makeFakeRpc({
+      sendTransaction: vi.fn().mockResolvedValue({ status: "PENDING", hash: "HASH" }),
+      getTransaction: vi.fn().mockRejectedValue(new Error("RPC unavailable")),
+    });
+    const { submitSignedXdr } = await import("./pipeline");
+    await expect(submitSignedXdr("AAAAAgAAAAA=", "join")).rejects.toMatchObject({
+      code: "SUBMIT_FAILED",
+      txHash: "HASH",
+      retryable: true,
+    });
+  });
   it("throws TX_TIMEOUT when polling never leaves NOT_FOUND", async () => {
     rpcRef.current = makeFakeRpc({ getTransaction: txStatus("NOT_FOUND") });
     const { submitSignedXdr } = await import("./pipeline");
     await expect(
       submitSignedXdr("AAAAAgAAAAA=", "join", { attempts: 2, intervalMs: 0 }),
-    ).rejects.toMatchObject({ code: "TX_TIMEOUT" });
+    ).rejects.toMatchObject({ code: "TX_TIMEOUT", txHash: "HASH", retryable: true });
   });
   it("rejects malformed XDR before submitting", async () => {
     const send = vi.fn();

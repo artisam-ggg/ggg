@@ -9,9 +9,17 @@ export type StellarErrorCode =
 
 export class StellarError extends Error {
   readonly code: StellarErrorCode;
-  constructor(code: StellarErrorCode, message: string, options?: { cause?: unknown }) {
+  readonly txHash?: string;
+  readonly retryable?: boolean;
+  constructor(
+    code: StellarErrorCode,
+    message: string,
+    options?: { cause?: unknown; txHash?: string; retryable?: boolean },
+  ) {
     super(message, options);
     this.name = "StellarError";
     this.code = code;
+    if (options?.txHash) this.txHash = options.txHash;
+    if (options?.retryable !== undefined) this.retryable = options.retryable;
   }
 }

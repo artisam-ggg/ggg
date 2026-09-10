@@ -5,6 +5,9 @@ Running log of shipped features (append one entry per change), per the auto-dev 
 ## Issue #245 — Clear duplicate tournament participation
 
 The join endpoint now checks the persisted participant record before building an unsigned join transaction. A wallet already recorded for the tournament receives a clear `409 CONFLICT` response (`You are already a participant in this tournament.`), avoiding an unnecessary signature and generic submission error. The Soroban contract remains the source of truth for races or subscriber lag.
+## Issue #243 — Structured Soroban deployment failures
+
+Tournament deployment submission now distinguishes malformed input/network errors, simulation failures, RPC submission failures, on-chain failures, and confirmation timeouts with safe structured API errors. The browser preserves the safe message and transaction hash, links to the relevant Stellar.Expert transaction when available, and continues to handle malformed proxy responses without exposing internals or JSON parser errors.
 
 ## Issue #217 — Deadline reference-app wiring
 

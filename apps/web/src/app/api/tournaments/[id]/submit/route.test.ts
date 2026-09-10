@@ -309,8 +309,9 @@ describe("POST /api/tournaments/[id]/submit", () => {
     const res = await POST(makeReq("k3") as Parameters<typeof POST>[0], ctx);
     const json = await res.json();
 
-    expect(res.status).toBe(502);
+    expect(res.status).toBe(422);
     expect(json.ok).toBe(false);
+    expect(json.error).toMatchObject({ code: "TX_FAILED", txHash: "TX_FAIL" });
     expect(updateMock).not.toHaveBeenCalled();
   });
 
@@ -487,7 +488,7 @@ describe("POST /api/tournaments/[id]/submit", () => {
   // Fix 4: StellarError status mapping by code
   // ---------------------------------------------------------------------------
 
-  it("maps StellarError TX_TIMEOUT to 504", async () => {
+  it("returns retryable timeout details", async () => {
     const { StellarError } = await import("@/lib/stellar");
     submitMock.mockRejectedValueOnce(new StellarError("TX_TIMEOUT", "timed out"));
 
@@ -496,19 +497,19 @@ describe("POST /api/tournaments/[id]/submit", () => {
 
     expect(res.status).toBe(504);
     expect(json.ok).toBe(false);
-    expect(json.error.code).toBe("STELLAR_ERROR");
+    expect(json.error).toMatchObject({ code: "TX_TIMEOUT", retryable: true });
   });
 
-  it("maps StellarError SUBMIT_FAILED to 502", async () => {
+  it("returns retryable RPC submission details instead of 502", async () => {
     const { StellarError } = await import("@/lib/stellar");
     submitMock.mockRejectedValueOnce(new StellarError("SUBMIT_FAILED", "submit failed"));
 
     const res = await POST(makeReq("k14") as Parameters<typeof POST>[0], ctx);
     const json = await res.json();
 
-    expect(res.status).toBe(502);
+    expect(res.status).toBe(503);
     expect(json.ok).toBe(false);
-    expect(json.error.code).toBe("STELLAR_ERROR");
+    expect(json.error).toMatchObject({ code: "SUBMIT_FAILED", retryable: true });
   });
 
   it("maps StellarError SIMULATION_FAILED to 422", async () => {
@@ -520,7 +521,7 @@ describe("POST /api/tournaments/[id]/submit", () => {
 
     expect(res.status).toBe(422);
     expect(json.ok).toBe(false);
-    expect(json.error.code).toBe("STELLAR_ERROR");
+    expect(json.error).toMatchObject({ code: "SIMULATION_FAILED", retryable: false });
   });
 });
 

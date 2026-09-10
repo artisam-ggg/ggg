@@ -11,9 +11,18 @@ import { StellarError } from "./errors";
 
 export async function simulateAndAssemble(tx: Transaction): Promise<Transaction> {
   const server = getRpc();
-  const sim = await server.simulateTransaction(tx);
+  let sim: Awaited<ReturnType<typeof server.simulateTransaction>>;
+  try {
+    sim = await server.simulateTransaction(tx);
+  } catch {
+    throw new StellarError("SIMULATION_FAILED", "Transaction simulation could not be completed", {
+      retryable: true,
+    });
+  }
   if (rpc.Api.isSimulationError(sim)) {
-    throw new StellarError("SIMULATION_FAILED", sim.error);
+    throw new StellarError("SIMULATION_FAILED", "Transaction simulation failed", {
+      retryable: false,
+    });
   }
   return rpc.assembleTransaction(tx, sim as never).build();
 }
@@ -106,9 +115,29 @@ export async function submitSignedXdr(
   if (!parsed.success) throw new StellarError("INVALID_INPUT", "Malformed signed XDR");
 
   const server = getRpc();
-  const tx = TransactionBuilder.fromXDR(parsed.data, networkPassphrase());
-  const sent = await server.sendTransaction(tx);
+  let tx: ReturnType<typeof TransactionBuilder.fromXDR>;
+  try {
+    tx = TransactionBuilder.fromXDR(parsed.data, networkPassphrase());
+  } catch {
+    throw new StellarError("INVALID_INPUT", "Malformed signed XDR");
+  }
+
+  let sent: Awaited<ReturnType<typeof server.sendTransaction>>;
+  try {
+    sent = await server.sendTransaction(tx);
+  } catch {
+    throw new StellarError("SUBMIT_FAILED", "Transaction submission could not be completed", {
+      retryable: true,
+    });
+  }
   if (sent.status === "ERROR") {
+    if (isNetworkMismatch(sent.errorResult)) {
+      throw new StellarError(
+        "NETWORK_MISMATCH",
+        "Transaction signature does not match the tournament network",
+        { retryable: false },
+      );
+    }
     throw new StellarError("SUBMIT_FAILED", `Submit rejected (${intent})`);
   }
   const hash = sent.hash;
@@ -116,7 +145,15 @@ export async function submitSignedXdr(
   const attempts = opts.attempts ?? 30;
   const intervalMs = opts.intervalMs ?? 1000;
   for (let i = 0; i < attempts; i++) {
-    const got = await server.getTransaction(hash);
+    let got: Awaited<ReturnType<typeof server.getTransaction>>;
+    try {
+      got = await server.getTransaction(hash);
+    } catch {
+      throw new StellarError("SUBMIT_FAILED", "Transaction confirmation could not be completed", {
+        txHash: hash,
+        retryable: true,
+      });
+    }
     if (got.status === "SUCCESS") {
       const contractId = extractContractId(intent, got);
       return contractId ? { hash, status: "SUCCESS", contractId } : { hash, status: "SUCCESS" };
@@ -124,7 +161,22 @@ export async function submitSignedXdr(
     if (got.status === "FAILED") return { hash, status: "FAILED" };
     if (intervalMs > 0) await new Promise((r) => setTimeout(r, intervalMs));
   }
-  throw new StellarError("TX_TIMEOUT", `Timed out polling ${hash}`);
+  throw new StellarError("TX_TIMEOUT", "Transaction confirmation timed out", {
+    txHash: hash,
+    retryable: true,
+  });
+}
+
+function isNetworkMismatch(errorResult: unknown): boolean {
+  if (!errorResult || typeof errorResult !== "object" || !("result" in errorResult)) return false;
+  const result = (errorResult as { result?: unknown }).result;
+  if (typeof result !== "function") return false;
+  try {
+    const code = (result as () => { switch?: () => { name?: string } })().switch;
+    return code?.().name === "txBadAuth";
+  } catch {
+    return false;
+  }
 }
 
 function extractContractId(

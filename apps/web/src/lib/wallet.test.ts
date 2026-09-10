@@ -35,7 +35,10 @@ describe("ensureWallet", () => {
     mocked.getNetwork.mockResolvedValueOnce({
       networkPassphrase: "Public Global Stellar Network ; September 2015",
     });
-    await expect(ensureWallet(PASS)).rejects.toThrow(/network/i);
+    await expect(ensureWallet(PASS)).rejects.toMatchObject({
+      name: "SubmissionError",
+      details: { code: "NETWORK_MISMATCH", retryable: false },
+    });
   });
 
   it("throws when Freighter is not installed (isConnected returns false)", async () => {
@@ -94,22 +97,34 @@ describe("signAndSubmit", () => {
     });
   });
 
-  it("throws on a non-ok envelope response", async () => {
+  it("preserves structured submission failure details", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(
         async () =>
           // HTTP 200 with an application-level ok:false envelope (the API's own error format)
           new Response(
-            JSON.stringify({ ok: false, error: { code: "SUBMIT_FAILED", message: "boom" } }),
+            JSON.stringify({
+              ok: false,
+              error: {
+                code: "TX_FAILED",
+                message: "Transaction failed on-chain",
+                txHash: "TX_FAIL",
+                retryable: false,
+              },
+            }),
             {
-              status: 200,
+              status: 422,
               headers: { "content-type": "application/json" },
             },
           ),
       ),
     );
-    await expect(signAndSubmit("U", "deploy", "/x", PASS)).rejects.toThrow("boom");
+    await expect(signAndSubmit("U", "deploy", "/x", PASS)).rejects.toMatchObject({
+      name: "SubmissionError",
+      message: "Transaction failed on-chain",
+      details: { code: "TX_FAILED", txHash: "TX_FAIL", retryable: false },
+    });
   });
 
   it("throws a generic message when envelope ok:false has no error field", async () => {

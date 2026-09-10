@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { WalletButton } from "./WalletButton";
 import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
-import { signAndSubmit } from "@/lib/wallet";
+import { signAndSubmit, SubmissionError } from "@/lib/wallet";
 import { createTournamentSchema } from "@/lib/validation/tournament";
 import { apiResponseSchema } from "@/lib/api";
 import { z } from "zod";
@@ -17,6 +17,7 @@ const STROOP_FACTOR = 10_000_000n;
  * Valid examples: "1", "1.5", "0.0000001", "123.4567890" (exactly 7 dec.)
  */
 const ENTRY_FEE_REGEX = /^\d+(\.\d{1,7})?$/;
+const TESTNET_PASSPHRASE = "Test SDF Network ; September 2015";
 
 const uploadResponseSchema = apiResponseSchema(
   z.object({ uploadUrl: z.string().url(), key: z.string().min(1) }),
@@ -62,6 +63,11 @@ function xlmToStroops(xlm: string): string {
   return (BigInt(whole) * STROOP_FACTOR + BigInt(fracPadded)).toString();
 }
 
+function transactionExplorerUrl(txHash: string, passphrase: string) {
+  const network = passphrase === TESTNET_PASSPHRASE ? "testnet" : "public";
+  return `https://stellar.expert/explorer/${network}/tx/${encodeURIComponent(txHash)}`;
+}
+
 type Phase = "idle" | "signing" | "submitting" | "initializing" | "success" | "error";
 
 interface CreateTournamentFormProps {
@@ -85,6 +91,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   // UI state
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [errorTxHash, setErrorTxHash] = useState<string | null>(null);
   const [entryFeeError, setEntryFeeError] = useState<string | null>(null);
 
   // Derived values
@@ -117,6 +124,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
 
   async function handleDeploy() {
     setError(null);
+    setErrorTxHash(null);
 
     // Validate entry fee BEFORE any conversion or network call
     const feeError = validateEntryFee(entryFee);
@@ -198,6 +206,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     } catch (e: unknown) {
       setPhase("error");
       setError(e instanceof Error ? e.message : "An unexpected error occurred");
+      setErrorTxHash(e instanceof SubmissionError ? (e.details.txHash ?? null) : null);
     }
   }
 
@@ -411,9 +420,19 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
 
       {/* Inline error */}
       {error && (
-        <p role="alert" className="mt-4 text-sm text-error" aria-live="assertive">
-          {error}
-        </p>
+        <div role="alert" className="mt-4 text-sm text-error" aria-live="assertive">
+          <p>{error}</p>
+          {errorTxHash && (
+            <a
+              href={transactionExplorerUrl(errorTxHash, expectedPassphrase)}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 inline-block underline"
+            >
+              View transaction
+            </a>
+          )}
+        </div>
       )}
 
       {/* Progress modal */}

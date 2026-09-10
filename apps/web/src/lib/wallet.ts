@@ -19,6 +19,22 @@ const submitResponseSchema = apiResponseSchema(
   }),
 );
 
+type SubmissionErrorDetails = {
+  code: string;
+  txHash?: string;
+  retryable?: boolean;
+};
+
+export class SubmissionError extends Error {
+  constructor(
+    message: string,
+    readonly details: SubmissionErrorDetails,
+  ) {
+    super(message);
+    this.name = "SubmissionError";
+  }
+}
+
 export async function ensureWallet(expectedPassphrase: string): Promise<string> {
   const connected = await freighter.isConnected();
   if (connected.error) throw new Error(`Freighter error: ${connected.error.message}`);
@@ -37,9 +53,10 @@ export async function ensureWallet(expectedPassphrase: string): Promise<string> 
   if (netError) throw new Error(`Freighter could not get network: ${netError.message}`);
 
   if (networkPassphrase !== expectedPassphrase)
-    throw new Error(
-      `Wrong network — switch Freighter to the tournament's network. Expected: "${expectedPassphrase}", got: "${networkPassphrase}"`,
-    );
+    throw new SubmissionError("Wrong network — switch Freighter to the tournament's network.", {
+      code: "NETWORK_MISMATCH",
+      retryable: false,
+    });
 
   return address;
 }
@@ -76,10 +93,16 @@ export async function signAndSubmit(
       throw new Error("Your session has ended. Please log in again.");
     throw new Error("Transaction submission failed. Please try again.");
   }
-  if (!json.success || !res.ok || !json.data.ok) {
+  if (!json.success || (json.data.ok && !res.ok)) {
     if (res.status === 401 || res.status === 403)
       throw new Error("Your session has ended. Please log in again.");
-    throw new Error(json.success && !json.data.ok ? json.data.error.message : "Submission failed");
+    throw new Error("Submission failed");
   }
-  return json.data.data;
+  if (json.data.ok) return json.data.data;
+  const { code, message, txHash, retryable } = json.data.error;
+  throw new SubmissionError(message, {
+    code,
+    ...(txHash ? { txHash } : {}),
+    ...(retryable === undefined ? {} : { retryable }),
+  });
 }
