@@ -5,9 +5,9 @@ import { z } from "zod";
 
 export type SubmitResult = {
   txHash: string;
-  contractId?: string;
-  status?: string;
-  initializeXdr?: string;
+  contractId?: string | undefined;
+  status?: string | undefined;
+  initializeXdr?: string | undefined;
 };
 
 const submitResponseSchema = apiResponseSchema(
