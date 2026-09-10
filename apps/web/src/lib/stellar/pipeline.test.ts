@@ -86,7 +86,7 @@ describe("submitSignedXdr", () => {
       code: "SUBMIT_FAILED",
     });
   });
-  it("classifies a bad-auth submission result as a signature failure", async () => {
+  it("classifies a bad-auth submission result as a network mismatch", async () => {
     rpcRef.current = makeFakeRpc({
       sendTransaction: vi.fn().mockResolvedValue({
         status: "ERROR",
@@ -95,7 +95,7 @@ describe("submitSignedXdr", () => {
     });
     const { submitSignedXdr } = await import("./pipeline");
     await expect(submitSignedXdr("AAAAAgAAAAA=", "join")).rejects.toMatchObject({
-      code: "TX_BAD_AUTH",
+      code: "NETWORK_MISMATCH",
       retryable: false,
     });
   });
@@ -137,6 +137,29 @@ describe("submitSignedXdr", () => {
     expect(logMalformed).toHaveBeenCalledWith("Stellar transaction rejected as malformed", {
       intent: "initialize",
       result: "txMalformed",
+    });
+    logMalformed.mockRestore();
+  });
+  it("reads receiver-sensitive generated XDR accessors", async () => {
+    const logMalformed = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const result = {
+      code: "txMalformed",
+      switch() {
+        return { name: this.code };
+      },
+    };
+    const errorResult = {
+      payload: result,
+      result() {
+        return this.payload;
+      },
+    };
+    rpcRef.current = makeFakeRpc({
+      sendTransaction: vi.fn().mockResolvedValue({ status: "ERROR", errorResult }),
+    });
+    const { submitSignedXdr } = await import("./pipeline");
+    await expect(submitSignedXdr("AAAAAgAAAAA=", "initialize")).rejects.toMatchObject({
+      code: "TX_MALFORMED",
     });
     logMalformed.mockRestore();
   });

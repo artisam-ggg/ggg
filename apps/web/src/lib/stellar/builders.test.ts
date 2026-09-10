@@ -2,7 +2,9 @@
 // Pure Stellar XDR-builder logic with no DOM; runs in node so Keypair.random()
 // gets a real WebCrypto seed (jsdom's crypto yields the wrong seed type).
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { Keypair } from "@stellar/stellar-sdk";
+import { Account, Keypair, Operation, TransactionBuilder } from "@stellar/stellar-sdk";
+
+const pipeline = vi.hoisted(() => ({ simulateAndAssemble: vi.fn() }));
 
 const built = (xdr: string) => ({ toXDR: () => xdr });
 const joinFn = vi.fn().mockResolvedValue(built("JOIN_XDR"));
@@ -23,6 +25,7 @@ const ClientCtor = vi.fn().mockImplementation(function () {
 (ClientCtor as unknown as { deploy: typeof deployFn }).deploy = deployFn;
 
 vi.mock("@/contract-client", () => ({ Client: ClientCtor }));
+vi.mock("./pipeline", () => pipeline);
 vi.mock("./client", () => ({
   networkPassphrase: () => "Test SDF Network ; September 2015",
   networkName: () => "testnet",
@@ -38,6 +41,14 @@ const G = Keypair.random().publicKey();
 const G2 = Keypair.random().publicKey();
 const G3 = Keypair.random().publicKey();
 const C = "CCJZ5DGASBWQXR5MPFCJXMBI333XE5U3FSJTNQU7RIKE3P5GN2K2WYD5";
+const INITIALIZE_XDR = new TransactionBuilder(new Account(G, "1"), {
+  fee: "100",
+  networkPassphrase: "Test SDF Network ; September 2015",
+})
+  .addOperation(Operation.manageData({ name: "test", value: "test" }))
+  .setTimeout(0)
+  .build()
+  .toXDR();
 
 beforeEach(() => {
   joinFn.mockClear();
@@ -46,6 +57,9 @@ beforeEach(() => {
   cancelFn.mockClear();
   initializeFn.mockClear();
   ClientCtor.mockClear();
+  initializeFn.mockResolvedValue(built(INITIALIZE_XDR));
+  pipeline.simulateAndAssemble.mockReset();
+  pipeline.simulateAndAssemble.mockResolvedValue(built("PREPARED_INITIALIZE_XDR"));
 });
 
 describe("buildClaimRefundTx", () => {
@@ -100,10 +114,11 @@ describe("buildInitializeTx", () => {
       settlementDeadline,
     });
 
-    expect(res).toEqual({ xdr: "INITIALIZE_XDR", network: "testnet" });
+    expect(res).toEqual({ xdr: "PREPARED_INITIALIZE_XDR", network: "testnet" });
     expect(initializeFn).toHaveBeenCalledWith(
       expect.objectContaining({ settlement_deadline: settlementDeadline }),
     );
+    expect(pipeline.simulateAndAssemble).toHaveBeenCalledOnce();
   });
 });
 

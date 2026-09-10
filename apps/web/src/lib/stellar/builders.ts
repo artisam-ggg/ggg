@@ -1,6 +1,8 @@
 import { Client } from "@/contract-client";
+import { TransactionBuilder } from "@stellar/stellar-sdk";
 import { env } from "@/lib/env";
 import { networkName, networkPassphrase } from "./client";
+import { simulateAndAssemble } from "./pipeline";
 import {
   stellarContractId,
   stellarPublicKey,
@@ -49,7 +51,7 @@ export async function readSettlementDeadline(params: {
     params.contractId,
     params.sourceAddress,
   ).get_settlement_deadline();
-  return assembled.result;
+  return assembled.result ?? undefined;
 }
 
 /** Builds a permissionless refund claim which always pays the registered player. */
@@ -104,7 +106,10 @@ export async function buildInitializeTx(params: {
     distribution_bps: params.distributionBps,
     settlement_deadline: params.settlementDeadline,
   });
-  return { xdr: assembled.toXDR(), network: networkName() };
+  const prepared = await simulateAndAssemble(
+    TransactionBuilder.fromXDR(assembled.toXDR(), networkPassphrase()),
+  );
+  return { xdr: prepared.toXDR(), network: networkName() };
 }
 
 export async function buildFinalizeTx(params: {

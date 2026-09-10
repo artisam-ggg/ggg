@@ -142,8 +142,8 @@ export async function submitSignedXdr(
     const rejectionCode = transactionResultCode(sent.errorResult);
     if (rejectionCode === "txBadAuth") {
       throw new StellarError(
-        "TX_BAD_AUTH",
-        "Transaction signature was rejected. Reconnect Freighter and sign again.",
+        "NETWORK_MISMATCH",
+        "Transaction signature does not match the tournament network",
         { retryable: false },
       );
     }
@@ -198,13 +198,13 @@ function transactionResultCode(errorResult: unknown): string | undefined {
   try {
     const result =
       typeof parsedError.data.result === "function"
-        ? parsedError.data.result()
+        ? parsedError.data.result.call(errorResult)
         : parsedError.data.result;
     const parsedResult = transactionResultSchema.safeParse(result);
     if (!parsedResult.success) return undefined;
     const resultSwitch =
       typeof parsedResult.data.switch === "function"
-        ? parsedResult.data.switch()
+        ? parsedResult.data.switch.call(result)
         : parsedResult.data.switch;
     const parsedSwitch = transactionResultSwitchSchema.safeParse(resultSwitch);
     return parsedSwitch.success ? parsedSwitch.data.name : undefined;
