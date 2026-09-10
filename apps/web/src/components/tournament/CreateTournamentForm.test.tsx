@@ -575,4 +575,39 @@ describe("stale authenticated form", () => {
     expect(signAndSubmit).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
+
+  it.each([
+    [401, "UNAUTHORIZED"],
+    [403, "FORBIDDEN"],
+  ] as const)("handles a structured %i response without submitting", async (status, code) => {
+    vi.clearAllMocks();
+    (ensureWallet as ReturnType<typeof vi.fn>).mockResolvedValue(MOCK_ORGANIZER);
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ ok: false, error: { code, message: "Authentication required" } }),
+          { status, headers: { "content-type": "application/json" } },
+        ),
+      );
+    vi.stubGlobal("fetch", mockFetch);
+
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/tournament name/i), { target: { value: "Cup" } });
+    fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
+    fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: /deploy soroban contract/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Your session has ended. Please log in again.",
+      ),
+    );
+    expect(signAndSubmit).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
 });

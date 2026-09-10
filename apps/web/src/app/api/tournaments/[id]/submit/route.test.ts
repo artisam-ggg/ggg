@@ -107,7 +107,7 @@ import { requireUser, AuthError } from "@/lib/auth-guards";
 import { assertSameOrigin } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
 import { prisma } from "@/lib/db";
-import { POST } from "./route";
+import { DELETE, GET, OPTIONS, PATCH, POST, PUT } from "./route";
 
 const requireUserMock = requireUser as ReturnType<typeof vi.fn>;
 const assertSameOriginMock = assertSameOrigin as ReturnType<typeof vi.fn>;
@@ -136,6 +136,8 @@ function makeReq(idemKey?: string, body: object = { signedXdr: VALID_XDR, intent
 }
 
 const ctx = { params: Promise.resolve({ id: "t_1" }) };
+
+const unsupportedMethods = [GET, PUT, PATCH, DELETE, OPTIONS] as const;
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -520,4 +522,19 @@ describe("POST /api/tournaments/[id]/submit", () => {
     expect(json.ok).toBe(false);
     expect(json.error.code).toBe("STELLAR_ERROR");
   });
+});
+
+describe("unsupported /api/tournaments/[id]/submit methods", () => {
+  it.each(unsupportedMethods.map((handler, index) => [index, handler] as const))(
+    "returns the standard method-not-allowed envelope for handler %i",
+    async (_index, handler) => {
+      const res = handler();
+
+      expect(res.status).toBe(405);
+      await expect(res.json()).resolves.toMatchObject({
+        ok: false,
+        error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" },
+      });
+    },
+  );
 });

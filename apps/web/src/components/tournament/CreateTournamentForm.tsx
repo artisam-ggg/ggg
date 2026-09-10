@@ -5,7 +5,8 @@ import { WalletButton } from "./WalletButton";
 import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
 import { signAndSubmit } from "@/lib/wallet";
 import { createTournamentSchema } from "@/lib/validation/tournament";
-import { apiEnvelopeSchema } from "@/lib/api";
+import { apiResponseSchema } from "@/lib/api";
+import { z } from "zod";
 
 // 1 XLM = 10,000,000 stroops (7 decimal places)
 const STROOP_FACTOR = 10_000_000n;
@@ -16,6 +17,17 @@ const STROOP_FACTOR = 10_000_000n;
  * Valid examples: "1", "1.5", "0.0000001", "123.4567890" (exactly 7 dec.)
  */
 const ENTRY_FEE_REGEX = /^\d+(\.\d{1,7})?$/;
+
+const uploadResponseSchema = apiResponseSchema(
+  z.object({ uploadUrl: z.string().url(), key: z.string().min(1) }),
+);
+const createTournamentResponseSchema = apiResponseSchema(
+  z.object({
+    tournamentId: z.string().min(1),
+    unsignedXdr: z.string().min(1),
+    network: z.string(),
+  }),
+);
 
 /**
  * Validate an entry-fee string. Returns an error message or null if valid.
@@ -87,21 +99,20 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ contentType: file.type, contentLength: file.size }),
     });
-    const presign = (await presignRes.json()) as {
-      ok: boolean;
-      data?: { uploadUrl: string; key: string };
-      error?: string;
-    };
-    if (!presign.ok) throw new Error(presign.error ?? "Upload presign failed");
+    const presign = uploadResponseSchema.safeParse(await presignRes.json());
+    if (!presign.success || !presign.data.ok)
+      throw new Error(
+        presign.success && !presign.data.ok ? presign.data.error.message : "Upload presign failed",
+      );
 
-    const putRes = await fetch(presign.data!.uploadUrl, {
+    const putRes = await fetch(presign.data.data.uploadUrl, {
       method: "PUT",
       headers: { "content-type": file.type },
       body: file,
     });
     if (!putRes.ok) throw new Error(`Cover image upload failed (HTTP ${putRes.status})`);
 
-    setCoverImageKey(presign.data!.key);
+    setCoverImageKey(presign.data.data.key);
   }
 
   async function handleDeploy() {
@@ -152,18 +163,10 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       const raw = await createRes.text();
       let created: { tournamentId: string; unsignedXdr: string; network: string };
       try {
-        const envelope = apiEnvelopeSchema.safeParse(JSON.parse(raw));
+        const envelope = createTournamentResponseSchema.safeParse(JSON.parse(raw));
         if (!envelope.success) throw new Error("Invalid API response");
         if (!envelope.data.ok) throw new Error(envelope.data.error.message);
-        const data = envelope.data.data;
-        if (
-          typeof data !== "object" ||
-          data === null ||
-          typeof (data as { tournamentId?: unknown }).tournamentId !== "string" ||
-          typeof (data as { unsignedXdr?: unknown }).unsignedXdr !== "string"
-        )
-          throw new Error("Invalid API response");
-        created = data as typeof created;
+        created = envelope.data.data;
       } catch (error) {
         if (
           createRes.status !== 401 &&

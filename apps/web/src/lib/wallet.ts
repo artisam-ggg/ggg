@@ -1,6 +1,7 @@
 "use client";
 import freighter from "@stellar/freighter-api";
-import { apiEnvelopeSchema } from "@/lib/api";
+import { apiResponseSchema } from "@/lib/api";
+import { z } from "zod";
 
 export type SubmitResult = {
   txHash: string;
@@ -8,6 +9,15 @@ export type SubmitResult = {
   status?: string;
   initializeXdr?: string;
 };
+
+const submitResponseSchema = apiResponseSchema(
+  z.object({
+    txHash: z.string().min(1),
+    contractId: z.string().optional(),
+    status: z.string().optional(),
+    initializeXdr: z.string().optional(),
+  }),
+);
 
 export async function ensureWallet(expectedPassphrase: string): Promise<string> {
   const connected = await freighter.isConnected();
@@ -58,9 +68,9 @@ export async function signAndSubmit(
   });
 
   const raw = await res.text();
-  let json: ReturnType<typeof apiEnvelopeSchema.safeParse>;
+  let json: ReturnType<typeof submitResponseSchema.safeParse>;
   try {
-    json = apiEnvelopeSchema.safeParse(JSON.parse(raw));
+    json = submitResponseSchema.safeParse(JSON.parse(raw));
   } catch {
     if (res.status === 401 || res.status === 403)
       throw new Error("Your session has ended. Please log in again.");
@@ -71,12 +81,5 @@ export async function signAndSubmit(
       throw new Error("Your session has ended. Please log in again.");
     throw new Error(json.success && !json.data.ok ? json.data.error.message : "Submission failed");
   }
-  const data = json.data.data;
-  if (
-    typeof data !== "object" ||
-    data === null ||
-    typeof (data as { txHash?: unknown }).txHash !== "string"
-  )
-    throw new Error("Transaction submission failed. Please try again.");
-  return data as SubmitResult;
+  return json.data.data;
 }
