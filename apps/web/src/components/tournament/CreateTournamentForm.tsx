@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { WalletButton } from "./WalletButton";
 import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
@@ -69,6 +69,7 @@ function transactionExplorerUrl(txHash: string, passphrase: string) {
 }
 
 type Phase = "idle" | "signing" | "submitting" | "initializing" | "success" | "error";
+type CoverUploadStatus = "idle" | "uploading" | "failed" | "complete";
 
 interface CreateTournamentFormProps {
   expectedPassphrase: string;
@@ -87,6 +88,8 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   const [settlementDeadline, setSettlementDeadline] = useState("");
   const [splits, setSplits] = useState<[number, number, number]>([60, 30, 10]);
   const [coverImageKey, setCoverImageKey] = useState<string | undefined>();
+  const [coverUploadStatus, setCoverUploadStatus] = useState<CoverUploadStatus>("idle");
+  const coverUploadRequest = useRef(0);
 
   // UI state
   const [phase, setPhase] = useState<Phase>("idle");
@@ -101,32 +104,48 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   const splitValid = splitSum === 100;
 
   async function handleCoverUpload(file: File) {
+    const request = ++coverUploadRequest.current;
     setError(null);
-    const presignRes = await fetch("/api/uploads", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ contentType: file.type, contentLength: file.size }),
-    });
-    const presign = uploadResponseSchema.safeParse(await presignRes.json());
-    if (!presign.success || !presign.data.ok)
-      throw new Error(
-        presign.success && !presign.data.ok ? presign.data.error.message : "Upload presign failed",
-      );
-
-    const putRes = await fetch(presign.data.data.uploadUrl, {
-      method: "PUT",
-      headers: { "content-type": file.type },
-      body: file,
-    });
-    if (!putRes.ok) throw new Error(`Cover image upload failed (HTTP ${putRes.status})`);
-
-    setCoverImageKey(presign.data.data.key);
+    setCoverUploadStatus("uploading");
+    try {
+      const form = new FormData();
+      form.set("file", file);
+      const uploadRes = await fetch("/api/uploads", {
+        method: "POST",
+        body: form,
+      });
+      const upload = (await uploadRes.json()) as {
+        ok: boolean;
+        data?: { key: string };
+        error?: { message?: string } | string;
+      };
+      if (!uploadRes.ok || !upload.ok) {
+        throw new Error(
+          typeof upload.error === "string"
+            ? upload.error
+            : (upload.error?.message ?? "Cover image upload failed"),
+        );
+      }
+      if (request === coverUploadRequest.current) {
+        setCoverImageKey(upload.data!.key);
+        setCoverUploadStatus("complete");
+      }
+    } catch (err: unknown) {
+      if (request === coverUploadRequest.current) {
+        setCoverUploadStatus("failed");
+        setError(err instanceof Error ? err.message : "Upload failed");
+      }
+    }
   }
 
   async function handleDeploy() {
     setError(null);
     setErrorTxHash(null);
     setRefereeError(null);
+    if (coverUploadStatus === "uploading" || coverUploadStatus === "failed") {
+      setError("Resolve the cover image upload before deploying.");
+      return;
+    }
 
     // Validate entry fee BEFORE any conversion or network call
     const feeError = validateEntryFee(entryFee);
@@ -225,7 +244,12 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   const monoFieldClass = `${fieldClass} data-mono text-acid-yellow`;
 
   const isSubmittable =
-    !!organizerAddress && !!settlementDeadline && splitValid && phase === "idle";
+    !!organizerAddress &&
+    !!settlementDeadline &&
+    splitValid &&
+    coverUploadStatus !== "uploading" &&
+    coverUploadStatus !== "failed" &&
+    phase === "idle";
 
   return (
     <form
@@ -412,9 +436,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) {
-              handleCoverUpload(file).catch((err: unknown) => {
-                setError(err instanceof Error ? err.message : "Upload failed");
-              });
+              void handleCoverUpload(file);
             }
           }}
         />

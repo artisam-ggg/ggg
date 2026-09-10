@@ -56,7 +56,10 @@ export const createTournamentSchema = z
       z.number().int().min(0).max(10000),
       z.number().int().min(0).max(10000),
     ]),
-    coverImageKey: z.string().max(256).optional(),
+    coverImageKey: z
+      .string()
+      .regex(/^covers\/[0-9a-f-]{36}\.(png|jpg|webp)$/)
+      .optional(),
   })
   .refine((v) => v.distributionBps[0] + v.distributionBps[1] + v.distributionBps[2] === 10000, {
     message: "Split must sum to 10000 basis points",
@@ -145,3 +148,22 @@ export const uploadSchema = z.object({
     .max(5 * 1024 * 1024), // 5 MB cap
 });
 export type UploadInput = z.infer<typeof uploadSchema>;
+
+export const uploadFileSchema = z
+  .custom<Blob>(
+    (value): value is Blob =>
+      typeof value === "object" &&
+      value !== null &&
+      "arrayBuffer" in value &&
+      "size" in value &&
+      "type" in value,
+    "An image file is required",
+  )
+  .refine(
+    (file) => ["image/png", "image/jpeg", "image/webp"].includes(file.type),
+    "Invalid file type. Upload a PNG, JPEG, or WEBP image.",
+  )
+  .refine(
+    (file) => file.size > 0 && file.size <= 5 * 1024 * 1024,
+    "Image must be no larger than 5 MB.",
+  );

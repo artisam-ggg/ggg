@@ -150,3 +150,7 @@ Authenticated tournament creation is dynamically rendered and sent with no-store
 ## Issue #242 — Support wallet switching and disconnection
 
 Wallet controls now let a user re-check Freighter after changing accounts and explicitly disconnect from the current GGG flow. Both actions update the shared parent wallet state, so join, create, refund, and referee settlement actions cannot continue using a stale address.
+
+## Issue #246 — Secure tournament cover uploads
+
+Cover image uploads now pass through the authenticated server route, which accepts only PNG, JPEG, and WEBP files up to 5 MB after MIME and file-signature validation. Rejected uploads are not written to object storage, and the creation form displays the safe API error message rather than an error object.

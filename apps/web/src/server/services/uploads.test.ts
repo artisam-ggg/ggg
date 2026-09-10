@@ -1,106 +1,83 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import sharp from "sharp";
 
-// Mock at the module boundary — never hits a real S3
-vi.mock("@aws-sdk/s3-request-presigner", () => ({
-  getSignedUrl: vi.fn(async () => "https://minio/presigned"),
-}));
 vi.mock("@/lib/s3", () => ({
-  s3: {},
+  s3: { send: vi.fn(async () => ({})) },
   BUCKET: "ggg-uploads",
 }));
 
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
-import { createPresignedUpload } from "./uploads";
+import { s3 } from "@/lib/s3";
+import { uploadCoverImage, MAX_COVER_IMAGE_BYTES } from "./uploads";
 
-const getSignedUrlMock = getSignedUrl as ReturnType<typeof vi.fn>;
+const sendMock = s3.send as ReturnType<typeof vi.fn>;
 
-describe("createPresignedUpload", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    getSignedUrlMock.mockResolvedValue("https://minio/presigned");
+async function image(format: "png" | "jpeg" | "webp"): Promise<Blob> {
+  const bytes = await sharp({
+    create: { width: 1, height: 1, channels: 3, background: "black" },
+  })
+    .toFormat(format)
+    .toBuffer();
+  return new Blob([new Uint8Array(bytes)], {
+    type: format === "jpeg" ? "image/jpeg" : `image/${format}`,
   });
+}
 
-  it("returns a random key with correct .png extension and a presigned URL", async () => {
-    const result = await createPresignedUpload("image/png", 1000);
+describe("uploadCoverImage", () => {
+  beforeEach(() => vi.clearAllMocks());
 
-    expect(result.uploadUrl).toBe("https://minio/presigned");
-    expect(result.key).toMatch(/^covers\/[0-9a-f-]{36}\.png$/);
-  });
+  it.each(["png", "jpeg", "webp"] as const)("stores a valid %s image", async (format) => {
+    const result = await uploadCoverImage(await image(format));
 
-  it("returns a random key with correct .jpg extension for image/jpeg", async () => {
-    const result = await createPresignedUpload("image/jpeg", 1000);
-
-    expect(result.uploadUrl).toBe("https://minio/presigned");
-    expect(result.key).toMatch(/^covers\/[0-9a-f-]{36}\.jpg$/);
-  });
-
-  it("returns a random key with correct .webp extension for image/webp", async () => {
-    const result = await createPresignedUpload("image/webp", 1000);
-
-    expect(result.uploadUrl).toBe("https://minio/presigned");
-    expect(result.key).toMatch(/^covers\/[0-9a-f-]{36}\.webp$/);
-  });
-
-  it("generates unique keys on each call", async () => {
-    const r1 = await createPresignedUpload("image/png", 1000);
-    const r2 = await createPresignedUpload("image/png", 1000);
-
-    expect(r1.key).not.toBe(r2.key);
-  });
-
-  it("passes correct Bucket, Key, ContentType, and ContentLength to PutObjectCommand", async () => {
-    await createPresignedUpload("image/png", 2048);
-
-    expect(getSignedUrlMock).toHaveBeenCalledOnce();
-    const [, cmd] = getSignedUrlMock.mock.calls[0] as [
-      unknown,
-      InstanceType<typeof PutObjectCommand>,
-    ];
-    // PutObjectCommand stores input in .input
-    const input = (cmd as unknown as { input: Record<string, unknown> }).input;
-    expect(input.Bucket).toBe("ggg-uploads");
-    expect(input.ContentType).toBe("image/png");
-    expect(input.ContentLength).toBe(2048);
-    expect(typeof input.Key).toBe("string");
-    expect(input.Key).toMatch(/^covers\//);
-  });
-
-  it("passes expiresIn option to getSignedUrl", async () => {
-    await createPresignedUpload("image/png", 1000);
-
-    const [, , opts] = getSignedUrlMock.mock.calls[0] as [unknown, unknown, { expiresIn: number }];
-    expect(opts.expiresIn).toBeGreaterThanOrEqual(60);
-    expect(opts.expiresIn).toBeLessThanOrEqual(300);
-  });
-
-  it("rejects oversized uploads (>5 MB)", async () => {
-    await expect(createPresignedUpload("image/png", 6 * 1024 * 1024)).rejects.toThrow(
-      "Content length out of range",
+    expect(result.key).toMatch(
+      new RegExp(`^covers/[0-9a-f-]{36}\\.${format === "jpeg" ? "jpg" : format}$`),
     );
-    expect(getSignedUrlMock).not.toHaveBeenCalled();
+    expect(sendMock).toHaveBeenCalledOnce();
   });
 
-  it("rejects exactly 0 content length", async () => {
-    await expect(createPresignedUpload("image/png", 0)).rejects.toThrow();
-    expect(getSignedUrlMock).not.toHaveBeenCalled();
+  it("rejects a PDF before it reaches storage", async () => {
+    await expect(
+      uploadCoverImage(new Blob(["%PDF-1.7"], { type: "application/pdf" })),
+    ).rejects.toThrow("Invalid file type");
+    expect(sendMock).not.toHaveBeenCalled();
   });
 
-  it("accepts exactly 5 MB (boundary value)", async () => {
-    const result = await createPresignedUpload("image/png", 5 * 1024 * 1024);
-    expect(result.uploadUrl).toBe("https://minio/presigned");
+  it("rejects an arbitrary document before it reaches storage", async () => {
+    await expect(
+      uploadCoverImage(new Blob(["not an image"], { type: "text/plain" })),
+    ).rejects.toThrow("Invalid file type");
+    expect(sendMock).not.toHaveBeenCalled();
   });
 
-  it("rejects disallowed MIME types", async () => {
-    await expect(createPresignedUpload("application/zip" as "image/png", 100)).rejects.toThrow(
-      "Unsupported content type",
+  it("rejects a renamed PDF with an image MIME type before it reaches storage", async () => {
+    await expect(uploadCoverImage(new Blob(["%PDF-1.7"], { type: "image/png" }))).rejects.toThrow(
+      "Invalid image file",
     );
-    expect(getSignedUrlMock).not.toHaveBeenCalled();
+    expect(sendMock).not.toHaveBeenCalled();
   });
 
-  it("rejects unknown image MIME types", async () => {
-    await expect(createPresignedUpload("image/gif" as "image/png", 100)).rejects.toThrow(
-      "Unsupported content type",
+  it("rejects an image MIME type that does not match its signature", async () => {
+    await expect(
+      uploadCoverImage(
+        new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], { type: "image/jpeg" }),
+      ),
+    ).rejects.toThrow("Invalid image file");
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a truncated JPEG before it reaches storage", async () => {
+    await expect(
+      uploadCoverImage(
+        new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], { type: "image/jpeg" }),
+      ),
+    ).rejects.toThrow("Invalid image file");
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects oversized images before it reaches storage", async () => {
+    const bytes = new Uint8Array(MAX_COVER_IMAGE_BYTES + 1);
+    await expect(uploadCoverImage(new Blob([bytes], { type: "image/png" }))).rejects.toThrow(
+      "no larger than 5 MB",
     );
+    expect(sendMock).not.toHaveBeenCalled();
   });
 });
