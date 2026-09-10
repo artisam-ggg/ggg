@@ -15,8 +15,13 @@ d("Testnet integration", () => {
     );
     expect(res.ok).toBe(true);
 
-    const { buildDeployInitializeTx, buildInitializeTx, readSettlementDeadline, resolveSacAddress, submitSignedXdr } =
-      await import("./index");
+    const {
+      buildDeployInitializeTx,
+      buildInitializeTx,
+      readSettlementDeadline,
+      resolveSacAddress,
+      submitSignedXdr,
+    } = await import("./index");
     const tokenAddr = resolveSacAddress("XLM");
     const deploy = await buildDeployInitializeTx({
       organizerAddress: organizer.publicKey(),
