@@ -161,12 +161,12 @@ describe("CreateTournamentForm", () => {
     vi.unstubAllGlobals();
   });
 
-  it("shows error and does NOT redirect when POST /api/tournaments returns ok:false", async () => {
+  it("preserves a server error message even when it matches the former parser sentinel", async () => {
     const mockFetch = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
           ok: false,
-          error: { code: "INVALID_REQUEST", message: "Name already taken" },
+          error: { code: "INVALID_REQUEST", message: "Invalid API response" },
         }),
         {
           status: 422,
@@ -188,7 +188,9 @@ describe("CreateTournamentForm", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /deploy soroban contract/i }));
 
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Name already taken"));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent("Invalid API response"),
+    );
     expect(push).not.toHaveBeenCalled();
     expect(signAndSubmit).not.toHaveBeenCalled();
 

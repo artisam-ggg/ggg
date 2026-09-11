@@ -160,29 +160,20 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const raw = await createRes.text();
-      let created: { tournamentId: string; unsignedXdr: string; network: string };
-      try {
-        const envelope = createTournamentResponseSchema.safeParse(JSON.parse(raw));
-        if (!envelope.success) throw new Error("Invalid API response");
-        if (!envelope.data.ok) throw new Error(envelope.data.error.message);
-        created = envelope.data.data;
-      } catch (error) {
-        if (
-          createRes.status !== 401 &&
-          createRes.status !== 403 &&
-          error instanceof Error &&
-          error.message !== "Invalid API response"
-        )
-          throw error;
-        throw new Error(
-          createRes.status === 401 || createRes.status === 403
-            ? "Your session has ended. Please log in again."
-            : "Tournament creation failed. Please try again.",
-        );
-      }
-      if (createRes.status === 401 || createRes.status === 403)
+      if (createRes.status === 401 || createRes.status === 403) {
         throw new Error("Your session has ended. Please log in again.");
+      }
+
+      const raw = await createRes.text();
+      let envelope: ReturnType<typeof createTournamentResponseSchema.safeParse>;
+      try {
+        envelope = createTournamentResponseSchema.safeParse(JSON.parse(raw));
+      } catch {
+        throw new Error("Tournament creation failed. Please try again.");
+      }
+      if (!envelope.success) throw new Error("Tournament creation failed. Please try again.");
+      if (!envelope.data.ok) throw new Error(envelope.data.error.message);
+      const created = envelope.data.data;
 
       setPhase("signing");
 
