@@ -2,6 +2,17 @@
 
 Running log of shipped features (append one entry per change), per the auto-dev workflow.
 
+## Issue #245 — Clear duplicate tournament participation
+
+The join endpoint now checks the persisted participant record before building an unsigned join transaction. A wallet already recorded for the tournament receives a clear `409 CONFLICT` response (`You are already a participant in this tournament.`), avoiding an unnecessary signature and generic submission error. The Soroban contract remains the source of truth for races or subscriber lag.
+## Issue #243 — Structured Soroban deployment failures
+
+Tournament deployment submission now distinguishes malformed input/network errors, rejected signatures, protocol-malformed signed envelopes, simulation failures, RPC submission failures, on-chain failures, and confirmation timeouts with safe structured API errors. RPC rejection data is Zod-validated before classification and every rejection logs its safe protocol result code. A `txMalformed` response is returned as a non-retryable 400 that tells the organiser to refresh and sign a newly generated transaction; `txBadAuth` is reported as a rejected signature (which can include a wrong signing network), not as a confirmed network mismatch. The browser preserves the safe message and transaction hash, links to the relevant Stellar.Expert transaction when available, and continues to handle malformed proxy responses without exposing internals or JSON parser errors.
+
+## Issue #239 — Inline referee wallet validation
+
+Tournament creation now renders an invalid referee wallet error directly below its input. The input receives visible error styling, `aria-invalid`, and an `aria-describedby` link to the accessible alert; correcting the field clears that feedback.
+
 ## Issue #217 — Deadline reference-app wiring
 
 Tournament creation now accepts UTC Unix-second deadlines, applies the one-hour minimum and #215's 90-day Testnet-safe horizon in the shared client/server schema, persists the exact instant, and sends the exact seconds to contract initialization. The API/UI expose confirmed deadlines and explicit legacy-contract state without inventing deadlines for pre-deadline deployments. Subscriber replay identity now uses the stable Soroban RPC event id with the transaction hash; confirmed `refund_claimed` events remain the source of per-player refund state.
@@ -128,3 +139,26 @@ Deploy confirmation now keeps a tournament in `DRAFT` until its separate `initia
 ## Issue #216 — Permissionless claimant refunds
 
 `claim_refund(player)` is permissionless: after the inclusive settlement deadline, or immediately after cancellation, any caller can submit a claim but the entry fee is always transferred only to that registered player. Each player can claim once; unknown players and finalized escrows are rejected. Cancellation now only records its terminal state, so no transaction loops over participants; individual refund claims are O(1) and preserve transfer atomicity. The contract enforces a Testnet-simulated `MAX_PLAYERS` ceiling of 100 registrations, with tests at the limit and one-over-limit, while refund tests cover deadline/state boundaries, arbitrary callers, exact events, failed transfers, and conservation.
+## Issue #240 — Identify participant timestamp timezones
+
+Participant registration times now render in UTC and expose the exact UTC instant through an accessible label.
+
+## Issue #241 — Prevent stale authenticated tournament forms after logout
+
+Authenticated tournament creation is dynamically rendered and sent with no-store cache control. Logout replaces the current history entry, API creation checks the current server session, and the form safely reports authentication or non-JSON failures.
+
+## Issue #242 — Support wallet switching and disconnection
+
+Wallet controls now let a user re-check Freighter after changing accounts and explicitly disconnect from the current GGG flow. Both actions update the shared parent wallet state, so join, create, refund, and referee settlement actions cannot continue using a stale address.
+
+## Issue #246 — Secure tournament cover uploads
+
+Cover image uploads now pass through the authenticated server route, which accepts only PNG, JPEG, and WEBP files up to 5 MB after MIME and file-signature validation. Rejected uploads are not written to object storage, and the creation form displays the safe API error message rather than an error object.
+
+## Issue #244 - Persist tournament creation drafts
+
+The create-tournament form now restores a validated `ggg:tournament-create-draft` browser draft after reload and offers Clear Draft. It stores only serializable public form fields; the connected organizer wallet and cover-image upload state are intentionally fetched live and never persisted.
+
+## Issue #259 — Assemble initialization transactions after contract deployment
+
+New tournament contracts now re-simulate and assemble their generated `initialize` invocation after deployment, ensuring the wallet signs Soroban resource data and fees for the newly-created instance. The opt-in Testnet integration test covers the full signed deploy-to-initialize sequence; existing DRAFT contracts with a deployed `contractId` can safely retry initialization through the existing deployment-recovery path.

@@ -5,7 +5,6 @@ import {
   joinSchema,
   finalizeSchema,
   listQuerySchema,
-  uploadSchema,
   assetSchema,
   statusSchema,
   stellarPublicKey,
@@ -167,9 +166,25 @@ describe("createTournamentSchema", () => {
   it("accepts optional coverImageKey", () => {
     const r = createTournamentSchema.safeParse({
       ...validCreate,
-      coverImageKey: "uploads/abc.png",
+      coverImageKey: "covers/00000000-0000-0000-0000-000000000000.png",
     });
     expect(r.success).toBe(true);
+  });
+
+  it("rejects legacy coverImageKey paths", () => {
+    const r = createTournamentSchema.safeParse({
+      ...validCreate,
+      coverImageKey: "uploads/abc.png",
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("rejects a coverImageKey with an invalid UUID shape", () => {
+    const r = createTournamentSchema.safeParse({
+      ...validCreate,
+      coverImageKey: "covers/------------------------------------.png",
+    });
+    expect(r.success).toBe(false);
   });
 
   it("rejects coverImageKey > 256 chars", () => {
@@ -308,47 +323,5 @@ describe("listQuerySchema", () => {
   it("accepts cursor as string", () => {
     const r = listQuerySchema.parse({ cursor: "abc123" });
     expect(r.cursor).toBe("abc123");
-  });
-});
-
-// --- uploadSchema ---
-
-describe("uploadSchema", () => {
-  it("accepts valid image content types", () => {
-    for (const contentType of ["image/png", "image/jpeg", "image/webp"] as const) {
-      const r = uploadSchema.safeParse({ contentType, contentLength: 1024 });
-      expect(r.success).toBe(true);
-    }
-  });
-
-  it("rejects unsupported content type", () => {
-    expect(uploadSchema.safeParse({ contentType: "image/gif", contentLength: 1024 }).success).toBe(
-      false,
-    );
-  });
-
-  it("rejects contentLength of 0", () => {
-    expect(uploadSchema.safeParse({ contentType: "image/png", contentLength: 0 }).success).toBe(
-      false,
-    );
-  });
-
-  it("rejects contentLength exceeding 5 MB", () => {
-    expect(
-      uploadSchema.safeParse({
-        contentType: "image/png",
-        contentLength: 5 * 1024 * 1024 + 1,
-      }).success,
-    ).toBe(false);
-  });
-
-  it("accepts exactly 5 MB", () => {
-    const r = uploadSchema.safeParse({ contentType: "image/png", contentLength: 5 * 1024 * 1024 });
-    expect(r.success).toBe(true);
-  });
-
-  it("coerces contentLength from string", () => {
-    const r = uploadSchema.parse({ contentType: "image/jpeg", contentLength: "2048" });
-    expect(r.contentLength).toBe(2048);
   });
 });

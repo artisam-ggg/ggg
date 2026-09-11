@@ -43,9 +43,15 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
 // Defense-in-depth authz (do NOT rely on proxy.ts alone). Redirects to /login
 // when unauthenticated; throws AuthError(403) when the role is insufficient.
 // Admins satisfy ORGANIZER requirements because of ROLE_RANK.
-export async function requireUser(role?: AppRole): Promise<SessionUser> {
+export async function requireUser(
+  role?: AppRole,
+  redirectOnUnauthenticated = true,
+): Promise<SessionUser> {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  if (!user) {
+    if (redirectOnUnauthenticated) redirect("/login");
+    throw new AuthError("Authentication required", 401);
+  }
   if (role && !hasRole(user.role, role)) {
     throw new AuthError("Forbidden", 403);
   }

@@ -116,6 +116,17 @@ describe("POST /api/tournaments/[id]/cancel", () => {
     });
   });
 
+  it("returns the standard 401 envelope when the session has ended", async () => {
+    requireUserMock.mockRejectedValue(new AuthError("Authentication required", 401));
+
+    const res = await POST(makeReq(), ctx);
+
+    expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toMatchObject({ ok: false, error: { code: "UNAUTHORIZED" } });
+    expect(requireUserMock).toHaveBeenCalledWith("ORGANIZER", false);
+    expect(buildCancelTxMock).not.toHaveBeenCalled();
+  });
+
   it("returns 403 when a non-owner tries to cancel", async () => {
     findUniqueMock.mockResolvedValueOnce({
       id: "t_1",

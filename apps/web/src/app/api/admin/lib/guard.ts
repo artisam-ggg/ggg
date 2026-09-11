@@ -6,12 +6,11 @@ import { rateLimit } from "@/lib/rate-limit";
 
 /**
  * Lightweight admin auth check for GET handlers. Returns a Response on failure
- * (403/401) or undefined on success. Throws NEXT_REDIRECT for unauthenticated
- * callers so Next.js can handle the redirect.
+ * (403/401) or undefined on success.
  */
 export async function requireAdminApi(): Promise<Response | undefined> {
   try {
-    await requireUser("ADMIN");
+    await requireUser("ADMIN", false);
   } catch (e) {
     if (e instanceof AuthError) {
       const code = e.status === 403 ? "FORBIDDEN" : "UNAUTHORIZED";
@@ -39,7 +38,7 @@ export async function withAdminMutation(
 
   let user: SessionUser;
   try {
-    user = await requireUser("ADMIN");
+    user = await requireUser("ADMIN", false);
   } catch (e) {
     if (e instanceof AuthError) {
       const code = e.status === 403 ? "FORBIDDEN" : "UNAUTHORIZED";

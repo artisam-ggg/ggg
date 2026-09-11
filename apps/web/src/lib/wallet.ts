@@ -1,12 +1,39 @@
 "use client";
 import freighter from "@stellar/freighter-api";
+import { apiResponseSchema } from "@/lib/api";
+import { z } from "zod";
 
 export type SubmitResult = {
   txHash: string;
-  contractId?: string;
-  status?: string;
-  initializeXdr?: string;
+  contractId?: string | undefined;
+  status?: string | undefined;
+  initializeXdr?: string | undefined;
 };
+
+const submitResponseSchema = apiResponseSchema(
+  z.object({
+    txHash: z.string().min(1),
+    contractId: z.string().optional(),
+    status: z.string().optional(),
+    initializeXdr: z.string().optional(),
+  }),
+);
+
+type SubmissionErrorDetails = {
+  code: string;
+  txHash?: string;
+  retryable?: boolean;
+};
+
+export class SubmissionError extends Error {
+  constructor(
+    message: string,
+    readonly details: SubmissionErrorDetails,
+  ) {
+    super(message);
+    this.name = "SubmissionError";
+  }
+}
 
 export async function ensureWallet(expectedPassphrase: string): Promise<string> {
   const connected = await freighter.isConnected();
@@ -26,9 +53,10 @@ export async function ensureWallet(expectedPassphrase: string): Promise<string> 
   if (netError) throw new Error(`Freighter could not get network: ${netError.message}`);
 
   if (networkPassphrase !== expectedPassphrase)
-    throw new Error(
-      `Wrong network — switch Freighter to the tournament's network. Expected: "${expectedPassphrase}", got: "${networkPassphrase}"`,
-    );
+    throw new SubmissionError("Wrong network — switch Freighter to the tournament's network.", {
+      code: "NETWORK_MISMATCH",
+      retryable: false,
+    });
 
   return address;
 }
@@ -56,11 +84,25 @@ export async function signAndSubmit(
     body: JSON.stringify({ signedXdr: signedTxXdr, intent }),
   });
 
-  // Guard against non-JSON error responses (e.g. a 5xx HTML error page from a proxy)
-  // before attempting res.json(), which would throw a raw SyntaxError on non-JSON bodies.
-  if (!res.ok) throw new Error(`Submit failed: ${res.status}`);
-
-  const json = (await res.json()) as { ok: boolean; data?: SubmitResult; error?: string };
-  if (!json.ok) throw new Error(json.error ?? "Submission failed");
-  return json.data as SubmitResult;
+  const raw = await res.text();
+  let json: ReturnType<typeof submitResponseSchema.safeParse>;
+  try {
+    json = submitResponseSchema.safeParse(JSON.parse(raw));
+  } catch {
+    if (res.status === 401 || res.status === 403)
+      throw new Error("Your session has ended. Please log in again.");
+    throw new Error("Transaction submission failed. Please try again.");
+  }
+  if (!json.success || (json.data.ok && !res.ok)) {
+    if (res.status === 401 || res.status === 403)
+      throw new Error("Your session has ended. Please log in again.");
+    throw new Error("Submission failed");
+  }
+  if (json.data.ok) return json.data.data;
+  const { code, message, txHash, retryable } = json.data.error;
+  throw new SubmissionError(message, {
+    code,
+    ...(txHash ? { txHash } : {}),
+    ...(retryable === undefined ? {} : { retryable }),
+  });
 }

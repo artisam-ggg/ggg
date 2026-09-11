@@ -2,6 +2,9 @@ import { requireUser } from "@/lib/auth-guards";
 import { env } from "@/lib/env";
 import { CreateTournamentForm } from "@/components/tournament/CreateTournamentForm";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function NewTournamentPage() {
   await requireUser("ORGANIZER");
   return (

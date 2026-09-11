@@ -49,6 +49,28 @@ describe("JoinCard", () => {
     );
   });
 
+  it("shows a tournament identifier without rendering the full URL", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    render(<JoinCard {...baseProps} tournamentId="tournament-1234567890" />);
+
+    expect(screen.queryByText(baseProps.joinUrl)).not.toBeInTheDocument();
+    expect(screen.getByText("Tournament: tourna…567890")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /copy link/i }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(baseProps.joinUrl));
+  });
+
+  it("shows an inline error when copying the link fails", async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error("Clipboard unavailable"));
+    Object.assign(navigator, { clipboard: { writeText } });
+    render(<JoinCard {...baseProps} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /copy link/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not copy tournament link");
+  });
+
   it("QR tile has accessible aria-label", () => {
     render(<JoinCard {...baseProps} />);
     expect(screen.getByRole("img", { name: /tournament join qr/i })).toBeInTheDocument();
@@ -145,6 +167,37 @@ describe("JoinCard", () => {
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Tournament is full"));
     expect(mockedSignAndSubmit).not.toHaveBeenCalled();
     expect(mockRefresh).not.toHaveBeenCalled();
+  });
+
+  it("renders the duplicate-participant message from the API error envelope", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              ok: false,
+              error: {
+                code: "CONFLICT",
+                message: "You are already a participant in this tournament.",
+              },
+            }),
+            { status: 409, headers: { "content-type": "application/json" } },
+          ),
+      ),
+    );
+
+    render(<JoinCard {...baseProps} />);
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await screen.findByText(/GPLAYE…AYERP/);
+    fireEvent.click(screen.getByRole("button", { name: /join tournament/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "You are already a participant in this tournament.",
+      ),
+    );
+    expect(mockedSignAndSubmit).not.toHaveBeenCalled();
   });
 
   it("Join button is disabled while pending (no double-click)", async () => {

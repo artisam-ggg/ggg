@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { z } from "zod";
 import { QrTile } from "./QrTile";
 import { WalletButton } from "./WalletButton";
 import { ContractAddress } from "./ContractAddress";
@@ -20,6 +21,12 @@ interface JoinCardProps {
 
 type Phase = "idle" | "signing" | "submitting" | "success" | "error";
 
+const joinResponseSchema = z.object({
+  ok: z.boolean(),
+  data: z.object({ unsignedXdr: z.string(), network: z.string() }).optional(),
+  error: z.union([z.string(), z.object({ message: z.string().optional() })]).optional(),
+});
+
 /**
  * JoinCard — contract-backed QR join flow (FLOW 02).
  *
@@ -37,8 +44,14 @@ export function JoinCard(props: JoinCardProps) {
   const [player, setPlayer] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
 
   const isPending = phase === "signing" || phase === "submitting";
+  const tournamentIdentifier =
+    props.tournamentId.length > 14
+      ? `${props.tournamentId.slice(0, 6)}…${props.tournamentId.slice(-6)}`
+      : props.tournamentId;
 
   async function onJoin() {
     if (!player || isPending) return;
@@ -52,19 +65,21 @@ export function JoinCard(props: JoinCardProps) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ playerAddress: player }),
       });
-      const built = (await buildRes.json()) as {
-        ok: boolean;
-        data?: { unsignedXdr: string; network: string };
-        error?: string;
-      };
-      if (!built.ok) {
-        throw new Error(built.error ?? "Failed to build join transaction");
+      const built = joinResponseSchema.safeParse(await buildRes.json());
+      if (!built.success) throw new Error("Failed to build join transaction");
+      if (!built.data.ok) {
+        throw new Error(
+          typeof built.data.error === "string"
+            ? built.data.error
+            : (built.data.error?.message ?? "Failed to build join transaction"),
+        );
       }
+      if (!built.data.data) throw new Error("Failed to build join transaction");
 
       // 2. Sign (Freighter) + submit.
       setPhase("signing");
       await signAndSubmit(
-        built.data!.unsignedXdr,
+        built.data.data.unsignedXdr,
         "join",
         `/api/tournaments/${props.tournamentId}/submit`,
         props.passphrase,
@@ -84,6 +99,18 @@ export function JoinCard(props: JoinCardProps) {
     setErrorMsg(null);
   }
 
+  async function copyJoinLink() {
+    setLinkCopied(false);
+    setCopyError(null);
+
+    try {
+      await navigator.clipboard.writeText(props.joinUrl);
+      setLinkCopied(true);
+    } catch {
+      setCopyError("Could not copy tournament link");
+    }
+  }
+
   return (
     <div className="kinetic-glass rounded-2xl p-6">
       <p className="label-caps text-on-surface-variant">Scan to join</p>
@@ -93,7 +120,23 @@ export function JoinCard(props: JoinCardProps) {
 
         <ContractAddress value={props.contractId} />
 
-        <code className="data-mono break-all text-xs text-on-surface-variant">{props.joinUrl}</code>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="data-mono text-xs text-on-surface-variant">
+            Tournament: {tournamentIdentifier}
+          </span>
+          <button
+            type="button"
+            onClick={() => void copyJoinLink()}
+            className="label-caps text-sm text-on-surface-variant focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+          >
+            {linkCopied ? "Link Copied" : "Copy Link"}
+          </button>
+          {copyError && (
+            <p role="alert" className="text-sm text-error">
+              {copyError}
+            </p>
+          )}
+        </div>
 
         <div className="flex flex-wrap items-center gap-3">
           <WalletButton expectedPassphrase={props.passphrase} onConnected={setPlayer} />

@@ -8,12 +8,31 @@ import {
 import { getRpc, networkPassphrase } from "./client";
 import { signedXdr as signedXdrSchema } from "./validation";
 import { StellarError } from "./errors";
+import { z } from "zod";
+
+const rpcErrorResultSchema = z.object({ result: z.unknown() });
+const transactionResultSchema = z.object({ switch: z.unknown() });
+const transactionResultSwitchSchema = z.object({ name: z.string() });
+const xdrTransactionResultSchema = z.object({
+  _attributes: z.object({ result: z.object({ _switch: z.object({ name: z.string() }) }) }),
+});
 
 export async function simulateAndAssemble(tx: Transaction): Promise<Transaction> {
   const server = getRpc();
-  const sim = await server.simulateTransaction(tx);
+  let sim: Awaited<ReturnType<typeof server.simulateTransaction>>;
+  try {
+    sim = await server.simulateTransaction(tx);
+  } catch (error) {
+    console.error("Stellar simulation RPC failed", { error });
+    throw new StellarError("SIMULATION_FAILED", "Transaction simulation could not be completed", {
+      retryable: true,
+    });
+  }
   if (rpc.Api.isSimulationError(sim)) {
-    throw new StellarError("SIMULATION_FAILED", sim.error);
+    console.error("Stellar simulation failed", { error: sim.error });
+    throw new StellarError("SIMULATION_FAILED", "Transaction simulation failed", {
+      retryable: false,
+    });
   }
   return rpc.assembleTransaction(tx, sim as never).build();
 }
@@ -106,17 +125,59 @@ export async function submitSignedXdr(
   if (!parsed.success) throw new StellarError("INVALID_INPUT", "Malformed signed XDR");
 
   const server = getRpc();
-  const tx = TransactionBuilder.fromXDR(parsed.data, networkPassphrase());
-  const sent = await server.sendTransaction(tx);
+  let tx: ReturnType<typeof TransactionBuilder.fromXDR>;
+  try {
+    tx = TransactionBuilder.fromXDR(parsed.data, networkPassphrase());
+  } catch {
+    throw new StellarError("INVALID_INPUT", "Malformed signed XDR");
+  }
+
+  let sent: Awaited<ReturnType<typeof server.sendTransaction>>;
+  try {
+    sent = await server.sendTransaction(tx);
+  } catch {
+    throw new StellarError("SUBMIT_FAILED", "Transaction submission could not be completed", {
+      retryable: true,
+    });
+  }
   if (sent.status === "ERROR") {
-    throw new StellarError("SUBMIT_FAILED", `Submit rejected (${intent})`);
+    const rejectionCode = transactionResultCode(sent.errorResult);
+    if (rejectionCode === "txBadAuth") {
+      throw new StellarError(
+        "TX_BAD_AUTH",
+        "Transaction signatures were rejected. Check the signing wallet and network.",
+        { retryable: false },
+      );
+    }
+    if (rejectionCode === "txMalformed") {
+      console.error("Stellar transaction rejected as malformed", { intent, result: "txMalformed" });
+      throw new StellarError(
+        "TX_MALFORMED",
+        "Transaction was rejected as malformed. Refresh the page and sign a newly generated transaction.",
+        { retryable: false },
+      );
+    }
+    console.error("Stellar transaction rejected", { intent, result: rejectionCode ?? "unknown" });
+    throw new StellarError(
+      "SUBMIT_FAILED",
+      `Stellar rejected ${intent} (${rejectionCode ?? "unknown"})`,
+      { retryable: false },
+    );
   }
   const hash = sent.hash;
 
   const attempts = opts.attempts ?? 30;
   const intervalMs = opts.intervalMs ?? 1000;
   for (let i = 0; i < attempts; i++) {
-    const got = await server.getTransaction(hash);
+    let got: Awaited<ReturnType<typeof server.getTransaction>>;
+    try {
+      got = await server.getTransaction(hash);
+    } catch {
+      throw new StellarError("SUBMIT_FAILED", "Transaction confirmation could not be completed", {
+        txHash: hash,
+        retryable: true,
+      });
+    }
     if (got.status === "SUCCESS") {
       const contractId = extractContractId(intent, got);
       return contractId ? { hash, status: "SUCCESS", contractId } : { hash, status: "SUCCESS" };
@@ -124,7 +185,37 @@ export async function submitSignedXdr(
     if (got.status === "FAILED") return { hash, status: "FAILED" };
     if (intervalMs > 0) await new Promise((r) => setTimeout(r, intervalMs));
   }
-  throw new StellarError("TX_TIMEOUT", `Timed out polling ${hash}`);
+  throw new StellarError("TX_TIMEOUT", "Transaction confirmation timed out", {
+    txHash: hash,
+    retryable: true,
+  });
+}
+
+function transactionResultCode(errorResult: unknown): string | undefined {
+  const parsedError = rpcErrorResultSchema.safeParse(errorResult);
+  if (parsedError.success) {
+    try {
+      const result =
+        typeof parsedError.data.result === "function"
+          ? parsedError.data.result.call(errorResult)
+          : parsedError.data.result;
+      const parsedResult = transactionResultSchema.safeParse(result);
+      if (parsedResult.success) {
+        const resultSwitch =
+          typeof parsedResult.data.switch === "function"
+            ? parsedResult.data.switch.call(result)
+            : parsedResult.data.switch;
+        const parsedSwitch = transactionResultSwitchSchema.safeParse(resultSwitch);
+        if (parsedSwitch.success) return parsedSwitch.data.name;
+      }
+    } catch {
+      // Fall back to the SDK's observed v15 XDR representation below.
+    }
+  }
+
+  // Fallback for @stellar/stellar-sdk v15 generated XDR objects.
+  const parsedXdrResult = xdrTransactionResultSchema.safeParse(errorResult);
+  return parsedXdrResult.success ? parsedXdrResult.data._attributes.result._switch.name : undefined;
 }
 
 function extractContractId(

@@ -10,6 +10,15 @@ import { withIdempotency } from "@/server/services/idempotency";
 
 type Ctx = { params: Promise<{ id: string }> };
 
+function methodNotAllowed(): Response {
+  return err("METHOD_NOT_ALLOWED", "Method not allowed", 405);
+}
+export const PUT = methodNotAllowed;
+export const PATCH = methodNotAllowed;
+export const DELETE = methodNotAllowed;
+export const OPTIONS = methodNotAllowed;
+export const GET = methodNotAllowed;
+
 export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   // 1. CSRF: same-origin only.
   try {
@@ -23,7 +32,7 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   // when unauthenticated and throws AuthError(403) when wrong role.
   let user: { id: string; username: string; role: string };
   try {
-    user = await requireUser();
+    user = await requireUser(undefined, false);
   } catch (e) {
     if (e instanceof AuthError) {
       const code = e.status === 403 ? "FORBIDDEN" : "UNAUTHORIZED";
@@ -65,8 +74,22 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
     return ok(data);
   } catch (e) {
     if (e instanceof StellarError) {
-      const stellarStatus = e.code === "TX_TIMEOUT" ? 504 : e.code === "SUBMIT_FAILED" ? 502 : 422; // SIMULATION_FAILED | INVALID_INPUT | others
-      return err("STELLAR_ERROR", e.message, stellarStatus);
+      const stellarStatus =
+        e.code === "TX_TIMEOUT"
+          ? 504
+          : e.code === "SUBMIT_FAILED"
+            ? 503
+            : e.code === "INVALID_INPUT" ||
+                e.code === "NETWORK_MISMATCH" ||
+                e.code === "TX_MALFORMED" ||
+                e.code === "TX_BAD_AUTH"
+              ? 400
+              : 422;
+      const retryable = e.retryable ?? (e.code === "TX_TIMEOUT" || e.code === "SUBMIT_FAILED");
+      return err(e.code, e.message, stellarStatus, {
+        ...(e.txHash ? { txHash: e.txHash } : {}),
+        retryable,
+      });
     }
     if (e instanceof Error && "status" in e) {
       const status = (e as Error & { status: number }).status;

@@ -107,7 +107,7 @@ import { requireUser, AuthError } from "@/lib/auth-guards";
 import { assertSameOrigin } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
 import { prisma } from "@/lib/db";
-import { POST } from "./route";
+import { DELETE, GET, OPTIONS, PATCH, POST, PUT } from "./route";
 
 const requireUserMock = requireUser as ReturnType<typeof vi.fn>;
 const assertSameOriginMock = assertSameOrigin as ReturnType<typeof vi.fn>;
@@ -136,6 +136,8 @@ function makeReq(idemKey?: string, body: object = { signedXdr: VALID_XDR, intent
 }
 
 const ctx = { params: Promise.resolve({ id: "t_1" }) };
+
+const unsupportedMethods = [GET, PUT, PATCH, DELETE, OPTIONS] as const;
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -189,7 +191,7 @@ describe("POST /api/tournaments/[id]/submit", () => {
     expect(updateData.deployTxHash).toBe("TX1");
   });
 
-  it("sets ACTIVE only after initialize succeeds", async () => {
+  it("sets ACTIVE only after confirmed initialize state matches", async () => {
     findUniqueMock.mockResolvedValueOnce({ ...dbTournament, contractId: "CDEPLOYED" });
 
     const res = await POST(
@@ -212,6 +214,63 @@ describe("POST /api/tournaments/[id]/submit", () => {
     expect(validateInitializeMock).toHaveBeenCalledWith(
       VALID_XDR,
       expect.objectContaining({ contractId: "CDEPLOYED" }),
+    );
+    expect(readSettlementDeadlineMock).toHaveBeenCalledWith(
+      expect.objectContaining({ contractId: "CDEPLOYED" }),
+    );
+  });
+
+  it("does not activate when the confirmed deadline differs", async () => {
+    findUniqueMock.mockResolvedValueOnce({ ...dbTournament, contractId: "CDEPLOYED" });
+    readSettlementDeadlineMock
+      .mockReset()
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(1n);
+
+    const res = await POST(
+      makeReq("k_initialize_mismatch", {
+        signedXdr: VALID_XDR,
+        intent: "initialize",
+      }) as Parameters<typeof POST>[0],
+      ctx,
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(502);
+    expect(json.ok).toBe(false);
+    expect(updateMock).toHaveBeenCalledWith({
+      where: { id: "t_1" },
+      data: { initializeTxHash: "TX1" },
+    });
+  });
+
+  it("reports deploy recovery when initialize simulation fails after deployment", async () => {
+    const { StellarError } = await import("@/lib/stellar");
+    buildInitializeMock.mockRejectedValueOnce(
+      new StellarError("SIMULATION_FAILED", "Transaction simulation failed"),
+    );
+
+    const res = await POST(makeReq("k_deploy_recovery") as Parameters<typeof POST>[0], ctx);
+    const json = await res.json();
+
+    expect(res.status).toBe(422);
+    expect(json.error.message).toBe(
+      "Contract deployed successfully, but initialization needs to be retried.",
+    );
+    expect(updateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ contractId: "CDEPLOYED" }) }),
+    );
+  });
+
+  it("reports deploy recovery when initialize preparation has an RPC error", async () => {
+    buildInitializeMock.mockRejectedValueOnce(new Error("RPC unavailable"));
+
+    const res = await POST(makeReq("k_deploy_rpc_error") as Parameters<typeof POST>[0], ctx);
+    const json = await res.json();
+
+    expect(res.status).toBe(422);
+    expect(json.error.message).toBe(
+      "Contract deployed successfully, but initialization needs to be retried.",
     );
   });
 
@@ -307,8 +366,9 @@ describe("POST /api/tournaments/[id]/submit", () => {
     const res = await POST(makeReq("k3") as Parameters<typeof POST>[0], ctx);
     const json = await res.json();
 
-    expect(res.status).toBe(502);
+    expect(res.status).toBe(422);
     expect(json.ok).toBe(false);
+    expect(json.error).toMatchObject({ code: "TX_FAILED", txHash: "TX_FAIL" });
     expect(updateMock).not.toHaveBeenCalled();
   });
 
@@ -364,16 +424,14 @@ describe("POST /api/tournaments/[id]/submit", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Auth: NEXT_REDIRECT propagates (unauthenticated)
+  // Auth: expired session returns the standard envelope
   // ---------------------------------------------------------------------------
 
-  it("re-throws NEXT_REDIRECT when unauthenticated", async () => {
-    const redirectError = Object.assign(new Error("NEXT_REDIRECT"), { digest: "NEXT_REDIRECT" });
-    requireUserMock.mockRejectedValueOnce(redirectError);
-
-    await expect(POST(makeReq("k6") as Parameters<typeof POST>[0], ctx)).rejects.toThrow(
-      "NEXT_REDIRECT",
-    );
+  it("returns 401 when the session has ended", async () => {
+    requireUserMock.mockRejectedValueOnce(new AuthError("Authentication required", 401));
+    const res = await POST(makeReq("k6") as Parameters<typeof POST>[0], ctx);
+    expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toMatchObject({ ok: false, error: { code: "UNAUTHORIZED" } });
     expect(submitMock).not.toHaveBeenCalled();
   });
 
@@ -487,7 +545,7 @@ describe("POST /api/tournaments/[id]/submit", () => {
   // Fix 4: StellarError status mapping by code
   // ---------------------------------------------------------------------------
 
-  it("maps StellarError TX_TIMEOUT to 504", async () => {
+  it("returns retryable timeout details", async () => {
     const { StellarError } = await import("@/lib/stellar");
     submitMock.mockRejectedValueOnce(new StellarError("TX_TIMEOUT", "timed out"));
 
@@ -496,19 +554,53 @@ describe("POST /api/tournaments/[id]/submit", () => {
 
     expect(res.status).toBe(504);
     expect(json.ok).toBe(false);
-    expect(json.error.code).toBe("STELLAR_ERROR");
+    expect(json.error).toMatchObject({ code: "TX_TIMEOUT", retryable: true });
   });
 
-  it("maps StellarError SUBMIT_FAILED to 502", async () => {
+  it("returns retryable RPC submission details instead of 502", async () => {
     const { StellarError } = await import("@/lib/stellar");
     submitMock.mockRejectedValueOnce(new StellarError("SUBMIT_FAILED", "submit failed"));
 
     const res = await POST(makeReq("k14") as Parameters<typeof POST>[0], ctx);
     const json = await res.json();
 
-    expect(res.status).toBe(502);
+    expect(res.status).toBe(503);
     expect(json.ok).toBe(false);
-    expect(json.error.code).toBe("STELLAR_ERROR");
+    expect(json.error).toMatchObject({ code: "SUBMIT_FAILED", retryable: true });
+  });
+
+  it("returns a clear 400 for a malformed Stellar envelope", async () => {
+    const { StellarError } = await import("@/lib/stellar");
+    submitMock.mockRejectedValueOnce(
+      new StellarError("TX_MALFORMED", "Transaction was rejected as malformed.", {
+        retryable: false,
+      }),
+    );
+
+    const res = await POST(makeReq("k14-malformed") as Parameters<typeof POST>[0], ctx);
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error).toMatchObject({ code: "TX_MALFORMED", retryable: false });
+  });
+
+  it("returns a clear 400 for a rejected transaction signature", async () => {
+    const { StellarError } = await import("@/lib/stellar");
+    submitMock.mockRejectedValueOnce(
+      new StellarError(
+        "TX_BAD_AUTH",
+        "Transaction signature was rejected. Reconnect Freighter and sign again.",
+        {
+          retryable: false,
+        },
+      ),
+    );
+
+    const res = await POST(makeReq("k14-bad-auth") as Parameters<typeof POST>[0], ctx);
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error).toMatchObject({ code: "TX_BAD_AUTH", retryable: false });
   });
 
   it("maps StellarError SIMULATION_FAILED to 422", async () => {
@@ -520,6 +612,21 @@ describe("POST /api/tournaments/[id]/submit", () => {
 
     expect(res.status).toBe(422);
     expect(json.ok).toBe(false);
-    expect(json.error.code).toBe("STELLAR_ERROR");
+    expect(json.error).toMatchObject({ code: "SIMULATION_FAILED", retryable: false });
   });
+});
+
+describe("unsupported /api/tournaments/[id]/submit methods", () => {
+  it.each(unsupportedMethods.map((handler, index) => [index, handler] as const))(
+    "returns the standard method-not-allowed envelope for handler %i",
+    async (_index, handler) => {
+      const res = handler();
+
+      expect(res.status).toBe(405);
+      await expect(res.json()).resolves.toMatchObject({
+        ok: false,
+        error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" },
+      });
+    },
+  );
 });
