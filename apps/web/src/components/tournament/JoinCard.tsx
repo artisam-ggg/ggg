@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { z } from "zod";
 import { QrTile } from "./QrTile";
 import { WalletButton } from "./WalletButton";
 import { ContractAddress } from "./ContractAddress";
@@ -19,6 +20,12 @@ interface JoinCardProps {
 }
 
 type Phase = "idle" | "signing" | "submitting" | "success" | "error";
+
+const joinResponseSchema = z.object({
+  ok: z.boolean(),
+  data: z.object({ unsignedXdr: z.string(), network: z.string() }).optional(),
+  error: z.union([z.string(), z.object({ message: z.string().optional() })]).optional(),
+});
 
 /**
  * JoinCard — contract-backed QR join flow (FLOW 02).
@@ -52,19 +59,21 @@ export function JoinCard(props: JoinCardProps) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ playerAddress: player }),
       });
-      const built = (await buildRes.json()) as {
-        ok: boolean;
-        data?: { unsignedXdr: string; network: string };
-        error?: string;
-      };
-      if (!built.ok) {
-        throw new Error(built.error ?? "Failed to build join transaction");
+      const built = joinResponseSchema.safeParse(await buildRes.json());
+      if (!built.success) throw new Error("Failed to build join transaction");
+      if (!built.data.ok) {
+        throw new Error(
+          typeof built.data.error === "string"
+            ? built.data.error
+            : (built.data.error?.message ?? "Failed to build join transaction"),
+        );
       }
+      if (!built.data.data) throw new Error("Failed to build join transaction");
 
       // 2. Sign (Freighter) + submit.
       setPhase("signing");
       await signAndSubmit(
-        built.data!.unsignedXdr,
+        built.data.data.unsignedXdr,
         "join",
         `/api/tournaments/${props.tournamentId}/submit`,
         props.passphrase,
