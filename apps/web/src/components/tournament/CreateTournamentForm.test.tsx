@@ -88,7 +88,7 @@ describe("CreateTournamentForm", () => {
     container.innerHTML = renderToString(<CreateTournamentForm expectedPassphrase="P" />);
     document.body.appendChild(container);
     localStorage.setItem("ggg:tournament-create-draft", JSON.stringify(draft));
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+    Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
     let root: ReturnType<typeof hydrateRoot> | undefined;
     await act(async () => {
@@ -102,7 +102,7 @@ describe("CreateTournamentForm", () => {
     } finally {
       await act(async () => root?.unmount());
       container.remove();
-      globalThis.IS_REACT_ACT_ENVIRONMENT = false;
+      Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", false);
     }
   });
 
