@@ -146,3 +146,7 @@ Participant registration times now render in UTC and expose the exact UTC instan
 ## Issue #241 — Prevent stale authenticated tournament forms after logout
 
 Authenticated tournament creation is dynamically rendered and sent with no-store cache control. Logout replaces the current history entry, API creation checks the current server session, and the form safely reports authentication or non-JSON failures.
+
+## Issue #242 — Support wallet switching and disconnection
+
+Wallet controls now let a user re-check Freighter after changing accounts and explicitly disconnect from the current GGG flow. Both actions update the shared parent wallet state, so join, create, refund, and referee settlement actions cannot continue using a stale address.
