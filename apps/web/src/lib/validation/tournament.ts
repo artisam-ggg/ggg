@@ -137,18 +137,6 @@ export const listQuerySchema = z.object({
 });
 export type ListQueryInput = z.infer<typeof listQuerySchema>;
 
-// --- uploadSchema ---
-
-export const uploadSchema = z.object({
-  contentType: z.enum(["image/png", "image/jpeg", "image/webp"]),
-  contentLength: z.coerce
-    .number()
-    .int()
-    .min(1)
-    .max(5 * 1024 * 1024), // 5 MB cap
-});
-export type UploadInput = z.infer<typeof uploadSchema>;
-
 export const uploadFileSchema = z
   .custom<Blob>(
     (value): value is Blob =>

@@ -90,6 +90,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   const [coverImageKey, setCoverImageKey] = useState<string | undefined>();
   const [coverUploadStatus, setCoverUploadStatus] = useState<CoverUploadStatus>("idle");
   const coverUploadRequest = useRef(0);
+  const coverImageInput = useRef<HTMLInputElement>(null);
 
   // UI state
   const [phase, setPhase] = useState<Phase>("idle");
@@ -136,6 +137,14 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         setError(err instanceof Error ? err.message : "Upload failed");
       }
     }
+  }
+
+  function removeCoverImage() {
+    ++coverUploadRequest.current;
+    setCoverImageKey(undefined);
+    setCoverUploadStatus("idle");
+    setError(null);
+    if (coverImageInput.current) coverImageInput.current.value = "";
   }
 
   async function handleDeploy() {
@@ -431,6 +440,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         <input
           id="coverImage"
           type="file"
+          ref={coverImageInput}
           accept="image/png,image/jpeg,image/webp"
           className={fieldClass}
           onChange={(e) => {
@@ -444,6 +454,15 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
           <p className="data-mono mt-1 text-xs text-on-surface-variant">
             Uploaded: {coverImageKey}
           </p>
+        )}
+        {coverUploadStatus !== "idle" && (
+          <button
+            type="button"
+            onClick={removeCoverImage}
+            className="label-caps mt-2 text-sm text-on-surface-variant underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+          >
+            Remove cover image
+          </button>
         )}
       </div>
 

@@ -7,7 +7,7 @@ vi.mock("@/lib/s3", () => ({
 }));
 
 import { s3 } from "@/lib/s3";
-import { uploadCoverImage, MAX_COVER_IMAGE_BYTES } from "./uploads";
+import { uploadCoverImage, MAX_COVER_IMAGE_BYTES, MAX_COVER_IMAGE_PIXELS } from "./uploads";
 
 const sendMock = s3.send as ReturnType<typeof vi.fn>;
 
@@ -32,6 +32,9 @@ describe("uploadCoverImage", () => {
       new RegExp(`^covers/[0-9a-f-]{36}\\.${format === "jpeg" ? "jpg" : format}$`),
     );
     expect(sendMock).toHaveBeenCalledOnce();
+    const command = sendMock.mock.calls[0]?.[0];
+    expect(command.input.Body).toBeInstanceOf(Buffer);
+    expect(command.input.ContentLength).toBe((command.input.Body as Buffer).length);
   });
 
   it("rejects a PDF before it reaches storage", async () => {
@@ -78,6 +81,21 @@ describe("uploadCoverImage", () => {
     await expect(uploadCoverImage(new Blob([bytes], { type: "image/png" }))).rejects.toThrow(
       "no larger than 5 MB",
     );
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects images above the decoded-pixel limit before storage", async () => {
+    const bytes = await sharp({
+      create: { width: 5000, height: 4000, channels: 3, background: "black" },
+    })
+      .png()
+      .toBuffer();
+    expect(bytes.length).toBeLessThan(MAX_COVER_IMAGE_BYTES);
+    expect(5000 * 4000).toBeGreaterThan(MAX_COVER_IMAGE_PIXELS);
+
+    await expect(
+      uploadCoverImage(new Blob([new Uint8Array(bytes)], { type: "image/png" })),
+    ).rejects.toThrow("Invalid image file");
     expect(sendMock).not.toHaveBeenCalled();
   });
 });
