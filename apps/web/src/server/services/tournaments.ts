@@ -11,6 +11,7 @@ import {
   explorerContractUrl,
   explorerTxUrl,
   resolveSacAddress,
+  StellarError,
   submitSignedXdr,
   StellarError,
   validateInitializeXdr,
@@ -236,7 +237,18 @@ export async function submitTournamentTx(
     if (!updated.contractId) {
       throw Object.assign(new Error("Deployment succeeded without a contract ID"), { status: 502 });
     }
-    const initializeXdr = await buildInitXdrFor(updated, updated.contractId);
+    let initializeXdr: string;
+    try {
+      initializeXdr = await buildInitXdrFor(updated, updated.contractId);
+    } catch (error) {
+      if (error instanceof StellarError && error.code === "SIMULATION_FAILED") {
+        throw new StellarError(
+          "SIMULATION_FAILED",
+          "Contract deployed successfully, but initialization needs to be retried.",
+        );
+      }
+      throw error;
+    }
     return {
       txHash: result.hash,
       contractId: updated.contractId,

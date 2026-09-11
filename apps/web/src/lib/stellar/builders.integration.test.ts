@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Asset, Keypair, TransactionBuilder } from "@stellar/stellar-sdk";
 
+const PASSPHRASE = "Test SDF Network ; September 2015";
 const enabled = process.env.RUN_STELLAR_IT === "1";
 const d = enabled ? describe : describe.skip;
 
@@ -20,12 +21,13 @@ d("Testnet integration", () => {
     const out = await buildDeployInitializeTx({
       organizerAddress: organizer.publicKey(),
       refereeAddress: referee.publicKey(),
-      tokenAddr: Asset.native().contractId("Test SDF Network ; September 2015"),
+      // Avoid resolveSacAddress here: the test must not depend on NATIVE_SAC_ADDRESS.
+      tokenAddr: Asset.native().contractId(PASSPHRASE),
       entryFee: 10_000_000n,
       distributionBps: [6000, 3000, 1000],
       settlementDeadline: deadline,
     });
-    const deploy = TransactionBuilder.fromXDR(out.xdr, "Test SDF Network ; September 2015");
+    const deploy = TransactionBuilder.fromXDR(out.xdr, PASSPHRASE);
     deploy.sign(organizer);
     const deployed = await submitSignedXdr(deploy.toEnvelope().toXDR("base64"), "deploy");
     expect(deployed.status).toBe("SUCCESS");
@@ -35,22 +37,21 @@ d("Testnet integration", () => {
       contractId: deployed.contractId!,
       organizerAddress: organizer.publicKey(),
       refereeAddress: referee.publicKey(),
-      tokenAddr: Asset.native().contractId("Test SDF Network ; September 2015"),
+      tokenAddr: Asset.native().contractId(PASSPHRASE),
       entryFee: 10_000_000n,
       distributionBps: [6000, 3000, 1000],
       settlementDeadline: deadline,
     });
     const initializeTx = TransactionBuilder.fromXDR(
       initialize.xdr,
-      "Test SDF Network ; September 2015",
+      PASSPHRASE,
     );
+    expect(initializeTx.toEnvelope().v1().tx().ext().value()).toBeDefined();
+    const operation = initializeTx.operations[0] as { auth?: unknown[] } | undefined;
+    expect(operation?.auth).toBeDefined();
+    expect(operation?.auth).not.toHaveLength(0);
     initializeTx.sign(organizer);
     const signedInitializeXdr = initializeTx.toEnvelope().toXDR("base64");
-    expect(
-      TransactionBuilder.fromXDR(signedInitializeXdr, "Test SDF Network ; September 2015")
-        .toEnvelope()
-        .toXDR("base64"),
-    ).toBe(signedInitializeXdr);
     await expect(submitSignedXdr(signedInitializeXdr, "initialize")).resolves.toMatchObject({
       status: "SUCCESS",
     });

@@ -36,6 +36,14 @@ vi.mock("@/lib/stellar", () => ({
   explorerContractUrl: vi.fn(),
   explorerTxUrl: vi.fn(),
   resolveSacAddress: vi.fn(),
+  StellarError: class StellarError extends Error {
+    constructor(
+      readonly code: string,
+      message: string,
+    ) {
+      super(message);
+    }
+  },
   submitSignedXdr: submitMock,
   validateInitializeXdr: validateInitializeMock,
   readSettlementDeadline: readSettlementDeadlineMock,
