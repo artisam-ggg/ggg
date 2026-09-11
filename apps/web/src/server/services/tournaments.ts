@@ -13,7 +13,6 @@ import {
   resolveSacAddress,
   StellarError,
   submitSignedXdr,
-  StellarError,
   validateInitializeXdr,
 } from "@/lib/stellar";
 
