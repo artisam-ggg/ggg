@@ -85,6 +85,24 @@ describe("CreateTournamentForm", () => {
     expect(feedback).toHaveAttribute("role", "alert");
   });
 
+  it("shows referee and other validation errors together", async () => {
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/tournament name/i), { target: { value: "Cup" } });
+    fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
+    fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText(/settlement deadline/i), {
+      target: { value: new Date(Date.now() + 91 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16) },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: /deploy soroban contract/i }));
+
+    expect(await screen.findByText(/invalid stellar public key/i)).toBeInTheDocument();
+    expect(await screen.findByText(/within 90 days/i)).toBeInTheDocument();
+  });
+
   it("clears split-sum error when percentages sum to 100 again", () => {
     render(<CreateTournamentForm expectedPassphrase="P" />);
     // Break the sum

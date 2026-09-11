@@ -162,11 +162,11 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         const refereeIssue = parsed.error.issues.find(
           (issue) => issue.path[0] === "refereeAddress",
         );
+        const otherIssue = parsed.error.issues.find((issue) => issue.path[0] !== "refereeAddress");
         if (refereeIssue) {
           setRefereeError(refereeIssue.message);
-        } else {
-          setError(parsed.error.issues[0]?.message ?? "Invalid form input");
         }
+        setError(otherIssue?.message ?? null);
         return;
       }
 
