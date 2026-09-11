@@ -19,9 +19,6 @@ const STROOP_FACTOR = 10_000_000n;
 const ENTRY_FEE_REGEX = /^\d+(\.\d{1,7})?$/;
 const TESTNET_PASSPHRASE = "Test SDF Network ; September 2015";
 
-const uploadResponseSchema = apiResponseSchema(
-  z.object({ uploadUrl: z.string().url(), key: z.string().min(1) }),
-);
 const createTournamentResponseSchema = apiResponseSchema(
   z.object({
     tournamentId: z.string().min(1),
