@@ -1,6 +1,8 @@
 import { Client } from "@/contract-client";
+import { TransactionBuilder, type Transaction } from "@stellar/stellar-sdk";
 import { env } from "@/lib/env";
 import { networkName, networkPassphrase } from "./client";
+import { simulateAndAssemble } from "./pipeline";
 import {
   stellarContractId,
   stellarPublicKey,
@@ -104,7 +106,12 @@ export async function buildInitializeTx(params: {
     distribution_bps: params.distributionBps,
     settlement_deadline: params.settlementDeadline,
   });
-  return { xdr: assembled.toXDR(), network: networkName() };
+  // Re-simulate the generated invocation after deployment so its Soroban data
+  // and resource fee are assembled for the newly-created contract instance.
+  const prepared = await simulateAndAssemble(
+    TransactionBuilder.fromXDR(assembled.toXDR(), networkPassphrase()) as Transaction,
+  );
+  return { xdr: prepared.toXDR(), network: networkName() };
 }
 
 export async function buildFinalizeTx(params: {
