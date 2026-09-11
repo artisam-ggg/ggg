@@ -55,7 +55,7 @@ describe("WalletButton", () => {
     );
   });
 
-  it("updates the connected address when switching wallets", async () => {
+  it("updates the connected address when re-checking wallets", async () => {
     const onConnected = vi.fn();
     mockedEnsureWallet
       .mockResolvedValueOnce("GABCDEFGHIJABCDEFGHIJ")
@@ -63,14 +63,14 @@ describe("WalletButton", () => {
     render(<WalletButton onConnected={onConnected} expectedPassphrase="P" />);
 
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
-    await screen.findByRole("button", { name: /switch wallet/i });
-    fireEvent.click(screen.getByRole("button", { name: /switch wallet/i }));
+    await screen.findByRole("button", { name: /re-check wallet/i });
+    fireEvent.click(screen.getByRole("button", { name: /re-check wallet/i }));
 
     await waitFor(() => expect(onConnected).toHaveBeenLastCalledWith("GNEWADDRESSNEWADDRESS"));
     expect(screen.getByLabelText("Wallet GNEWADDRESSNEWADDRESS")).toBeInTheDocument();
   });
 
-  it("keeps the current wallet and shows an error when switching fails", async () => {
+  it("keeps the current wallet and shows an error when re-checking fails", async () => {
     const onConnected = vi.fn();
     mockedEnsureWallet
       .mockResolvedValueOnce("GABCDEFGHIJABCDEFGHIJ")
@@ -78,11 +78,23 @@ describe("WalletButton", () => {
     render(<WalletButton onConnected={onConnected} expectedPassphrase="P" />);
 
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
-    await screen.findByRole("button", { name: /switch wallet/i });
-    fireEvent.click(screen.getByRole("button", { name: /switch wallet/i }));
+    await screen.findByRole("button", { name: /re-check wallet/i });
+    fireEvent.click(screen.getByRole("button", { name: /re-check wallet/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Freighter access denied");
     expect(screen.getByLabelText("Wallet GABCDEFGHIJABCDEFGHIJ")).toBeInTheDocument();
+  });
+
+  it("acknowledges a re-check when the wallet is unchanged", async () => {
+    const onConnected = vi.fn();
+    render(<WalletButton onConnected={onConnected} expectedPassphrase="P" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await screen.findByRole("button", { name: /re-check wallet/i });
+    fireEvent.click(screen.getByRole("button", { name: /re-check wallet/i }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Wallet re-checked");
+    expect(onConnected).toHaveBeenCalledTimes(1);
   });
 
   it("clears the connected address when disconnecting", async () => {
@@ -95,6 +107,64 @@ describe("WalletButton", () => {
 
     expect(onConnected).toHaveBeenLastCalledWith(null);
     expect(screen.getByRole("button", { name: /connect wallet/i })).toBeInTheDocument();
+  });
+
+  it("ignores a pending re-check after disconnecting", async () => {
+    const onConnected = vi.fn();
+    let resolveRecheck: (address: string) => void;
+    const recheck = new Promise<string>((resolve) => {
+      resolveRecheck = resolve;
+    });
+    mockedEnsureWallet.mockResolvedValueOnce("GABCDEFGHIJABCDEFGHIJ").mockReturnValueOnce(recheck);
+    render(<WalletButton onConnected={onConnected} expectedPassphrase="P" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await screen.findByRole("button", { name: /re-check wallet/i });
+    fireEvent.click(screen.getByRole("button", { name: /re-check wallet/i }));
+    expect(screen.getByRole("button", { name: /re-checking/i })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /disconnect wallet/i }));
+    resolveRecheck!("GNEWADDRESSNEWADDRESS");
+
+    await waitFor(() => expect(onConnected).toHaveBeenLastCalledWith(null));
+    expect(screen.getByRole("button", { name: /connect wallet/i })).toBeInTheDocument();
+  });
+
+  it("serializes rapid re-check attempts", async () => {
+    const onConnected = vi.fn();
+    let resolveRecheck: (address: string) => void;
+    const recheck = new Promise<string>((resolve) => {
+      resolveRecheck = resolve;
+    });
+    mockedEnsureWallet.mockResolvedValueOnce("GABCDEFGHIJABCDEFGHIJ").mockReturnValueOnce(recheck);
+    render(<WalletButton onConnected={onConnected} expectedPassphrase="P" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await screen.findByRole("button", { name: /re-check wallet/i });
+    const recheckButton = screen.getByRole("button", { name: /re-check wallet/i });
+    fireEvent.click(recheckButton);
+    fireEvent.click(recheckButton);
+    expect(mockedEnsureWallet).toHaveBeenCalledTimes(2);
+    resolveRecheck!("GNEWADDRESSNEWADDRESS");
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Wallet GNEWADDRESSNEWADDRESS")).toBeInTheDocument(),
+    );
+  });
+
+  it("clears a re-check error when disconnecting", async () => {
+    const onConnected = vi.fn();
+    mockedEnsureWallet
+      .mockResolvedValueOnce("GABCDEFGHIJABCDEFGHIJ")
+      .mockRejectedValueOnce(new Error("Freighter access denied"));
+    render(<WalletButton onConnected={onConnected} expectedPassphrase="P" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await screen.findByRole("button", { name: /re-check wallet/i });
+    fireEvent.click(screen.getByRole("button", { name: /re-check wallet/i }));
+    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: /disconnect wallet/i }));
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("shows an error message when ensureWallet throws", async () => {
@@ -115,7 +185,7 @@ describe("WalletButton", () => {
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: /connect wallet/i })).not.toBeInTheDocument(),
     );
-    expect(screen.getByRole("button", { name: /switch wallet/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /re-check wallet/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /disconnect wallet/i })).toBeInTheDocument();
   });
 });

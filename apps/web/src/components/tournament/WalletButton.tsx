@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Wallet } from "lucide-react";
 import { ensureWallet } from "@/lib/wallet";
 
@@ -12,7 +12,9 @@ interface WalletButtonProps {
 export function WalletButton({ expectedPassphrase, onConnected }: WalletButtonProps) {
   const [address, setAddress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
+  const attemptId = useRef(0);
 
   if (address) {
     return (
@@ -26,15 +28,20 @@ export function WalletButton({ expectedPassphrase, onConnected }: WalletButtonPr
         </span>
         <button
           type="button"
+          disabled={connecting}
           onClick={handleConnect}
-          className="label-caps text-sm text-acid-yellow focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+          className="label-caps text-sm text-acid-yellow focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong disabled:opacity-50"
         >
-          Switch Wallet
+          {connecting ? "Re-checking…" : "Re-check Wallet"}
         </button>
         <button
           type="button"
           onClick={() => {
+            attemptId.current += 1;
+            setConnecting(false);
             setAddress(null);
+            setError(null);
+            setNotice(null);
             onConnected(null);
           }}
           className="label-caps text-sm text-on-surface-variant focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
@@ -46,21 +53,34 @@ export function WalletButton({ expectedPassphrase, onConnected }: WalletButtonPr
             {error}
           </p>
         )}
+        {notice && (
+          <p role="status" className="text-sm text-on-surface-variant">
+            {notice}
+          </p>
+        )}
       </div>
     );
   }
 
   async function handleConnect() {
+    const currentAttempt = ++attemptId.current;
     setError(null);
+    setNotice(null);
     setConnecting(true);
     try {
       const a = await ensureWallet(expectedPassphrase);
-      setAddress(a);
-      onConnected(a);
+      if (currentAttempt !== attemptId.current) return;
+      if (a === address) {
+        setNotice("Wallet re-checked");
+      } else {
+        setAddress(a);
+        onConnected(a);
+      }
     } catch (e: unknown) {
+      if (currentAttempt !== attemptId.current) return;
       setError(e instanceof Error ? e.message : "Failed to connect wallet");
     } finally {
-      setConnecting(false);
+      if (currentAttempt === attemptId.current) setConnecting(false);
     }
   }
 
