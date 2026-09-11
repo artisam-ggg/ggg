@@ -10,6 +10,15 @@ import { withIdempotency } from "@/server/services/idempotency";
 
 type Ctx = { params: Promise<{ id: string }> };
 
+function methodNotAllowed(): Response {
+  return err("METHOD_NOT_ALLOWED", "Method not allowed", 405);
+}
+export const PUT = methodNotAllowed;
+export const PATCH = methodNotAllowed;
+export const DELETE = methodNotAllowed;
+export const OPTIONS = methodNotAllowed;
+export const GET = methodNotAllowed;
+
 export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   // 1. CSRF: same-origin only.
   try {
@@ -23,7 +32,7 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   // when unauthenticated and throws AuthError(403) when wrong role.
   let user: { id: string; username: string; role: string };
   try {
-    user = await requireUser();
+    user = await requireUser(undefined, false);
   } catch (e) {
     if (e instanceof AuthError) {
       const code = e.status === 403 ? "FORBIDDEN" : "UNAUTHORIZED";

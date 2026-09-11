@@ -100,10 +100,13 @@ describe("signAndSubmit", () => {
       vi.fn(
         async () =>
           // HTTP 200 with an application-level ok:false envelope (the API's own error format)
-          new Response(JSON.stringify({ ok: false, error: "boom" }), {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          }),
+          new Response(
+            JSON.stringify({ ok: false, error: { code: "SUBMIT_FAILED", message: "boom" } }),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          ),
       ),
     );
     await expect(signAndSubmit("U", "deploy", "/x", PASS)).rejects.toThrow("boom");
@@ -130,14 +133,26 @@ describe("signAndSubmit", () => {
       vi.fn(async () => ({
         ok: false,
         status: 502,
-        json: async () => {
-          throw new SyntaxError("Unexpected token <");
-        },
+        text: async () => "<html>bad gateway</html>",
       })),
     );
-    await expect(signAndSubmit("U", "deploy", "/x", PASS)).rejects.toThrow("Submit failed: 502");
+    await expect(signAndSubmit("U", "deploy", "/x", PASS)).rejects.toThrow(
+      "Transaction submission failed. Please try again.",
+    );
     await expect(signAndSubmit("U", "deploy", "/x", PASS)).rejects.not.toThrow(
       expect.any(SyntaxError),
+    );
+  });
+
+  it.each([401, 403, 405])("handles a non-JSON %i submit response safely", async (status) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("METHOD NOT ALLOWED", { status })),
+    );
+    await expect(signAndSubmit("U", "deploy", "/x", PASS)).rejects.toThrow(
+      status === 401 || status === 403
+        ? "Your session has ended. Please log in again."
+        : "Transaction submission failed. Please try again.",
     );
   });
 

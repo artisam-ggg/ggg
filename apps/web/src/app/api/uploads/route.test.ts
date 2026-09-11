@@ -134,13 +134,14 @@ describe("POST /api/uploads", () => {
     expect(json.ok).toBe(false);
   });
 
-  it("re-throws NEXT_REDIRECT when unauthenticated", async () => {
-    const redirectError = Object.assign(new Error("NEXT_REDIRECT"), { digest: "NEXT_REDIRECT" });
-    requireUserMock.mockRejectedValue(redirectError);
+  it("returns the standard 401 envelope when the session has ended", async () => {
+    requireUserMock.mockRejectedValue(new AuthError("Authentication required", 401));
 
-    await expect(POST(makeReq({ contentType: "image/png", contentLength: 1000 }))).rejects.toThrow(
-      "NEXT_REDIRECT",
-    );
+    const res = await POST(makeReq({ contentType: "image/png", contentLength: 1000 }));
+
+    expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toMatchObject({ ok: false, error: { code: "UNAUTHORIZED" } });
+    expect(requireUserMock).toHaveBeenCalledWith(undefined, false);
     expect(createPresignedUploadMock).not.toHaveBeenCalled();
   });
 
