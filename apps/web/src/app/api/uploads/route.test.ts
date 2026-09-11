@@ -3,12 +3,23 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/lib/auth-guards", () => ({
   requireUser: vi.fn(async () => ({ id: "user_1", username: "alice", role: "ORGANIZER" })),
   AuthError: class AuthError extends Error {
-    readonly status = 403;
+    constructor(
+      message: string,
+      readonly status: number,
+    ) {
+      super(message);
+      this.name = "AuthError";
+    }
   },
 }));
 vi.mock("@/lib/csrf", () => ({
   assertSameOrigin: vi.fn(),
-  CsrfError: class CsrfError extends Error {},
+  CsrfError: class CsrfError extends Error {
+    constructor() {
+      super("Cross-origin request rejected");
+      this.name = "CsrfError";
+    }
+  },
 }));
 vi.mock("@/lib/rate-limit", () => ({ rateLimit: vi.fn(async () => ({ ok: true })) }));
 vi.mock("@/server/services/uploads", () => ({
@@ -19,11 +30,15 @@ vi.mock("@/server/services/uploads", () => ({
   uploadCoverImage: vi.fn(async () => ({ key: "covers/abc.png" })),
 }));
 
+import { AuthError, requireUser } from "@/lib/auth-guards";
+import { assertSameOrigin, CsrfError } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
 import { uploadCoverImage } from "@/server/services/uploads";
 import { POST } from "./route";
 
 const rateLimitMock = rateLimit as ReturnType<typeof vi.fn>;
+const requireUserMock = requireUser as ReturnType<typeof vi.fn>;
+const assertSameOriginMock = assertSameOrigin as ReturnType<typeof vi.fn>;
 const uploadCoverImageMock = uploadCoverImage as ReturnType<typeof vi.fn>;
 
 function uploadRequest(file?: File) {
@@ -39,6 +54,8 @@ function uploadRequest(file?: File) {
 describe("POST /api/uploads", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    assertSameOriginMock.mockReturnValue(undefined);
+    requireUserMock.mockResolvedValue({ id: "user_1", username: "alice", role: "ORGANIZER" });
     rateLimitMock.mockResolvedValue({ ok: true });
     uploadCoverImageMock.mockResolvedValue({ key: "covers/abc.png" });
   });
@@ -58,6 +75,34 @@ describe("POST /api/uploads", () => {
     await expect(res.json()).resolves.toMatchObject({
       ok: false,
       error: { message: "An image file is required" },
+    });
+    expect(uploadCoverImageMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [401, "UNAUTHORIZED", "Unauthenticated"],
+    [403, "FORBIDDEN", "Forbidden"],
+  ])("returns the %i auth envelope without uploading", async (status, code, message) => {
+    requireUserMock.mockRejectedValueOnce(new AuthError(message, status));
+
+    const res = await POST(uploadRequest(new File(["image"], "cover.png", { type: "image/png" })));
+
+    expect(res.status).toBe(status);
+    await expect(res.json()).resolves.toEqual({ ok: false, error: { code, message } });
+    expect(uploadCoverImageMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a CSRF violation without uploading", async () => {
+    assertSameOriginMock.mockImplementationOnce(() => {
+      throw new CsrfError();
+    });
+
+    const res = await POST(uploadRequest(new File(["image"], "cover.png", { type: "image/png" })));
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toEqual({
+      ok: false,
+      error: { code: "CSRF_VIOLATION", message: "Cross-origin request rejected" },
     });
     expect(uploadCoverImageMock).not.toHaveBeenCalled();
   });
