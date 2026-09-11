@@ -28,7 +28,7 @@ export function ParticipantList({ participants }: { participants: Participant[] 
               <span className="data-mono text-acid-yellow">{trunc(p.playerAddr)}</span>
               <time
                 className="data-mono text-xs text-on-surface-variant"
-                dateTime={p.joinedAt}
+                dateTime={validTimestamp ? joinedAt.toISOString() : undefined}
                 aria-label={
                   validTimestamp
                     ? `Joined at ${joinedAt.toISOString()} UTC`
@@ -36,7 +36,10 @@ export function ParticipantList({ participants }: { participants: Participant[] 
                 }
               >
                 {validTimestamp
-                  ? joinedAt.toLocaleTimeString(undefined, { timeZoneName: "short" })
+                  ? joinedAt.toLocaleTimeString("en-US", {
+                      timeZone: "UTC",
+                      timeZoneName: "short",
+                    })
                   : "Time unavailable"}
               </time>
             </li>
