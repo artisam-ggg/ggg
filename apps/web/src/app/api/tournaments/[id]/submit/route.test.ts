@@ -222,7 +222,10 @@ describe("POST /api/tournaments/[id]/submit", () => {
 
   it("does not activate when the confirmed deadline differs", async () => {
     findUniqueMock.mockResolvedValueOnce({ ...dbTournament, contractId: "CDEPLOYED" });
-    readSettlementDeadlineMock.mockReset().mockResolvedValueOnce(undefined).mockResolvedValueOnce(1n);
+    readSettlementDeadlineMock
+      .mockReset()
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(1n);
 
     const res = await POST(
       makeReq("k_initialize_mismatch", {

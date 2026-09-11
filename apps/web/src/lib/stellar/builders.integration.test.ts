@@ -42,10 +42,7 @@ d("Testnet integration", () => {
       distributionBps: [6000, 3000, 1000],
       settlementDeadline: deadline,
     });
-    const initializeTx = TransactionBuilder.fromXDR(
-      initialize.xdr,
-      PASSPHRASE,
-    );
+    const initializeTx = TransactionBuilder.fromXDR(initialize.xdr, PASSPHRASE);
     expect(initializeTx.toEnvelope().v1().tx().ext().value()).toBeDefined();
     const operation = initializeTx.operations[0] as { auth?: unknown[] } | undefined;
     expect(operation?.auth).toBeDefined();
