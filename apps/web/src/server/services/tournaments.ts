@@ -12,6 +12,7 @@ import {
   explorerTxUrl,
   resolveSacAddress,
   submitSignedXdr,
+  StellarError,
   validateInitializeXdr,
 } from "@/lib/stellar";
 
@@ -216,7 +217,10 @@ export async function submitTournamentTx(
 
   if (result.status === "FAILED") {
     // Do NOT mutate tournament to any success state.
-    throw Object.assign(new Error(`Transaction failed on-chain (${result.hash})`), { status: 502 });
+    throw new StellarError("TX_FAILED", "Transaction failed on-chain", {
+      txHash: result.hash,
+      retryable: false,
+    });
   }
 
   // Persist confirmed on-chain state.

@@ -49,7 +49,7 @@ export async function readSettlementDeadline(params: {
     params.contractId,
     params.sourceAddress,
   ).get_settlement_deadline();
-  return assembled.result;
+  return assembled.result ?? undefined;
 }
 
 /** Builds a permissionless refund claim which always pays the registered player. */

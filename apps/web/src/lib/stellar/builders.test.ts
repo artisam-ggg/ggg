@@ -2,7 +2,7 @@
 // Pure Stellar XDR-builder logic with no DOM; runs in node so Keypair.random()
 // gets a real WebCrypto seed (jsdom's crypto yields the wrong seed type).
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { Keypair } from "@stellar/stellar-sdk";
+import { Account, Keypair, Operation, TransactionBuilder } from "@stellar/stellar-sdk";
 
 const built = (xdr: string) => ({ toXDR: () => xdr });
 const joinFn = vi.fn().mockResolvedValue(built("JOIN_XDR"));
@@ -38,6 +38,14 @@ const G = Keypair.random().publicKey();
 const G2 = Keypair.random().publicKey();
 const G3 = Keypair.random().publicKey();
 const C = "CCJZ5DGASBWQXR5MPFCJXMBI333XE5U3FSJTNQU7RIKE3P5GN2K2WYD5";
+const RAW_XDR = new TransactionBuilder(new Account(G, "1"), {
+  fee: "100",
+  networkPassphrase: "Test SDF Network ; September 2015",
+})
+  .addOperation(Operation.manageData({ name: "test", value: "test" }))
+  .setTimeout(0)
+  .build()
+  .toXDR();
 
 beforeEach(() => {
   joinFn.mockClear();
@@ -46,6 +54,11 @@ beforeEach(() => {
   cancelFn.mockClear();
   initializeFn.mockClear();
   ClientCtor.mockClear();
+  joinFn.mockResolvedValue(built(RAW_XDR));
+  claimRefundFn.mockResolvedValue(built(RAW_XDR));
+  finalizeFn.mockResolvedValue(built(RAW_XDR));
+  cancelFn.mockResolvedValue(built(RAW_XDR));
+  initializeFn.mockResolvedValue(built(RAW_XDR));
 });
 
 describe("buildClaimRefundTx", () => {
@@ -56,17 +69,17 @@ describe("buildClaimRefundTx", () => {
       playerAddress: G,
       submitterAddress: G2,
     });
-    expect(res).toEqual({ xdr: "REFUND_XDR", network: "testnet" });
+    expect(res).toEqual({ xdr: RAW_XDR, network: "testnet" });
     expect(ClientCtor).toHaveBeenCalledWith(expect.objectContaining({ publicKey: G2 }));
     expect(claimRefundFn).toHaveBeenCalledWith({ player: G });
   });
 });
 
 describe("buildJoinTx", () => {
-  it("instantiates Client with contract+source and returns simulated XDR", async () => {
+  it("instantiates Client with contract+source and returns the assembled XDR", async () => {
     const { buildJoinTx } = await import("./builders");
     const res = await buildJoinTx({ contractId: C, playerAddress: G });
-    expect(res).toEqual({ xdr: "JOIN_XDR", network: "testnet" });
+    expect(res).toEqual({ xdr: RAW_XDR, network: "testnet" });
     expect(ClientCtor).toHaveBeenCalledWith(
       expect.objectContaining({ contractId: C, publicKey: G }),
     );
@@ -100,7 +113,7 @@ describe("buildInitializeTx", () => {
       settlementDeadline,
     });
 
-    expect(res).toEqual({ xdr: "INITIALIZE_XDR", network: "testnet" });
+    expect(res).toEqual({ xdr: RAW_XDR, network: "testnet" });
     expect(initializeFn).toHaveBeenCalledWith(
       expect.objectContaining({ settlement_deadline: settlementDeadline }),
     );
@@ -117,7 +130,7 @@ describe("buildFinalizeTx", () => {
       second: G2,
       third: G3,
     });
-    expect(res.xdr).toBe("FINALIZE_XDR");
+    expect(res.xdr).toBe(RAW_XDR);
     expect(finalizeFn).toHaveBeenCalledWith({ first: G, second: G2, third: G3 });
   });
   it("rejects non-distinct winners", async () => {
@@ -132,7 +145,7 @@ describe("buildCancelTx", () => {
   it("passes organizer as source", async () => {
     const { buildCancelTx } = await import("./builders");
     const res = await buildCancelTx({ contractId: C, organizerAddress: G });
-    expect(res.xdr).toBe("CANCEL_XDR");
+    expect(res.xdr).toBe(RAW_XDR);
     expect(ClientCtor).toHaveBeenCalledWith(expect.objectContaining({ publicKey: G }));
   });
 });
