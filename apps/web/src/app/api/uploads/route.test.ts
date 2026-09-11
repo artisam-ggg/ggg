@@ -12,6 +12,7 @@ vi.mock("@/lib/csrf", () => ({
 }));
 vi.mock("@/lib/rate-limit", () => ({ rateLimit: vi.fn(async () => ({ ok: true })) }));
 vi.mock("@/server/services/uploads", () => ({
+  MAX_COVER_IMAGE_BYTES: 5 * 1024 * 1024,
   CoverImageValidationError: class CoverImageValidationError extends Error {
     readonly status = 400;
   },
@@ -59,6 +60,35 @@ describe("POST /api/uploads", () => {
       error: { message: "An image file is required" },
     });
     expect(uploadCoverImageMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects an oversized declared body before parsing multipart data", async () => {
+    const formData = vi.fn();
+    const req = {
+      headers: new Headers({ "content-length": String(5 * 1024 * 1024 + 1) }),
+      formData,
+    } as Parameters<typeof POST>[0];
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      ok: false,
+      error: { message: "Image must be no larger than 5 MB." },
+    });
+    expect(formData).not.toHaveBeenCalled();
+  });
+
+  it("returns the file validation message for a disallowed MIME type", async () => {
+    const res = await POST(
+      uploadRequest(new File(["not an image"], "cover.txt", { type: "text/plain" })),
+    );
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      ok: false,
+      error: { message: "Invalid file type. Upload a PNG, JPEG, or WEBP image." },
+    });
   });
 
   it("does not process a file after rate limiting", async () => {

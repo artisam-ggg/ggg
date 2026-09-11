@@ -60,24 +60,26 @@ export async function uploadCoverImage(file: Blob): Promise<{ key: string }> {
 
   const bytes = new Uint8Array(await file.arrayBuffer());
   if (!hasImageSignature(contentType, bytes)) throw invalidImage("Invalid image file.");
+  let safe: Buffer;
   try {
     const image = sharp(bytes, { limitInputPixels: MAX_COVER_IMAGE_PIXELS });
     const format = await image.metadata().then((metadata) => metadata.format);
     if (format !== contentType.slice(6)) throw invalidImage("Invalid image file.");
-    const safe = await image.toBuffer();
-    const key = `covers/${randomUUID()}.${ext}`;
-    await s3.send(
-      new PutObjectCommand({
-        Bucket: BUCKET,
-        Key: key,
-        ContentType: contentType,
-        ContentLength: safe.length,
-        Body: safe,
-      }),
-    );
-    return { key };
+    safe = await image.toBuffer();
   } catch (error) {
     if (error instanceof CoverImageValidationError) throw error;
     throw invalidImage("Invalid image file.");
   }
+
+  const key = `covers/${randomUUID()}.${ext}`;
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: BUCKET,
+      Key: key,
+      ContentType: contentType,
+      ContentLength: safe.length,
+      Body: safe,
+    }),
+  );
+  return { key };
 }

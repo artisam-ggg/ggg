@@ -58,7 +58,9 @@ export const createTournamentSchema = z
     ]),
     coverImageKey: z
       .string()
-      .regex(/^covers\/[0-9a-f-]{36}\.(png|jpg|webp)$/)
+      .regex(
+        /^covers\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(png|jpg|webp)$/,
+      )
       .optional(),
   })
   .refine((v) => v.distributionBps[0] + v.distributionBps[1] + v.distributionBps[2] === 10000, {

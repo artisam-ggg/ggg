@@ -4,7 +4,11 @@ import { requireUser, AuthError } from "@/lib/auth-guards";
 import { assertSameOrigin, CsrfError } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
 import { uploadFileSchema } from "@/lib/validation/tournament";
-import { CoverImageValidationError, uploadCoverImage } from "@/server/services/uploads";
+import {
+  CoverImageValidationError,
+  MAX_COVER_IMAGE_BYTES,
+  uploadCoverImage,
+} from "@/server/services/uploads";
 
 export async function POST(req: NextRequest): Promise<Response> {
   // 1. CSRF: same-origin only.
@@ -33,6 +37,11 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (!rl.ok) return err("TOO_MANY_REQUESTS", "Too many requests. Try again later.", 429);
 
   // 4. Validate bytes before storage. Presigned direct uploads cannot enforce this.
+  const contentLength = Number(req.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > MAX_COVER_IMAGE_BYTES) {
+    return err("INVALID_REQUEST", "Image must be no larger than 5 MB.", 400);
+  }
+
   let file: FormDataEntryValue | null;
   try {
     file = (await req.formData()).get("file");
@@ -40,7 +49,13 @@ export async function POST(req: NextRequest): Promise<Response> {
     return err("INVALID_REQUEST", "Invalid upload request", 400);
   }
   const parsed = uploadFileSchema.safeParse(file);
-  if (!parsed.success) return err("INVALID_REQUEST", "An image file is required", 400);
+  if (!parsed.success) {
+    return err(
+      "INVALID_REQUEST",
+      parsed.error.issues[0]?.message ?? "An image file is required",
+      400,
+    );
+  }
 
   try {
     const data = await uploadCoverImage(parsed.data);

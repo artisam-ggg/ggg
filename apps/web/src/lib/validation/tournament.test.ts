@@ -179,6 +179,14 @@ describe("createTournamentSchema", () => {
     expect(r.success).toBe(false);
   });
 
+  it("rejects a coverImageKey with an invalid UUID shape", () => {
+    const r = createTournamentSchema.safeParse({
+      ...validCreate,
+      coverImageKey: "covers/------------------------------------.png",
+    });
+    expect(r.success).toBe(false);
+  });
+
   it("rejects coverImageKey > 256 chars", () => {
     const r = createTournamentSchema.safeParse({
       ...validCreate,

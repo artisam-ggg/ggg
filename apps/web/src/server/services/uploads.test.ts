@@ -98,4 +98,12 @@ describe("uploadCoverImage", () => {
     ).rejects.toThrow("Invalid image file");
     expect(sendMock).not.toHaveBeenCalled();
   });
+
+  it("propagates storage failures without misclassifying them as invalid images", async () => {
+    sendMock.mockRejectedValueOnce(new Error("Object storage unavailable"));
+
+    await expect(uploadCoverImage(await image("png"))).rejects.toThrow(
+      "Object storage unavailable",
+    );
+  });
 });
