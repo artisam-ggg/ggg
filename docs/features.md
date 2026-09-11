@@ -158,3 +158,7 @@ Cover image uploads now pass through the authenticated server route, which accep
 ## Issue #244 - Persist tournament creation drafts
 
 The create-tournament form now restores a validated `ggg:tournament-create-draft` browser draft after reload and offers Clear Draft. It stores only serializable public form fields; the connected organizer wallet and cover-image upload state are intentionally fetched live and never persisted.
+
+## Issue #259 — Assemble initialization transactions after contract deployment
+
+New tournament contracts now re-simulate and assemble their generated `initialize` invocation after deployment, ensuring the wallet signs Soroban resource data and fees for the newly-created instance. The opt-in Testnet integration test covers the full signed deploy-to-initialize sequence; existing DRAFT contracts with a deployed `contractId` can safely retry initialization through the existing deployment-recovery path.

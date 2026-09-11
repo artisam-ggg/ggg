@@ -191,7 +191,7 @@ describe("POST /api/tournaments/[id]/submit", () => {
     expect(updateData.deployTxHash).toBe("TX1");
   });
 
-  it("sets ACTIVE only after initialize succeeds", async () => {
+  it("sets ACTIVE only after confirmed initialize state matches", async () => {
     findUniqueMock.mockResolvedValueOnce({ ...dbTournament, contractId: "CDEPLOYED" });
 
     const res = await POST(
@@ -214,6 +214,63 @@ describe("POST /api/tournaments/[id]/submit", () => {
     expect(validateInitializeMock).toHaveBeenCalledWith(
       VALID_XDR,
       expect.objectContaining({ contractId: "CDEPLOYED" }),
+    );
+    expect(readSettlementDeadlineMock).toHaveBeenCalledWith(
+      expect.objectContaining({ contractId: "CDEPLOYED" }),
+    );
+  });
+
+  it("does not activate when the confirmed deadline differs", async () => {
+    findUniqueMock.mockResolvedValueOnce({ ...dbTournament, contractId: "CDEPLOYED" });
+    readSettlementDeadlineMock
+      .mockReset()
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(1n);
+
+    const res = await POST(
+      makeReq("k_initialize_mismatch", {
+        signedXdr: VALID_XDR,
+        intent: "initialize",
+      }) as Parameters<typeof POST>[0],
+      ctx,
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(502);
+    expect(json.ok).toBe(false);
+    expect(updateMock).toHaveBeenCalledWith({
+      where: { id: "t_1" },
+      data: { initializeTxHash: "TX1" },
+    });
+  });
+
+  it("reports deploy recovery when initialize simulation fails after deployment", async () => {
+    const { StellarError } = await import("@/lib/stellar");
+    buildInitializeMock.mockRejectedValueOnce(
+      new StellarError("SIMULATION_FAILED", "Transaction simulation failed"),
+    );
+
+    const res = await POST(makeReq("k_deploy_recovery") as Parameters<typeof POST>[0], ctx);
+    const json = await res.json();
+
+    expect(res.status).toBe(422);
+    expect(json.error.message).toBe(
+      "Contract deployed successfully, but initialization needs to be retried.",
+    );
+    expect(updateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ contractId: "CDEPLOYED" }) }),
+    );
+  });
+
+  it("reports deploy recovery when initialize preparation has an RPC error", async () => {
+    buildInitializeMock.mockRejectedValueOnce(new Error("RPC unavailable"));
+
+    const res = await POST(makeReq("k_deploy_rpc_error") as Parameters<typeof POST>[0], ctx);
+    const json = await res.json();
+
+    expect(res.status).toBe(422);
+    expect(json.error.message).toBe(
+      "Contract deployed successfully, but initialization needs to be retried.",
     );
   });
 

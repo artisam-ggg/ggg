@@ -113,6 +113,7 @@ function transactionExplorerUrl(txHash: string, passphrase: string) {
 
 type Phase = "idle" | "signing" | "submitting" | "initializing" | "success" | "error";
 type CoverUploadStatus = "idle" | "uploading" | "failed" | "complete";
+type PendingDeployment = { tournamentId: string; unsignedXdr: string };
 
 interface CreateTournamentFormProps {
   expectedPassphrase: string;
@@ -140,6 +141,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
   const [errorTxHash, setErrorTxHash] = useState<string | null>(null);
+  const [pendingDeployment, setPendingDeployment] = useState<PendingDeployment | null>(null);
   const [entryFeeError, setEntryFeeError] = useState<string | null>(null);
   const [refereeError, setRefereeError] = useState<string | null>(null);
   const hasDraft =
@@ -249,6 +251,44 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     if (coverImageInput.current) coverImageInput.current.value = "";
   }
 
+  async function submitDeployment(pending: PendingDeployment) {
+    setPhase("signing");
+    const submitUrl = `/api/tournaments/${pending.tournamentId}/submit`;
+    const deployRes = await signAndSubmit(
+      pending.unsignedXdr,
+      "deploy",
+      submitUrl,
+      expectedPassphrase,
+    );
+
+    if (deployRes.initializeXdr) {
+      setPhase("initializing");
+      await signAndSubmit(deployRes.initializeXdr, "initialize", submitUrl, expectedPassphrase);
+    }
+
+    setPendingDeployment(null);
+    removeStoredDraft();
+    setPhase("success");
+    router.push(`/tournaments/${pending.tournamentId}`);
+  }
+
+  function handleDeploymentError(e: unknown) {
+    setPhase("error");
+    setError(e instanceof Error ? e.message : "An unexpected error occurred");
+    setErrorTxHash(e instanceof SubmissionError ? (e.details.txHash ?? null) : null);
+  }
+
+  async function retryInitialization() {
+    if (!pendingDeployment) return;
+    setError(null);
+    setErrorTxHash(null);
+    try {
+      await submitDeployment(pendingDeployment);
+    } catch (e: unknown) {
+      handleDeploymentError(e);
+    }
+  }
+
   async function handleDeploy() {
     setError(null);
     setErrorTxHash(null);
@@ -321,32 +361,14 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       if (!envelope.success) throw new Error("Tournament creation failed. Please try again.");
       if (!envelope.data.ok) throw new Error(envelope.data.error.message);
       const created = envelope.data.data;
-
-      setPhase("signing");
-
-      const submitUrl = `/api/tournaments/${created.tournamentId}/submit`;
-      const deployRes = await signAndSubmit(
-        created.unsignedXdr,
-        "deploy",
-        submitUrl,
-        expectedPassphrase,
-      );
-
-      // The escrow Wasm has no Soroban constructor, so deploy only creates the
-      // contract — the organiser must sign a second `initialize` transaction to
-      // set its state before anyone can join. Do it under the same action.
-      if (deployRes.initializeXdr) {
-        setPhase("initializing");
-        await signAndSubmit(deployRes.initializeXdr, "initialize", submitUrl, expectedPassphrase);
-      }
-
-      removeStoredDraft();
-      setPhase("success");
-      router.push(`/tournaments/${created.tournamentId}`);
+      const pending = {
+        tournamentId: created.tournamentId,
+        unsignedXdr: created.unsignedXdr,
+      };
+      setPendingDeployment(pending);
+      await submitDeployment(pending);
     } catch (e: unknown) {
-      setPhase("error");
-      setError(e instanceof Error ? e.message : "An unexpected error occurred");
-      setErrorTxHash(e instanceof SubmissionError ? (e.details.txHash ?? null) : null);
+      handleDeploymentError(e);
     }
   }
 
@@ -605,6 +627,15 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
             >
               View transaction
             </a>
+          )}
+          {pendingDeployment && (
+            <button
+              type="button"
+              onClick={() => void retryInitialization()}
+              className="label-caps mt-2 block text-sm underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+            >
+              Retry initialization
+            </button>
           )}
         </div>
       )}

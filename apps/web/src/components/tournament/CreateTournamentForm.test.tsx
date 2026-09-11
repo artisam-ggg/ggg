@@ -478,6 +478,51 @@ describe("CreateTournamentForm", () => {
     vi.unstubAllGlobals();
   });
 
+  it("retries initialization for a tournament whose deployment already succeeded", async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          data: { tournamentId: "t_recover", unsignedXdr: "DEPLOY_XDR", network: "testnet" },
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", mockFetch);
+    (signAndSubmit as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ txHash: "TX_DEPLOY", initializeXdr: "INITIALIZE_XDR" })
+      .mockRejectedValueOnce(
+        new Error("Contract deployed successfully, but initialization needs to be retried."),
+      )
+      .mockResolvedValueOnce({ txHash: "TX_DEPLOY", initializeXdr: "INITIALIZE_XDR" })
+      .mockResolvedValueOnce({ txHash: "TX_INIT", status: "ACTIVE" });
+
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/tournament name/i), { target: { value: "Cup" } });
+    fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
+    fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole("button", { name: /deploy soroban contract/i }));
+    await screen.findByRole("dialog", { name: /transaction failed/i });
+    fireEvent.click(screen.getByRole("button", { name: /close/i }));
+    fireEvent.click(screen.getByRole("button", { name: /retry initialization/i }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/tournaments/t_recover"));
+    expect(signAndSubmit).toHaveBeenCalledTimes(4);
+    expect(signAndSubmit).toHaveBeenNthCalledWith(
+      3,
+      "DEPLOY_XDR",
+      "deploy",
+      "/api/tournaments/t_recover/submit",
+      "P",
+    );
+    vi.unstubAllGlobals();
+  });
+
   it("cover image upload: sends the file to the server and includes coverImageKey in create body", async () => {
     const mockFetch = vi
       .fn()
