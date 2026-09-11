@@ -119,6 +119,22 @@ async function buildInitXdrFor(
   return xdr;
 }
 
+async function buildInitRecoveryXdr(
+  tournament: Parameters<typeof buildInitXdrFor>[0],
+  contractId: string,
+): Promise<string> {
+  try {
+    return await buildInitXdrFor(tournament, contractId);
+  } catch (error) {
+    if (error instanceof Error && "status" in error) throw error;
+    throw new StellarError(
+      "SIMULATION_FAILED",
+      "Contract deployed successfully, but initialization needs to be retried.",
+      { cause: error },
+    );
+  }
+}
+
 /**
  * Submits a client-signed XDR on-chain and reconciles confirmed state into the
  * database. Mutates the tournament record ONLY after the Stellar network
@@ -151,7 +167,7 @@ export async function submitTournamentTx(
   // @unique constraint in the Prisma schema, so return a fresh initialize XDR
   // for an interrupted deploy→initialize flow instead of submitting again.
   if (input.intent === "deploy" && tournament.contractId) {
-    const initializeXdr = await buildInitXdrFor(tournament, tournament.contractId);
+    const initializeXdr = await buildInitRecoveryXdr(tournament, tournament.contractId);
     return {
       txHash: tournament.deployTxHash ?? "",
       contractId: tournament.contractId,
@@ -192,7 +208,13 @@ export async function submitTournamentTx(
         sourceAddress: tournament.organizerAddr,
       });
     } catch {
-      // An uninitialized contract and transient RPC failures both proceed to submit.
+      // Once initialize has been submitted, never replay its signed XDR while
+      // chain-state reconciliation is unavailable.
+      if (tournament.initializeTxHash) {
+        throw Object.assign(new Error("Unable to confirm on-chain initialization"), {
+          status: 502,
+        });
+      }
     }
     if (confirmedDeadline !== undefined) {
       if (confirmedDeadline !== BigInt(Math.floor(settlementDeadline.getTime() / 1000))) {
@@ -211,6 +233,11 @@ export async function submitTournamentTx(
         status: updated.status,
         explorerUrl: explorerContractUrl(tournament.contractId),
       };
+    }
+    if (tournament.initializeTxHash) {
+      throw Object.assign(new Error("On-chain initialization could not be confirmed"), {
+        status: 502,
+      });
     }
   }
 
@@ -237,18 +264,7 @@ export async function submitTournamentTx(
     if (!updated.contractId) {
       throw Object.assign(new Error("Deployment succeeded without a contract ID"), { status: 502 });
     }
-    let initializeXdr: string;
-    try {
-      initializeXdr = await buildInitXdrFor(updated, updated.contractId);
-    } catch (error) {
-      if (error instanceof StellarError && error.code === "SIMULATION_FAILED") {
-        throw new StellarError(
-          "SIMULATION_FAILED",
-          "Contract deployed successfully, but initialization needs to be retried.",
-        );
-      }
-      throw error;
-    }
+    const initializeXdr = await buildInitRecoveryXdr(updated, updated.contractId);
     return {
       txHash: result.hash,
       contractId: updated.contractId,
@@ -263,6 +279,7 @@ export async function submitTournamentTx(
   if (input.intent === "initialize") {
     const settlementDeadline = requireFutureSettlementDeadline(tournament.settlementDeadline);
     const expectedDeadline = BigInt(Math.floor(settlementDeadline.getTime() / 1000));
+    await prisma.tournament.update({ where: { id }, data: { initializeTxHash: result.hash } });
     let confirmedDeadline: bigint | undefined;
     try {
       confirmedDeadline = await readSettlementDeadline({
@@ -271,6 +288,11 @@ export async function submitTournamentTx(
       });
     } catch {
       throw Object.assign(new Error("Unable to confirm on-chain initialization"), { status: 502 });
+    }
+    if (confirmedDeadline === undefined) {
+      throw Object.assign(new Error("On-chain initialization could not be confirmed"), {
+        status: 502,
+      });
     }
     if (confirmedDeadline !== expectedDeadline) {
       throw Object.assign(

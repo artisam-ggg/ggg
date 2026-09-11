@@ -325,7 +325,7 @@ describe("submitTournamentTx", () => {
       contractId: "CDEPLOYED",
     });
     submitMock.mockResolvedValue({ hash: "TX_INIT", status: "SUCCESS" });
-    readSettlementDeadlineMock.mockResolvedValue(1_800_000_000n);
+    readSettlementDeadlineMock.mockResolvedValueOnce(undefined).mockResolvedValue(1_800_000_000n);
 
     await expect(
       submitTournamentTx("t_1", { signedXdr: "XDR", intent: "initialize" }, "user_1"),
@@ -333,7 +333,11 @@ describe("submitTournamentTx", () => {
       message: "On-chain settlement deadline does not match this tournament",
       status: 502,
     });
-    expect(updateMock).not.toHaveBeenCalled();
+    expect(submitMock).toHaveBeenCalledTimes(1);
+    expect(updateMock).toHaveBeenCalledWith({
+      where: { id: "t_1" },
+      data: { initializeTxHash: "TX_INIT" },
+    });
   });
 
   it("does not activate when on-chain initialization cannot be confirmed", async () => {
@@ -361,6 +365,37 @@ describe("submitTournamentTx", () => {
       submitTournamentTx("t_1", { signedXdr: "XDR", intent: "initialize" }, "user_1"),
     ).rejects.toMatchObject({ message: "Unable to confirm on-chain initialization", status: 502 });
     expect(submitMock).toHaveBeenCalledTimes(1);
+    expect(updateMock).toHaveBeenCalledWith({
+      where: { id: "t_1" },
+      data: { initializeTxHash: "TX_INIT" },
+    });
+  });
+
+  it("does not replay initialize while reconciliation is unavailable", async () => {
+    const deadline = new Date("2026-09-10T00:00:00.000Z");
+    vi.setSystemTime(new Date("2026-09-09T00:00:00.000Z"));
+    findUniqueMock.mockResolvedValue({
+      id: "t_1",
+      organizerId: "user_1",
+      organizerAddr: "GORG",
+      refereeAddr: "GREF",
+      tokenAddr: "CTOKEN",
+      entryFee: 10n,
+      firstBps: 6000,
+      secondBps: 3000,
+      thirdBps: 1000,
+      settlementDeadline: deadline,
+      status: "DRAFT",
+      contractId: "CDEPLOYED",
+      initializeTxHash: "TX_INIT",
+    });
+    readSettlementDeadlineMock.mockRejectedValue(new Error("RPC unavailable"));
+
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "initialize" }, "user_1"),
+    ).rejects.toMatchObject({ message: "Unable to confirm on-chain initialization", status: 502 });
+
+    expect(submitMock).not.toHaveBeenCalled();
     expect(updateMock).not.toHaveBeenCalled();
   });
 });

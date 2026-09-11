@@ -30,6 +30,9 @@ function clientFor(contractId: string, source: string): InstanceType<typeof Clie
 }
 
 async function preparedXdr(assembled: { toXDR: () => string }): Promise<string> {
+  // The binding's first simulation supplies auth entries. Reassembly keeps
+  // those entries while refreshing Soroban data, including the footprint that
+  // core validates before contract execution.
   const prepared = await simulateAndAssemble(
     TransactionBuilder.fromXDR(assembled.toXDR(), networkPassphrase()) as Transaction,
   );

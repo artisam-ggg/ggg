@@ -65,6 +65,8 @@ model Tournament {
   payouts            Payout[]
   events             ContractEvent[]
   deployTxHash       String?
+  // Persisted after initialize submits so reconciliation retries never replay it.
+  initializeTxHash   String?
   createdAt          DateTime         @default(now())
   finalizedAt        DateTime?
   cancelledAt        DateTime?

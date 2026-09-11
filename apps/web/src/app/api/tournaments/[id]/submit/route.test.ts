@@ -238,9 +238,10 @@ describe("POST /api/tournaments/[id]/submit", () => {
 
     expect(res.status).toBe(502);
     expect(json.ok).toBe(false);
-    expect(updateMock).not.toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: "ACTIVE" }) }),
-    );
+    expect(updateMock).toHaveBeenCalledWith({
+      where: { id: "t_1" },
+      data: { initializeTxHash: "TX1" },
+    });
   });
 
   it("reports deploy recovery when initialize simulation fails after deployment", async () => {
@@ -258,6 +259,18 @@ describe("POST /api/tournaments/[id]/submit", () => {
     );
     expect(updateMock).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ contractId: "CDEPLOYED" }) }),
+    );
+  });
+
+  it("reports deploy recovery when initialize preparation has an RPC error", async () => {
+    buildInitializeMock.mockRejectedValueOnce(new Error("RPC unavailable"));
+
+    const res = await POST(makeReq("k_deploy_rpc_error") as Parameters<typeof POST>[0], ctx);
+    const json = await res.json();
+
+    expect(res.status).toBe(422);
+    expect(json.error.message).toBe(
+      "Contract deployed successfully, but initialization needs to be retried.",
     );
   });
 
