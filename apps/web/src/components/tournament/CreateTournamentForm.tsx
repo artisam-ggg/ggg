@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { WalletButton } from "./WalletButton";
 import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
@@ -26,6 +26,52 @@ const createTournamentResponseSchema = apiResponseSchema(
     network: z.string(),
   }),
 );
+
+const DRAFT_STORAGE_KEY = "ggg:tournament-create-draft";
+
+const draftSchema = z.object({
+  name: z.string().max(120),
+  gameTitle: z.string().max(120),
+  entryFee: z.string().max(32),
+  asset: z.enum(["XLM", "USDC"]),
+  refereeAddress: z.string().max(56),
+  settlementDeadline: z.string().max(32),
+  splits: z.tuple([
+    z.number().int().min(0).max(100),
+    z.number().int().min(0).max(100),
+    z.number().int().min(0).max(100),
+  ]),
+});
+
+type TournamentDraft = z.infer<typeof draftSchema>;
+
+const emptyDraft: TournamentDraft = {
+  name: "",
+  gameTitle: "",
+  entryFee: "",
+  asset: "XLM",
+  refereeAddress: "",
+  settlementDeadline: "",
+  splits: [60, 30, 10],
+};
+
+function loadDraft(): TournamentDraft {
+  try {
+    const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+    const parsed = draftSchema.safeParse(JSON.parse(raw ?? "null"));
+    return parsed.success ? parsed.data : emptyDraft;
+  } catch {
+    return emptyDraft;
+  }
+}
+
+function removeStoredDraft() {
+  try {
+    localStorage.removeItem(DRAFT_STORAGE_KEY);
+  } catch {
+    // Browser storage is unavailable.
+  }
+}
 
 /**
  * Validate an entry-fee string. Returns an error message or null if valid.
@@ -88,6 +134,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   const [coverUploadStatus, setCoverUploadStatus] = useState<CoverUploadStatus>("idle");
   const coverUploadRequest = useRef(0);
   const coverImageInput = useRef<HTMLInputElement>(null);
+  const [restored, setRestored] = useState(false);
 
   // UI state
   const [phase, setPhase] = useState<Phase>("idle");
@@ -95,6 +142,64 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   const [errorTxHash, setErrorTxHash] = useState<string | null>(null);
   const [entryFeeError, setEntryFeeError] = useState<string | null>(null);
   const [refereeError, setRefereeError] = useState<string | null>(null);
+  const hasDraft =
+    !!name ||
+    !!gameTitle ||
+    !!entryFee ||
+    !!refereeAddress ||
+    !!settlementDeadline ||
+    asset !== "XLM" ||
+    splits.join(",") !== "60,30,10";
+
+  useEffect(() => {
+    const draft = loadDraft();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Restore browser-only draft after hydration.
+    setName(draft.name);
+    setGameTitle(draft.gameTitle);
+    setEntryFee(draft.entryFee);
+    setAsset(draft.asset);
+    setRefereeAddress(draft.refereeAddress);
+    setSettlementDeadline(draft.settlementDeadline);
+    setSplits(draft.splits);
+    setRestored(true);
+  }, []);
+
+  useEffect(() => {
+    if (!restored) return;
+
+    // Wallet and upload state are deliberately excluded; both must be fetched live.
+    const draft = { name, gameTitle, entryFee, asset, refereeAddress, settlementDeadline, splits };
+    if (!hasDraft) {
+      removeStoredDraft();
+    } else {
+      try {
+        localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+      } catch {
+        // Browser storage is unavailable.
+      }
+    }
+  }, [
+    asset,
+    entryFee,
+    gameTitle,
+    hasDraft,
+    name,
+    refereeAddress,
+    restored,
+    settlementDeadline,
+    splits,
+  ]);
+
+  function clearDraft() {
+    removeStoredDraft();
+    setName("");
+    setGameTitle("");
+    setEntryFee("");
+    setAsset("XLM");
+    setRefereeAddress("");
+    setSettlementDeadline("");
+    setSplits([60, 30, 10]);
+  }
 
   // Derived values
   const bps = splits.map((s) => s * 100) as [number, number, number];
@@ -235,6 +340,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         await signAndSubmit(deployRes.initializeXdr, "initialize", submitUrl, expectedPassphrase);
       }
 
+      removeStoredDraft();
       setPhase("success");
       router.push(`/tournaments/${created.tournamentId}`);
     } catch (e: unknown) {
@@ -272,7 +378,6 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       <p className="mt-2 text-sm text-on-surface-variant">
         Deploy a Soroban escrow contract for your tournament.
       </p>
-
       {/* Tournament Name */}
       <div className="mt-8">
         <label className={labelClass} htmlFor="name">
@@ -476,6 +581,15 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         >
           Deploy Soroban Contract
         </button>
+        {hasDraft && (
+          <button
+            type="button"
+            onClick={clearDraft}
+            className="brutalist-border label-caps px-3 py-2 text-sm text-on-surface-variant transition-colors hover:bg-surface-container-high focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+          >
+            Clear Draft
+          </button>
+        )}
       </div>
 
       {/* Inline error */}
