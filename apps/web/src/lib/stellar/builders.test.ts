@@ -19,6 +19,7 @@ const claimRefundFn = vi.fn();
 const finalizeFn = vi.fn();
 const cancelFn = vi.fn();
 const initializeFn = vi.fn();
+const getSettlementDeadlineFn = vi.fn();
 const deployFn = vi.fn();
 const ClientCtor = vi.fn().mockImplementation(function () {
   return {
@@ -27,6 +28,7 @@ const ClientCtor = vi.fn().mockImplementation(function () {
     finalize_results: finalizeFn,
     cancel_tournament: cancelFn,
     initialize: initializeFn,
+    get_settlement_deadline: getSettlementDeadlineFn,
   };
 });
 (ClientCtor as unknown as { deploy: typeof deployFn }).deploy = deployFn;
@@ -84,12 +86,14 @@ beforeEach(() => {
   finalizeFn.mockClear();
   cancelFn.mockClear();
   initializeFn.mockClear();
+  getSettlementDeadlineFn.mockReset();
   ClientCtor.mockClear();
   joinFn.mockResolvedValue(built(RAW_XDR));
   claimRefundFn.mockResolvedValue(built(RAW_XDR));
   finalizeFn.mockResolvedValue(built(RAW_XDR));
   cancelFn.mockResolvedValue(built(RAW_XDR));
   initializeFn.mockResolvedValue(built(INITIALIZE_XDR));
+  getSettlementDeadlineFn.mockResolvedValue({ result: null });
   deployFn.mockResolvedValue(built(RAW_XDR));
   pipeline.simulateAndAssemble.mockReset();
   pipeline.simulateAndAssemble.mockResolvedValue(built("PREPARED_XDR"));
@@ -132,6 +136,17 @@ describe("buildJoinTx", () => {
     await expect(buildJoinTx({ contractId: C, playerAddress: "x" })).rejects.toMatchObject({
       code: "INVALID_INPUT",
     });
+  });
+});
+
+describe("readSettlementDeadline", () => {
+  it("normalizes an uninitialized contract's Option::None to undefined", async () => {
+    const { readSettlementDeadline } = await import("./builders");
+
+    await expect(
+      readSettlementDeadline({ contractId: C, sourceAddress: G }),
+    ).resolves.toBeUndefined();
+    expect(getSettlementDeadlineFn).toHaveBeenCalledOnce();
   });
 });
 
