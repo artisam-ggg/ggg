@@ -43,12 +43,19 @@ d("Testnet integration", () => {
       settlementDeadline: deadline,
     });
     const initializeTx = TransactionBuilder.fromXDR(initialize.xdr, PASSPHRASE);
-    expect(initializeTx.toEnvelope().v1().tx().ext().value()).toBeDefined();
+    const sorobanData = initializeTx.toEnvelope().v1().tx().ext().value();
+    expect(sorobanData).toBeDefined();
+    expect(BigInt(sorobanData!.resourceFee().toString())).toBeGreaterThan(0n);
     const operation = initializeTx.operations[0] as { auth?: unknown[] } | undefined;
     expect(operation?.auth).toBeDefined();
     expect(operation?.auth).not.toHaveLength(0);
     initializeTx.sign(organizer);
     const signedInitializeXdr = initializeTx.toEnvelope().toXDR("base64");
+    const signedInitialize = TransactionBuilder.fromXDR(signedInitializeXdr, PASSPHRASE);
+    expect(signedInitialize.signatures).toHaveLength(1);
+    expect(
+      organizer.verify(signedInitialize.hash(), signedInitialize.signatures[0]!.signature()),
+    ).toBe(true);
     await expect(submitSignedXdr(signedInitializeXdr, "initialize")).resolves.toMatchObject({
       status: "SUCCESS",
     });

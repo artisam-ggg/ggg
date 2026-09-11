@@ -336,7 +336,7 @@ describe("submitTournamentTx", () => {
     expect(updateMock).not.toHaveBeenCalled();
   });
 
-  it("activates a legacy contract when its deadline getter is unavailable", async () => {
+  it("does not activate when on-chain initialization cannot be confirmed", async () => {
     const deadline = new Date("2026-09-10T00:00:00.000Z");
     vi.setSystemTime(new Date("2026-09-09T00:00:00.000Z"));
     findUniqueMock.mockResolvedValue({
@@ -356,15 +356,11 @@ describe("submitTournamentTx", () => {
     });
     submitMock.mockResolvedValue({ hash: "TX_INIT", status: "SUCCESS" });
     readSettlementDeadlineMock.mockRejectedValue(new Error("missing getter"));
-    updateMock.mockResolvedValue({ contractId: "CDEPLOYED", status: "ACTIVE" });
 
     await expect(
       submitTournamentTx("t_1", { signedXdr: "XDR", intent: "initialize" }, "user_1"),
-    ).resolves.toMatchObject({ status: "ACTIVE", contractId: "CDEPLOYED" });
+    ).rejects.toMatchObject({ message: "Unable to confirm on-chain initialization", status: 502 });
     expect(submitMock).toHaveBeenCalledTimes(1);
-    expect(updateMock).toHaveBeenCalledWith({
-      where: { id: "t_1" },
-      data: { status: "ACTIVE" },
-    });
+    expect(updateMock).not.toHaveBeenCalled();
   });
 });

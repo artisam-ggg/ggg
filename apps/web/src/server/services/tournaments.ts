@@ -264,16 +264,15 @@ export async function submitTournamentTx(
     const settlementDeadline = requireFutureSettlementDeadline(tournament.settlementDeadline);
     const expectedDeadline = BigInt(Math.floor(settlementDeadline.getTime() / 1000));
     let confirmedDeadline: bigint | undefined;
-    let deadlineReadFailed = false;
     try {
       confirmedDeadline = await readSettlementDeadline({
         contractId: tournament.contractId!,
         sourceAddress: tournament.organizerAddr,
       });
     } catch {
-      deadlineReadFailed = true;
+      throw Object.assign(new Error("Unable to confirm on-chain initialization"), { status: 502 });
     }
-    if (!deadlineReadFailed && confirmedDeadline !== expectedDeadline) {
+    if (confirmedDeadline !== expectedDeadline) {
       throw Object.assign(
         new Error("On-chain settlement deadline does not match this tournament"),
         {
@@ -283,9 +282,7 @@ export async function submitTournamentTx(
     }
     const updated = await prisma.tournament.update({
       where: { id },
-      data: deadlineReadFailed
-        ? { status: "ACTIVE" }
-        : { status: "ACTIVE", deadlineConfirmedAt: new Date() },
+      data: { status: "ACTIVE", deadlineConfirmedAt: new Date() },
     });
     return {
       txHash: result.hash,
