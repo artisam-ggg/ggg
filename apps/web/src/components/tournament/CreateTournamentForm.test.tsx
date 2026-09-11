@@ -81,6 +81,7 @@ describe("CreateTournamentForm", () => {
 
   it("clears the saved draft and form values on request", async () => {
     render(<CreateTournamentForm expectedPassphrase="P" />);
+    expect(screen.queryByRole("button", { name: /clear draft/i })).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText(/tournament name/i), { target: { value: "Saved Cup" } });
     await waitFor(() =>
       expect(localStorage.getItem("ggg:tournament-create-draft")).toContain("Saved Cup"),
@@ -90,6 +91,80 @@ describe("CreateTournamentForm", () => {
 
     expect(screen.getByLabelText(/tournament name/i)).toHaveValue("");
     expect(localStorage.getItem("ggg:tournament-create-draft")).toBeNull();
+  });
+
+  it("keeps the connected wallet and cover upload after a storage event", async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            data: { uploadUrl: "https://s3.example.com/presigned", key: "covers/img.png" },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 200 }));
+    vi.stubGlobal("fetch", mockFetch);
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await screen.findByLabelText(`Wallet ${MOCK_ORGANIZER}`);
+    fireEvent.change(screen.getByLabelText(/cover image/i), {
+      target: { files: [new File(["img"], "cover.png", { type: "image/png" })] },
+    });
+    await screen.findByText("Uploaded: covers/img.png");
+
+    localStorage.setItem(
+      "ggg:tournament-create-draft",
+      JSON.stringify({
+        name: "Other tab",
+        gameTitle: "",
+        entryFee: "",
+        asset: "XLM",
+        refereeAddress: "",
+        settlementDeadline: "",
+        splits: [60, 30, 10],
+      }),
+    );
+    window.dispatchEvent(new StorageEvent("storage", { key: "ggg:tournament-create-draft" }));
+
+    expect(screen.getByLabelText(`Wallet ${MOCK_ORGANIZER}`)).toBeInTheDocument();
+    expect(screen.getByText("Uploaded: covers/img.png")).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps the deploy phase after a storage event", async () => {
+    const mockFetch = vi.fn(() => new Promise<Response>(() => {}));
+    vi.stubGlobal("fetch", mockFetch);
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/tournament name/i), { target: { value: "Cup" } });
+    fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
+    fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: /deploy soroban contract/i }));
+    await screen.findByRole("dialog");
+
+    localStorage.setItem(
+      "ggg:tournament-create-draft",
+      JSON.stringify({
+        name: "Other tab",
+        gameTitle: "",
+        entryFee: "",
+        asset: "XLM",
+        refereeAddress: "",
+        settlementDeadline: "",
+        splits: [60, 30, 10],
+      }),
+    );
+    window.dispatchEvent(new StorageEvent("storage", { key: "ggg:tournament-create-draft" }));
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    vi.unstubAllGlobals();
   });
 
   it("renders all required fields", () => {

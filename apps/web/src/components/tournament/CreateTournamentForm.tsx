@@ -133,31 +133,19 @@ interface CreateTournamentFormProps {
 
 export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFormProps) {
   const initialDraft = useSyncExternalStore(subscribeToDraft, getDraftSnapshot, () => emptyDraft);
-
-  return (
-    <CreateTournamentFormContent
-      key={JSON.stringify(initialDraft)}
-      expectedPassphrase={expectedPassphrase}
-      initialDraft={initialDraft}
-    />
-  );
-}
-
-function CreateTournamentFormContent({
-  expectedPassphrase,
-  initialDraft,
-}: CreateTournamentFormProps & { initialDraft: TournamentDraft }) {
   const router = useRouter();
 
   // Form state
-  const [name, setName] = useState(initialDraft.name);
-  const [gameTitle, setGameTitle] = useState(initialDraft.gameTitle);
-  const [entryFee, setEntryFee] = useState(initialDraft.entryFee);
-  const [asset, setAsset] = useState<"XLM" | "USDC">(initialDraft.asset);
-  const [refereeAddress, setRefereeAddress] = useState(initialDraft.refereeAddress);
+  const [name, setName] = useState(() => initialDraft.name);
+  const [gameTitle, setGameTitle] = useState(() => initialDraft.gameTitle);
+  const [entryFee, setEntryFee] = useState(() => initialDraft.entryFee);
+  const [asset, setAsset] = useState<"XLM" | "USDC">(() => initialDraft.asset);
+  const [refereeAddress, setRefereeAddress] = useState(() => initialDraft.refereeAddress);
   const [organizerAddress, setOrganizerAddress] = useState("");
-  const [settlementDeadline, setSettlementDeadline] = useState(initialDraft.settlementDeadline);
-  const [splits, setSplits] = useState<[number, number, number]>(initialDraft.splits);
+  const [settlementDeadline, setSettlementDeadline] = useState(
+    () => initialDraft.settlementDeadline,
+  );
+  const [splits, setSplits] = useState<[number, number, number]>(() => initialDraft.splits);
   const [coverImageKey, setCoverImageKey] = useState<string | undefined>();
   const [coverUploadStatus, setCoverUploadStatus] = useState<CoverUploadStatus>("idle");
   const coverUploadRequest = useRef(0);
@@ -169,18 +157,19 @@ function CreateTournamentFormContent({
   const [errorTxHash, setErrorTxHash] = useState<string | null>(null);
   const [entryFeeError, setEntryFeeError] = useState<string | null>(null);
   const [refereeError, setRefereeError] = useState<string | null>(null);
+  const hasDraft =
+    !!name ||
+    !!gameTitle ||
+    !!entryFee ||
+    !!refereeAddress ||
+    !!settlementDeadline ||
+    asset !== "XLM" ||
+    splits.join(",") !== "60,30,10";
+
   useEffect(() => {
     // Wallet and upload state are deliberately excluded; both must be fetched live.
     const draft = { name, gameTitle, entryFee, asset, refereeAddress, settlementDeadline, splits };
-    if (
-      !name &&
-      !gameTitle &&
-      !entryFee &&
-      !refereeAddress &&
-      !settlementDeadline &&
-      asset === "XLM" &&
-      splits.join(",") === "60,30,10"
-    ) {
+    if (!hasDraft) {
       removeStoredDraft();
     } else {
       try {
@@ -189,7 +178,7 @@ function CreateTournamentFormContent({
         // Browser storage is unavailable.
       }
     }
-  }, [asset, entryFee, gameTitle, name, refereeAddress, settlementDeadline, splits]);
+  }, [asset, entryFee, gameTitle, hasDraft, name, refereeAddress, settlementDeadline, splits]);
 
   function clearDraft() {
     removeStoredDraft();
@@ -379,14 +368,6 @@ function CreateTournamentFormContent({
       <p className="mt-2 text-sm text-on-surface-variant">
         Deploy a Soroban escrow contract for your tournament.
       </p>
-      <button
-        type="button"
-        onClick={clearDraft}
-        className="brutalist-border label-caps mt-3 px-3 py-2 text-sm text-on-surface-variant transition-colors hover:bg-surface-container-high focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
-      >
-        Clear Draft
-      </button>
-
       {/* Tournament Name */}
       <div className="mt-8">
         <label className={labelClass} htmlFor="name">
@@ -590,6 +571,15 @@ function CreateTournamentFormContent({
         >
           Deploy Soroban Contract
         </button>
+        {hasDraft && (
+          <button
+            type="button"
+            onClick={clearDraft}
+            className="brutalist-border label-caps px-3 py-2 text-sm text-on-surface-variant transition-colors hover:bg-surface-container-high focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+          >
+            Clear Draft
+          </button>
+        )}
       </div>
 
       {/* Inline error */}
