@@ -312,29 +312,6 @@ describe("POST /api/tournaments/[id]/submit", () => {
     expect(updateMock).not.toHaveBeenCalled();
   });
 
-  it("maps the contract's AlreadyJoined error to a clear conflict", async () => {
-    submitMock.mockResolvedValueOnce({
-      hash: "TX_FAIL",
-      contractId: undefined,
-      status: "FAILED",
-      contractErrorCode: 9,
-    } as never);
-
-    const res = await POST(
-      makeReq("k3-duplicate", { signedXdr: "AAAAAgAAAAA=", intent: "join" }) as Parameters<
-        typeof POST
-      >[0],
-      ctx,
-    );
-    const json = await res.json();
-
-    expect(res.status).toBe(409);
-    expect(json).toMatchObject({
-      ok: false,
-      error: { code: "CONFLICT", message: "You are already a participant in this tournament." },
-    });
-  });
-
   // ---------------------------------------------------------------------------
   // Missing idempotency key → 400
   // ---------------------------------------------------------------------------

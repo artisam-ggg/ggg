@@ -4,7 +4,6 @@ import {
   type Transaction,
   Address,
   scValToNative,
-  xdr,
 } from "@stellar/stellar-sdk";
 import { getRpc, networkPassphrase } from "./client";
 import { signedXdr as signedXdrSchema } from "./validation";
@@ -22,7 +21,6 @@ export async function simulateAndAssemble(tx: Transaction): Promise<Transaction>
 export interface SubmitResult {
   hash: string;
   contractId?: string;
-  contractErrorCode?: number;
   status: "SUCCESS" | "FAILED";
 }
 
@@ -123,31 +121,10 @@ export async function submitSignedXdr(
       const contractId = extractContractId(intent, got);
       return contractId ? { hash, status: "SUCCESS", contractId } : { hash, status: "SUCCESS" };
     }
-    if (got.status === "FAILED") {
-      const contractErrorCode = extractContractErrorCode(got);
-      return contractErrorCode === undefined
-        ? { hash, status: "FAILED" }
-        : { hash, status: "FAILED", contractErrorCode };
-    }
+    if (got.status === "FAILED") return { hash, status: "FAILED" };
     if (intervalMs > 0) await new Promise((r) => setTimeout(r, intervalMs));
   }
   throw new StellarError("TX_TIMEOUT", `Timed out polling ${hash}`);
-}
-
-function extractContractErrorCode(got: {
-  diagnosticEventsXdr?: xdr.DiagnosticEvent[] | undefined;
-}): number | undefined {
-  for (const diagnostic of got.diagnosticEventsXdr ?? []) {
-    try {
-      const error = diagnostic.event().body().v0().data();
-      if (error.switch().name === "scvError" && error.error().switch().name === "sceContract") {
-        return error.error().contractCode();
-      }
-    } catch {
-      // Diagnostics are supplemental; unknown data must not change the error mapping.
-    }
-  }
-  return undefined;
 }
 
 function extractContractId(

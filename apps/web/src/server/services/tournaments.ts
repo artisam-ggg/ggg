@@ -14,6 +14,7 @@ import {
   submitSignedXdr,
   validateInitializeXdr,
 } from "@/lib/stellar";
+
 import type {
   CreateTournamentInput,
   FinalizeInput,
@@ -215,11 +216,6 @@ export async function submitTournamentTx(
 
   if (result.status === "FAILED") {
     // Do NOT mutate tournament to any success state.
-    if (input.intent === "join" && result.contractErrorCode === 9) {
-      throw Object.assign(new Error("You are already a participant in this tournament."), {
-        status: 409,
-      });
-    }
     throw Object.assign(new Error(`Transaction failed on-chain (${result.hash})`), { status: 502 });
   }
 
