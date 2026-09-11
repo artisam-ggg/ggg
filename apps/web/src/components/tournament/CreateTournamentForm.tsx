@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { WalletButton } from "./WalletButton";
 import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
@@ -19,9 +19,6 @@ const STROOP_FACTOR = 10_000_000n;
 const ENTRY_FEE_REGEX = /^\d+(\.\d{1,7})?$/;
 const TESTNET_PASSPHRASE = "Test SDF Network ; September 2015";
 
-const uploadResponseSchema = apiResponseSchema(
-  z.object({ uploadUrl: z.string().url(), key: z.string().min(1) }),
-);
 const createTournamentResponseSchema = apiResponseSchema(
   z.object({
     tournamentId: z.string().min(1),
@@ -69,6 +66,7 @@ function transactionExplorerUrl(txHash: string, passphrase: string) {
 }
 
 type Phase = "idle" | "signing" | "submitting" | "initializing" | "success" | "error";
+type CoverUploadStatus = "idle" | "uploading" | "failed" | "complete";
 
 interface CreateTournamentFormProps {
   expectedPassphrase: string;
@@ -87,6 +85,9 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   const [settlementDeadline, setSettlementDeadline] = useState("");
   const [splits, setSplits] = useState<[number, number, number]>([60, 30, 10]);
   const [coverImageKey, setCoverImageKey] = useState<string | undefined>();
+  const [coverUploadStatus, setCoverUploadStatus] = useState<CoverUploadStatus>("idle");
+  const coverUploadRequest = useRef(0);
+  const coverImageInput = useRef<HTMLInputElement>(null);
 
   // UI state
   const [phase, setPhase] = useState<Phase>("idle");
@@ -101,32 +102,56 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   const splitValid = splitSum === 100;
 
   async function handleCoverUpload(file: File) {
+    const request = ++coverUploadRequest.current;
     setError(null);
-    const presignRes = await fetch("/api/uploads", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ contentType: file.type, contentLength: file.size }),
-    });
-    const presign = uploadResponseSchema.safeParse(await presignRes.json());
-    if (!presign.success || !presign.data.ok)
-      throw new Error(
-        presign.success && !presign.data.ok ? presign.data.error.message : "Upload presign failed",
-      );
+    setCoverUploadStatus("uploading");
+    try {
+      const form = new FormData();
+      form.set("file", file);
+      const uploadRes = await fetch("/api/uploads", {
+        method: "POST",
+        body: form,
+      });
+      const upload = (await uploadRes.json()) as {
+        ok: boolean;
+        data?: { key: string };
+        error?: { message?: string } | string;
+      };
+      if (!uploadRes.ok || !upload.ok) {
+        throw new Error(
+          typeof upload.error === "string"
+            ? upload.error
+            : (upload.error?.message ?? "Cover image upload failed"),
+        );
+      }
+      if (request === coverUploadRequest.current) {
+        setCoverImageKey(upload.data!.key);
+        setCoverUploadStatus("complete");
+      }
+    } catch (err: unknown) {
+      if (request === coverUploadRequest.current) {
+        setCoverUploadStatus("failed");
+        setError(err instanceof Error ? err.message : "Upload failed");
+      }
+    }
+  }
 
-    const putRes = await fetch(presign.data.data.uploadUrl, {
-      method: "PUT",
-      headers: { "content-type": file.type },
-      body: file,
-    });
-    if (!putRes.ok) throw new Error(`Cover image upload failed (HTTP ${putRes.status})`);
-
-    setCoverImageKey(presign.data.data.key);
+  function removeCoverImage() {
+    ++coverUploadRequest.current;
+    setCoverImageKey(undefined);
+    setCoverUploadStatus("idle");
+    setError(null);
+    if (coverImageInput.current) coverImageInput.current.value = "";
   }
 
   async function handleDeploy() {
     setError(null);
     setErrorTxHash(null);
     setRefereeError(null);
+    if (coverUploadStatus === "uploading" || coverUploadStatus === "failed") {
+      setError("Resolve the cover image upload before deploying.");
+      return;
+    }
 
     // Validate entry fee BEFORE any conversion or network call
     const feeError = validateEntryFee(entryFee);
@@ -225,7 +250,12 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   const monoFieldClass = `${fieldClass} data-mono text-acid-yellow`;
 
   const isSubmittable =
-    !!organizerAddress && !!settlementDeadline && splitValid && phase === "idle";
+    !!organizerAddress &&
+    !!settlementDeadline &&
+    splitValid &&
+    coverUploadStatus !== "uploading" &&
+    coverUploadStatus !== "failed" &&
+    phase === "idle";
 
   return (
     <form
@@ -407,14 +437,13 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         <input
           id="coverImage"
           type="file"
+          ref={coverImageInput}
           accept="image/png,image/jpeg,image/webp"
           className={fieldClass}
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) {
-              handleCoverUpload(file).catch((err: unknown) => {
-                setError(err instanceof Error ? err.message : "Upload failed");
-              });
+              void handleCoverUpload(file);
             }
           }}
         />
@@ -422,6 +451,15 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
           <p className="data-mono mt-1 text-xs text-on-surface-variant">
             Uploaded: {coverImageKey}
           </p>
+        )}
+        {coverUploadStatus !== "idle" && (
+          <button
+            type="button"
+            onClick={removeCoverImage}
+            className="label-caps mt-2 text-sm text-on-surface-variant underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+          >
+            Remove cover image
+          </button>
         )}
       </div>
 

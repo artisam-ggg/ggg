@@ -320,22 +320,19 @@ describe("CreateTournamentForm", () => {
     vi.unstubAllGlobals();
   });
 
-  it("cover image upload: PUTs to presigned URL and includes coverImageKey in create body", async () => {
-    // First call = /api/uploads presign, second call = PUT to presignedUrl, third = /api/tournaments
+  it("cover image upload: sends the file to the server and includes coverImageKey in create body", async () => {
     const mockFetch = vi
       .fn()
-      // upload presign
+      // server upload
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
             ok: true,
-            data: { uploadUrl: "https://s3.example.com/presigned", key: "covers/img.png" },
+            data: { key: "covers/123e4567-e89b-12d3-a456-426614174000.png" },
           }),
           { status: 200, headers: { "content-type": "application/json" } },
         ),
       )
-      // PUT to presigned URL
-      .mockResolvedValueOnce(new Response(null, { status: 200 }))
       // POST /api/tournaments
       .mockResolvedValueOnce(
         new Response(
@@ -359,17 +356,11 @@ describe("CreateTournamentForm", () => {
     const file = new File(["img bytes"], "cover.png", { type: "image/png" });
     fireEvent.change(screen.getByLabelText(/cover image/i), { target: { files: [file] } });
 
-    // Wait for upload to complete (presign + PUT)
+    // Wait for server upload to complete.
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
         "/api/uploads",
         expect.objectContaining({ method: "POST" }),
-      );
-    });
-    await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith(
-        "https://s3.example.com/presigned",
-        expect.objectContaining({ method: "PUT" }),
       );
     });
 
@@ -386,7 +377,7 @@ describe("CreateTournamentForm", () => {
       );
       expect(tournamentCall).toBeDefined();
       const body = JSON.parse((tournamentCall![1] as RequestInit).body as string);
-      expect(body.coverImageKey).toBe("covers/img.png");
+      expect(body.coverImageKey).toBe("covers/123e4567-e89b-12d3-a456-426614174000.png");
     });
 
     vi.unstubAllGlobals();
@@ -607,33 +598,37 @@ describe("CreateTournamentForm", () => {
     vi.unstubAllGlobals();
   });
 
-  it("cover PUT returning ok:false → surfaces error and does NOT set coverImageKey", async () => {
-    const mockFetch = vi
-      .fn()
-      // presign succeeds
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            ok: true,
-            data: { uploadUrl: "https://s3.example.com/presigned", key: "covers/img.png" },
-          }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        ),
-      )
-      // PUT fails with 403
-      .mockResolvedValueOnce(new Response(null, { status: 403 }));
+  it("a failed optional cover upload can be removed so deployment is re-enabled", async () => {
+    const mockFetch = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ ok: false, error: { message: "Invalid file type." } }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      }),
+    );
     vi.stubGlobal("fetch", mockFetch);
 
     render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/tournament name/i), { target: { value: "Cup" } });
+    fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
+    fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
 
     const file = new File(["img bytes"], "cover.png", { type: "image/png" });
     fireEvent.change(screen.getByLabelText(/cover image/i), { target: { files: [file] } });
 
-    // Error should appear; coverImageKey "Uploaded:" text should NOT appear
-    await waitFor(() =>
-      expect(screen.getByRole("alert")).toHaveTextContent(/cover image upload failed/i),
-    );
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Invalid file type."));
     expect(screen.queryByText(/Uploaded:/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /deploy soroban contract/i })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: /remove cover image/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /deploy soroban contract/i })).toBeEnabled(),
+    );
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 
     vi.unstubAllGlobals();
   });

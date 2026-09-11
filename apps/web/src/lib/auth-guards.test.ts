@@ -74,6 +74,15 @@ describe("requireUser", () => {
     await expect(requireUser()).rejects.toThrow("REDIRECT:/login");
   });
 
+  it("throws a 401 AuthError instead of redirecting when requested", async () => {
+    authMock.mockResolvedValue(null);
+    await expect(requireUser(undefined, false)).rejects.toMatchObject({
+      message: "Authentication required",
+      status: 401,
+    });
+    expect(redirectMock).not.toHaveBeenCalled();
+  });
+
   it("throws AuthError (403) when the role does not match", async () => {
     authMock.mockResolvedValue(session("ORGANIZER"));
     isSessionValidMock.mockResolvedValue(true);
