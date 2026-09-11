@@ -315,7 +315,7 @@ For every active tournament, the detail page renders:
 
 - The **contract address** (`C...`), copyable.
 - A **QR code** (`qrcode.react`) encoding the public GGG tournament URL.
-- The human-readable URL as text, so scanning opens the detail page and its wallet-backed **Join Tournament** action.
+- A short tournament identifier and copy/share action. The full URL is not rendered in the default visible UI, while the QR code continues to encode it for the wallet-backed **Join Tournament** action.
 
 A raw SEP-7 payment must not be treated as a tournament join: it transfers tokens but cannot call `join_tournament` or register the player in the escrow. The QR path therefore always leads to the signed contract invocation.
 

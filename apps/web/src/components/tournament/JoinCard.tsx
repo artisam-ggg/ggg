@@ -38,8 +38,13 @@ export function JoinCard(props: JoinCardProps) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
 
   const isPending = phase === "signing" || phase === "submitting";
+  const tournamentIdentifier =
+    props.tournamentId.length > 14
+      ? `${props.tournamentId.slice(0, 6)}…${props.tournamentId.slice(-6)}`
+      : props.tournamentId;
 
   async function onJoin() {
     if (!player || isPending) return;
@@ -86,8 +91,15 @@ export function JoinCard(props: JoinCardProps) {
   }
 
   async function copyJoinLink() {
-    await navigator.clipboard.writeText(props.joinUrl);
-    setLinkCopied(true);
+    setLinkCopied(false);
+    setCopyError(null);
+
+    try {
+      await navigator.clipboard.writeText(props.joinUrl);
+      setLinkCopied(true);
+    } catch {
+      setCopyError("Could not copy tournament link");
+    }
   }
 
   return (
@@ -99,13 +111,23 @@ export function JoinCard(props: JoinCardProps) {
 
         <ContractAddress value={props.contractId} />
 
-        <button
-          type="button"
-          onClick={() => copyJoinLink().catch(() => setErrorMsg("Could not copy tournament link"))}
-          className="label-caps text-sm text-on-surface-variant focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
-        >
-          {linkCopied ? "Link Copied" : "Copy Link"}
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="data-mono text-xs text-on-surface-variant">
+            Tournament: {tournamentIdentifier}
+          </span>
+          <button
+            type="button"
+            onClick={() => void copyJoinLink()}
+            className="label-caps text-sm text-on-surface-variant focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+          >
+            {linkCopied ? "Link Copied" : "Copy Link"}
+          </button>
+          {copyError && (
+            <p role="alert" className="text-sm text-error">
+              {copyError}
+            </p>
+          )}
+        </div>
 
         <div className="flex flex-wrap items-center gap-3">
           <WalletButton expectedPassphrase={props.passphrase} onConnected={setPlayer} />
@@ -122,7 +144,7 @@ export function JoinCard(props: JoinCardProps) {
       </div>
 
       {/* Error display — role="alert" for screen readers */}
-      {errorMsg && (
+      {errorMsg && phase === "error" && (
         <p role="alert" className="mt-3 text-sm text-error">
           {errorMsg}
         </p>

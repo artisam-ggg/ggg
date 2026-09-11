@@ -49,12 +49,13 @@ describe("JoinCard", () => {
     );
   });
 
-  it("hides the full URL until the user explicitly copies it", async () => {
+  it("shows a tournament identifier without rendering the full URL", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
-    render(<JoinCard {...baseProps} />);
+    render(<JoinCard {...baseProps} tournamentId="tournament-1234567890" />);
 
     expect(screen.queryByText(baseProps.joinUrl)).not.toBeInTheDocument();
+    expect(screen.getByText("Tournament: tourna…567890")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /copy link/i }));
 
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(baseProps.joinUrl));
