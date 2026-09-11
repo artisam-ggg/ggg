@@ -22,12 +22,14 @@ export async function simulateAndAssemble(tx: Transaction): Promise<Transaction>
   let sim: Awaited<ReturnType<typeof server.simulateTransaction>>;
   try {
     sim = await server.simulateTransaction(tx);
-  } catch {
+  } catch (error) {
+    console.error("Stellar simulation RPC failed", { error });
     throw new StellarError("SIMULATION_FAILED", "Transaction simulation could not be completed", {
       retryable: true,
     });
   }
   if (rpc.Api.isSimulationError(sim)) {
+    console.error("Stellar simulation failed", { error: sim.error });
     throw new StellarError("SIMULATION_FAILED", "Transaction simulation failed", {
       retryable: false,
     });
@@ -142,8 +144,8 @@ export async function submitSignedXdr(
     const rejectionCode = transactionResultCode(sent.errorResult);
     if (rejectionCode === "txBadAuth") {
       throw new StellarError(
-        "NETWORK_MISMATCH",
-        "Transaction signature does not match the tournament network",
+        "TX_BAD_AUTH",
+        "Transaction signatures were rejected. Check the signing wallet and network.",
         { retryable: false },
       );
     }
@@ -190,27 +192,30 @@ export async function submitSignedXdr(
 }
 
 function transactionResultCode(errorResult: unknown): string | undefined {
-  const parsedXdrResult = xdrTransactionResultSchema.safeParse(errorResult);
-  if (parsedXdrResult.success) return parsedXdrResult.data._attributes.result._switch.name;
-
   const parsedError = rpcErrorResultSchema.safeParse(errorResult);
-  if (!parsedError.success) return undefined;
-  try {
-    const result =
-      typeof parsedError.data.result === "function"
-        ? parsedError.data.result.call(errorResult)
-        : parsedError.data.result;
-    const parsedResult = transactionResultSchema.safeParse(result);
-    if (!parsedResult.success) return undefined;
-    const resultSwitch =
-      typeof parsedResult.data.switch === "function"
-        ? parsedResult.data.switch.call(result)
-        : parsedResult.data.switch;
-    const parsedSwitch = transactionResultSwitchSchema.safeParse(resultSwitch);
-    return parsedSwitch.success ? parsedSwitch.data.name : undefined;
-  } catch {
-    return undefined;
+  if (parsedError.success) {
+    try {
+      const result =
+        typeof parsedError.data.result === "function"
+          ? parsedError.data.result.call(errorResult)
+          : parsedError.data.result;
+      const parsedResult = transactionResultSchema.safeParse(result);
+      if (parsedResult.success) {
+        const resultSwitch =
+          typeof parsedResult.data.switch === "function"
+            ? parsedResult.data.switch.call(result)
+            : parsedResult.data.switch;
+        const parsedSwitch = transactionResultSwitchSchema.safeParse(resultSwitch);
+        if (parsedSwitch.success) return parsedSwitch.data.name;
+      }
+    } catch {
+      // Fall back to the SDK's observed v15 XDR representation below.
+    }
   }
+
+  // Fallback for @stellar/stellar-sdk v15 generated XDR objects.
+  const parsedXdrResult = xdrTransactionResultSchema.safeParse(errorResult);
+  return parsedXdrResult.success ? parsedXdrResult.data._attributes.result._switch.name : undefined;
 }
 
 function extractContractId(

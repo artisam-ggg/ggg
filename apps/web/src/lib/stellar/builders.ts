@@ -1,8 +1,6 @@
 import { Client } from "@/contract-client";
-import { TransactionBuilder, type Transaction } from "@stellar/stellar-sdk";
 import { env } from "@/lib/env";
 import { networkName, networkPassphrase } from "./client";
-import { simulateAndAssemble } from "./pipeline";
 import {
   stellarContractId,
   stellarPublicKey,
@@ -29,13 +27,6 @@ function clientFor(contractId: string, source: string): InstanceType<typeof Clie
   });
 }
 
-async function preparedXdr(assembled: { toXDR(): string }): Promise<string> {
-  const prepared = await simulateAndAssemble(
-    TransactionBuilder.fromXDR(assembled.toXDR(), networkPassphrase()) as Transaction,
-  );
-  return prepared.toXDR();
-}
-
 export async function buildJoinTx(params: {
   contractId: string;
   playerAddress: string;
@@ -44,7 +35,7 @@ export async function buildJoinTx(params: {
   parse(stellarPublicKey, params.playerAddress, "playerAddress");
   const c = clientFor(params.contractId, params.playerAddress);
   const assembled = await c.join_tournament({ player: params.playerAddress });
-  return { xdr: await preparedXdr(assembled), network: networkName() };
+  return { xdr: assembled.toXDR(), network: networkName() };
 }
 
 /** Reads the deadline stored in a deployed deadline-aware escrow contract. */
@@ -72,7 +63,7 @@ export async function buildClaimRefundTx(params: {
   parse(stellarPublicKey, params.submitterAddress, "submitterAddress");
   const c = clientFor(params.contractId, params.submitterAddress);
   const assembled = await c.claim_refund({ player: params.playerAddress });
-  return { xdr: await preparedXdr(assembled), network: networkName() };
+  return { xdr: assembled.toXDR(), network: networkName() };
 }
 
 /**
@@ -113,7 +104,7 @@ export async function buildInitializeTx(params: {
     distribution_bps: params.distributionBps,
     settlement_deadline: params.settlementDeadline,
   });
-  return { xdr: await preparedXdr(assembled), network: networkName() };
+  return { xdr: assembled.toXDR(), network: networkName() };
 }
 
 export async function buildFinalizeTx(params: {
@@ -140,7 +131,7 @@ export async function buildFinalizeTx(params: {
     second: params.second,
     third: params.third,
   });
-  return { xdr: await preparedXdr(assembled), network: networkName() };
+  return { xdr: assembled.toXDR(), network: networkName() };
 }
 
 export async function buildCancelTx(params: {
@@ -151,7 +142,7 @@ export async function buildCancelTx(params: {
   parse(stellarPublicKey, params.organizerAddress, "organizerAddress");
   const c = clientFor(params.contractId, params.organizerAddress);
   const assembled = await c.cancel_tournament();
-  return { xdr: await preparedXdr(assembled), network: networkName() };
+  return { xdr: assembled.toXDR(), network: networkName() };
 }
 
 export async function buildDeployInitializeTx(params: {

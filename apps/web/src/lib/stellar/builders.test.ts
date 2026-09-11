@@ -4,8 +4,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Account, Keypair, Operation, TransactionBuilder } from "@stellar/stellar-sdk";
 
-const pipeline = vi.hoisted(() => ({ simulateAndAssemble: vi.fn() }));
-
 const built = (xdr: string) => ({ toXDR: () => xdr });
 const joinFn = vi.fn().mockResolvedValue(built("JOIN_XDR"));
 const claimRefundFn = vi.fn().mockResolvedValue(built("REFUND_XDR"));
@@ -25,7 +23,6 @@ const ClientCtor = vi.fn().mockImplementation(function () {
 (ClientCtor as unknown as { deploy: typeof deployFn }).deploy = deployFn;
 
 vi.mock("@/contract-client", () => ({ Client: ClientCtor }));
-vi.mock("./pipeline", () => pipeline);
 vi.mock("./client", () => ({
   networkPassphrase: () => "Test SDF Network ; September 2015",
   networkName: () => "testnet",
@@ -62,8 +59,6 @@ beforeEach(() => {
   finalizeFn.mockResolvedValue(built(RAW_XDR));
   cancelFn.mockResolvedValue(built(RAW_XDR));
   initializeFn.mockResolvedValue(built(RAW_XDR));
-  pipeline.simulateAndAssemble.mockReset();
-  pipeline.simulateAndAssemble.mockResolvedValue(built("PREPARED_XDR"));
 });
 
 describe("buildClaimRefundTx", () => {
@@ -74,23 +69,21 @@ describe("buildClaimRefundTx", () => {
       playerAddress: G,
       submitterAddress: G2,
     });
-    expect(res).toEqual({ xdr: "PREPARED_XDR", network: "testnet" });
+    expect(res).toEqual({ xdr: RAW_XDR, network: "testnet" });
     expect(ClientCtor).toHaveBeenCalledWith(expect.objectContaining({ publicKey: G2 }));
     expect(claimRefundFn).toHaveBeenCalledWith({ player: G });
-    expect(pipeline.simulateAndAssemble).toHaveBeenCalledOnce();
   });
 });
 
 describe("buildJoinTx", () => {
-  it("instantiates Client with contract+source and returns simulated XDR", async () => {
+  it("instantiates Client with contract+source and returns the assembled XDR", async () => {
     const { buildJoinTx } = await import("./builders");
     const res = await buildJoinTx({ contractId: C, playerAddress: G });
-    expect(res).toEqual({ xdr: "PREPARED_XDR", network: "testnet" });
+    expect(res).toEqual({ xdr: RAW_XDR, network: "testnet" });
     expect(ClientCtor).toHaveBeenCalledWith(
       expect.objectContaining({ contractId: C, publicKey: G }),
     );
     expect(joinFn).toHaveBeenCalledWith({ player: G });
-    expect(pipeline.simulateAndAssemble).toHaveBeenCalledOnce();
   });
   it("rejects an invalid contract id", async () => {
     const { buildJoinTx } = await import("./builders");
@@ -120,11 +113,10 @@ describe("buildInitializeTx", () => {
       settlementDeadline,
     });
 
-    expect(res).toEqual({ xdr: "PREPARED_XDR", network: "testnet" });
+    expect(res).toEqual({ xdr: RAW_XDR, network: "testnet" });
     expect(initializeFn).toHaveBeenCalledWith(
       expect.objectContaining({ settlement_deadline: settlementDeadline }),
     );
-    expect(pipeline.simulateAndAssemble).toHaveBeenCalledOnce();
   });
 });
 
@@ -138,9 +130,8 @@ describe("buildFinalizeTx", () => {
       second: G2,
       third: G3,
     });
-    expect(res.xdr).toBe("PREPARED_XDR");
+    expect(res.xdr).toBe(RAW_XDR);
     expect(finalizeFn).toHaveBeenCalledWith({ first: G, second: G2, third: G3 });
-    expect(pipeline.simulateAndAssemble).toHaveBeenCalledOnce();
   });
   it("rejects non-distinct winners", async () => {
     const { buildFinalizeTx } = await import("./builders");
@@ -154,9 +145,8 @@ describe("buildCancelTx", () => {
   it("passes organizer as source", async () => {
     const { buildCancelTx } = await import("./builders");
     const res = await buildCancelTx({ contractId: C, organizerAddress: G });
-    expect(res.xdr).toBe("PREPARED_XDR");
+    expect(res.xdr).toBe(RAW_XDR);
     expect(ClientCtor).toHaveBeenCalledWith(expect.objectContaining({ publicKey: G }));
-    expect(pipeline.simulateAndAssemble).toHaveBeenCalledOnce();
   });
 });
 
