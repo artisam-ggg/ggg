@@ -65,7 +65,7 @@ describe("POST /api/uploads", () => {
   it("rejects an oversized declared body before parsing multipart data", async () => {
     const formData = vi.fn();
     const req = {
-      headers: new Headers({ "content-length": String(5 * 1024 * 1024 + 1) }),
+      headers: new Headers({ "content-length": String(5 * 1024 * 1024 + 64 * 1024 + 1) }),
       formData,
     } as unknown as Parameters<typeof POST>[0];
 
@@ -77,6 +77,32 @@ describe("POST /api/uploads", () => {
       error: { message: "Image must be no larger than 5 MB." },
     });
     expect(formData).not.toHaveBeenCalled();
+  });
+
+  it("accepts a file at the exact size limit when multipart framing is included", async () => {
+    const form = new FormData();
+    form.set(
+      "file",
+      new File([new Uint8Array(5 * 1024 * 1024)], "cover.png", { type: "image/png" }),
+    );
+    const base = new Request("http://localhost:3000/api/uploads", {
+      method: "POST",
+      headers: { origin: "http://localhost:3000" },
+      body: form,
+    });
+    const contentLength = (await base.clone().arrayBuffer()).byteLength;
+    const req = new Request(base, {
+      headers: {
+        origin: "http://localhost:3000",
+        "content-length": String(contentLength),
+        "content-type": base.headers.get("content-type") ?? "",
+      },
+    }) as Parameters<typeof POST>[0];
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    expect(uploadCoverImageMock).toHaveBeenCalledOnce();
   });
 
   it("returns the file validation message for a disallowed MIME type", async () => {
@@ -101,6 +127,7 @@ describe("POST /api/uploads", () => {
 
   it("does not expose an object storage error", async () => {
     uploadCoverImageMock.mockRejectedValue(new Error("S3 bucket internal detail"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     const res = await POST(uploadRequest(new File(["image"], "cover.png", { type: "image/png" })));
 
@@ -109,5 +136,9 @@ describe("POST /api/uploads", () => {
       ok: false,
       error: { message: "Cover image upload failed. Try again later." },
     });
+    expect(errorSpy).toHaveBeenCalledWith("Cover image upload failed", {
+      error: expect.any(Error),
+    });
+    errorSpy.mockRestore();
   });
 });

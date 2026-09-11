@@ -10,6 +10,9 @@ import {
   uploadCoverImage,
 } from "@/server/services/uploads";
 
+// Multipart framing adds a small overhead around the file; uploadFileSchema enforces the exact cap.
+const MAX_UPLOAD_BODY_BYTES = MAX_COVER_IMAGE_BYTES + 64 * 1024;
+
 export async function POST(req: NextRequest): Promise<Response> {
   // 1. CSRF: same-origin only.
   try {
@@ -37,10 +40,16 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (!rl.ok) return err("TOO_MANY_REQUESTS", "Too many requests. Try again later.", 429);
 
   // 4. Validate bytes before storage. Presigned direct uploads cannot enforce this.
-  const contentLength = Number(req.headers.get("content-length"));
-  if (Number.isFinite(contentLength) && contentLength > MAX_COVER_IMAGE_BYTES) {
+  const contentLengthHeader = req.headers.get("content-length");
+  const contentLength = contentLengthHeader === null ? undefined : Number(contentLengthHeader);
+  if (
+    contentLength !== undefined &&
+    Number.isFinite(contentLength) &&
+    contentLength > MAX_UPLOAD_BODY_BYTES
+  ) {
     return err("INVALID_REQUEST", "Image must be no larger than 5 MB.", 400);
   }
+  // Header-less or malformed requests fall through to uploadFileSchema's exact per-file validation.
 
   let file: FormDataEntryValue | null;
   try {
@@ -62,6 +71,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     return ok(data);
   } catch (e: unknown) {
     if (e instanceof CoverImageValidationError) return err("INVALID_REQUEST", e.message, e.status);
+    console.error("Cover image upload failed", { error: e });
     return err("UPLOAD_ERROR", "Cover image upload failed. Try again later.", 500);
   }
 }
