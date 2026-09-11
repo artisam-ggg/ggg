@@ -67,7 +67,7 @@ describe("POST /api/uploads", () => {
     const req = {
       headers: new Headers({ "content-length": String(5 * 1024 * 1024 + 1) }),
       formData,
-    } as Parameters<typeof POST>[0];
+    } as unknown as Parameters<typeof POST>[0];
 
     const res = await POST(req);
 
