@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { WalletButton } from "./WalletButton";
 import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
@@ -55,27 +55,14 @@ const emptyDraft: TournamentDraft = {
   splits: [60, 30, 10],
 };
 
-let cachedDraftRaw: string | null | undefined;
-let cachedDraft = emptyDraft;
-
-function getDraftSnapshot(): TournamentDraft {
+function loadDraft(): TournamentDraft {
   try {
     const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
-    if (raw !== cachedDraftRaw) {
-      cachedDraftRaw = raw;
-      const parsed = draftSchema.safeParse(JSON.parse(raw ?? "null"));
-      cachedDraft = parsed.success ? parsed.data : emptyDraft;
-    }
+    const parsed = draftSchema.safeParse(JSON.parse(raw ?? "null"));
+    return parsed.success ? parsed.data : emptyDraft;
   } catch {
-    cachedDraftRaw = null;
-    cachedDraft = emptyDraft;
+    return emptyDraft;
   }
-  return cachedDraft;
-}
-
-function subscribeToDraft(onStoreChange: () => void) {
-  window.addEventListener("storage", onStoreChange);
-  return () => window.removeEventListener("storage", onStoreChange);
 }
 
 function removeStoredDraft() {
@@ -132,24 +119,22 @@ interface CreateTournamentFormProps {
 }
 
 export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFormProps) {
-  const initialDraft = useSyncExternalStore(subscribeToDraft, getDraftSnapshot, () => emptyDraft);
   const router = useRouter();
 
   // Form state
-  const [name, setName] = useState(() => initialDraft.name);
-  const [gameTitle, setGameTitle] = useState(() => initialDraft.gameTitle);
-  const [entryFee, setEntryFee] = useState(() => initialDraft.entryFee);
-  const [asset, setAsset] = useState<"XLM" | "USDC">(() => initialDraft.asset);
-  const [refereeAddress, setRefereeAddress] = useState(() => initialDraft.refereeAddress);
+  const [name, setName] = useState("");
+  const [gameTitle, setGameTitle] = useState("");
+  const [entryFee, setEntryFee] = useState("");
+  const [asset, setAsset] = useState<"XLM" | "USDC">("XLM");
+  const [refereeAddress, setRefereeAddress] = useState("");
   const [organizerAddress, setOrganizerAddress] = useState("");
-  const [settlementDeadline, setSettlementDeadline] = useState(
-    () => initialDraft.settlementDeadline,
-  );
-  const [splits, setSplits] = useState<[number, number, number]>(() => initialDraft.splits);
+  const [settlementDeadline, setSettlementDeadline] = useState("");
+  const [splits, setSplits] = useState<[number, number, number]>([60, 30, 10]);
   const [coverImageKey, setCoverImageKey] = useState<string | undefined>();
   const [coverUploadStatus, setCoverUploadStatus] = useState<CoverUploadStatus>("idle");
   const coverUploadRequest = useRef(0);
   const coverImageInput = useRef<HTMLInputElement>(null);
+  const [restored, setRestored] = useState(false);
 
   // UI state
   const [phase, setPhase] = useState<Phase>("idle");
@@ -167,6 +152,21 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     splits.join(",") !== "60,30,10";
 
   useEffect(() => {
+    const draft = loadDraft();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Restore browser-only draft after hydration.
+    setName(draft.name);
+    setGameTitle(draft.gameTitle);
+    setEntryFee(draft.entryFee);
+    setAsset(draft.asset);
+    setRefereeAddress(draft.refereeAddress);
+    setSettlementDeadline(draft.settlementDeadline);
+    setSplits(draft.splits);
+    setRestored(true);
+  }, []);
+
+  useEffect(() => {
+    if (!restored) return;
+
     // Wallet and upload state are deliberately excluded; both must be fetched live.
     const draft = { name, gameTitle, entryFee, asset, refereeAddress, settlementDeadline, splits };
     if (!hasDraft) {
@@ -178,7 +178,17 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         // Browser storage is unavailable.
       }
     }
-  }, [asset, entryFee, gameTitle, hasDraft, name, refereeAddress, settlementDeadline, splits]);
+  }, [
+    asset,
+    entryFee,
+    gameTitle,
+    hasDraft,
+    name,
+    refereeAddress,
+    restored,
+    settlementDeadline,
+    splits,
+  ]);
 
   function clearDraft() {
     removeStoredDraft();

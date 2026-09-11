@@ -1,4 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { act } from "react";
+import { hydrateRoot } from "react-dom/client";
+import { renderToString } from "react-dom/server";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Valid Stellar public keys (56 chars, real base32-encoded Ed25519)
@@ -69,6 +72,38 @@ describe("CreateTournamentForm", () => {
     expect(screen.getByDisplayValue(REF)).toBeInTheDocument();
     expect(screen.getByDisplayValue("50")).toBeInTheDocument();
     expect(localStorage.getItem("ggg:tournament-create-draft")).not.toContain(MOCK_ORGANIZER);
+  });
+
+  it("restores a preloaded draft during hydration without deleting it", async () => {
+    const draft = {
+      name: "Hydrated Cup",
+      gameTitle: "SF6",
+      entryFee: "1.5",
+      asset: "USDC",
+      refereeAddress: REF,
+      settlementDeadline: "2026-10-01T12:00",
+      splits: [50, 30, 20],
+    };
+    const container = document.createElement("div");
+    container.innerHTML = renderToString(<CreateTournamentForm expectedPassphrase="P" />);
+    document.body.appendChild(container);
+    localStorage.setItem("ggg:tournament-create-draft", JSON.stringify(draft));
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+    let root: ReturnType<typeof hydrateRoot> | undefined;
+    await act(async () => {
+      root = hydrateRoot(container, <CreateTournamentForm expectedPassphrase="P" />);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    try {
+      expect(container.querySelector("#name")).toHaveValue("Hydrated Cup");
+      expect(localStorage.getItem("ggg:tournament-create-draft")).toContain("Hydrated Cup");
+    } finally {
+      await act(async () => root?.unmount());
+      container.remove();
+      globalThis.IS_REACT_ACT_ENVIRONMENT = false;
+    }
   });
 
   it("ignores malformed browser storage", () => {
