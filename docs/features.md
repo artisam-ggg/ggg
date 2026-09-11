@@ -132,3 +132,7 @@ Deploy confirmation now keeps a tournament in `DRAFT` until its separate `initia
 ## Issue #216 — Permissionless claimant refunds
 
 `claim_refund(player)` is permissionless: after the inclusive settlement deadline, or immediately after cancellation, any caller can submit a claim but the entry fee is always transferred only to that registered player. Each player can claim once; unknown players and finalized escrows are rejected. Cancellation now only records its terminal state, so no transaction loops over participants; individual refund claims are O(1) and preserve transfer atomicity. The contract enforces a Testnet-simulated `MAX_PLAYERS` ceiling of 100 registrations, with tests at the limit and one-over-limit, while refund tests cover deadline/state boundaries, arbitrary callers, exact events, failed transfers, and conservation.
+
+## Issue #247 - Hide full tournament URLs
+
+The public join control no longer renders its full tournament URL by default. The QR code and an explicit Copy Link action retain the working share URL without exposing route and record details in the page content.
