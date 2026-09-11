@@ -9,6 +9,10 @@ The join endpoint now checks the persisted participant record before building an
 
 Tournament deployment submission now distinguishes malformed input/network errors, rejected signatures, protocol-malformed signed envelopes, simulation failures, RPC submission failures, on-chain failures, and confirmation timeouts with safe structured API errors. RPC rejection data is Zod-validated before classification and every rejection logs its safe protocol result code. A `txMalformed` response is returned as a non-retryable 400 that tells the organiser to refresh and sign a newly generated transaction; `txBadAuth` is reported as a rejected signature (which can include a wrong signing network), not as a confirmed network mismatch. The browser preserves the safe message and transaction hash, links to the relevant Stellar.Expert transaction when available, and continues to handle malformed proxy responses without exposing internals or JSON parser errors.
 
+## Issue #239 — Inline referee wallet validation
+
+Tournament creation now renders an invalid referee wallet error directly below its input. The input receives visible error styling, `aria-invalid`, and an `aria-describedby` link to the accessible alert; correcting the field clears that feedback.
+
 ## Issue #217 — Deadline reference-app wiring
 
 Tournament creation now accepts UTC Unix-second deadlines, applies the one-hour minimum and #215's 90-day Testnet-safe horizon in the shared client/server schema, persists the exact instant, and sends the exact seconds to contract initialization. The API/UI expose confirmed deadlines and explicit legacy-contract state without inventing deadlines for pre-deadline deployments. Subscriber replay identity now uses the stable Soroban RPC event id with the transaction hash; confirmed `refund_claimed` events remain the source of per-player refund state.
