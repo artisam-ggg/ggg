@@ -28,6 +28,7 @@ enum EventType {
   REGISTERED
   FINALIZED
   CANCELLED
+  REFUND_CLAIMED
 }
 
 model User {
@@ -41,29 +42,34 @@ model User {
 }
 
 model Tournament {
-  id            String           @id @default(cuid())
-  name          String
-  gameTitle     String
-  asset         Asset            @default(XLM)
-  entryFee      BigInt
-  firstBps      Int
-  secondBps     Int
-  thirdBps      Int
-  organizer     User             @relation("organizer", fields: [organizerId], references: [id])
-  organizerId   String
-  organizerAddr String
-  refereeAddr   String
-  contractId    String?          @unique
-  tokenAddr     String?
-  status        TournamentStatus @default(DRAFT)
-  coverImageKey String?
-  participants  Participant[]
-  payouts       Payout[]
-  events        ContractEvent[]
-  deployTxHash  String?
-  createdAt     DateTime         @default(now())
-  finalizedAt   DateTime?
-  cancelledAt   DateTime?
+  id                 String           @id @default(cuid())
+  name               String
+  gameTitle          String
+  asset              Asset            @default(XLM)
+  entryFee           BigInt
+  firstBps           Int
+  secondBps          Int
+  thirdBps           Int
+  organizer          User             @relation("organizer", fields: [organizerId], references: [id])
+  organizerId        String
+  organizerAddr      String
+  refereeAddr        String
+  settlementDeadline DateTime?
+  // Set only after the deadline-aware initialize transaction is confirmed.
+  deadlineConfirmedAt DateTime?
+  contractId         String?          @unique
+  tokenAddr          String?
+  status             TournamentStatus @default(DRAFT)
+  coverImageKey      String?
+  participants       Participant[]
+  payouts            Payout[]
+  events             ContractEvent[]
+  deployTxHash       String?
+  // Persisted after initialize submits so reconciliation retries never replay it.
+  initializeTxHash   String?
+  createdAt          DateTime         @default(now())
+  finalizedAt        DateTime?
+  cancelledAt        DateTime?
 }
 
 model Participant {
@@ -95,10 +101,12 @@ model ContractEvent {
   type         EventType
   ledger       Int?
   txHash       String?
+  // Soroban RPC event id. Together with txHash it is stable across subscriber replay.
+  eventId      String?
   payload      Json
   createdAt    DateTime   @default(now())
 
-  @@unique([txHash, type], name: "txHash_type")
+  @@unique([txHash, eventId], name: "txHash_eventId")
   @@index([tournamentId, createdAt])
 }
 

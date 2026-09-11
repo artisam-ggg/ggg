@@ -1,10 +1,13 @@
 import { Client } from "@/contract-client";
+import { TransactionBuilder, type Transaction } from "@stellar/stellar-sdk";
 import { env } from "@/lib/env";
 import { networkName, networkPassphrase } from "./client";
+import { simulateAndAssemble } from "./pipeline";
 import {
   stellarContractId,
   stellarPublicKey,
   i128Amount,
+  u64Timestamp,
   distributionBps as bpsSchema,
 } from "./validation";
 import { StellarError } from "./errors";
@@ -26,6 +29,16 @@ function clientFor(contractId: string, source: string): InstanceType<typeof Clie
   });
 }
 
+async function preparedXdr(assembled: { toXDR: () => string }): Promise<string> {
+  // The binding's first simulation supplies auth entries. Reassembly keeps
+  // those entries while refreshing Soroban data, including the footprint that
+  // core validates before contract execution.
+  const prepared = await simulateAndAssemble(
+    TransactionBuilder.fromXDR(assembled.toXDR(), networkPassphrase()) as Transaction,
+  );
+  return prepared.toXDR();
+}
+
 export async function buildJoinTx(params: {
   contractId: string;
   playerAddress: string;
@@ -34,7 +47,35 @@ export async function buildJoinTx(params: {
   parse(stellarPublicKey, params.playerAddress, "playerAddress");
   const c = clientFor(params.contractId, params.playerAddress);
   const assembled = await c.join_tournament({ player: params.playerAddress });
-  return { xdr: assembled.toXDR(), network: networkName() };
+  return { xdr: await preparedXdr(assembled), network: networkName() };
+}
+
+/** Reads the deadline stored in a deployed deadline-aware escrow contract. */
+export async function readSettlementDeadline(params: {
+  contractId: string;
+  sourceAddress: string;
+}): Promise<bigint | undefined> {
+  parse(stellarContractId, params.contractId, "contractId");
+  parse(stellarPublicKey, params.sourceAddress, "sourceAddress");
+  const assembled = await clientFor(
+    params.contractId,
+    params.sourceAddress,
+  ).get_settlement_deadline();
+  return assembled.result ?? undefined;
+}
+
+/** Builds a permissionless refund claim which always pays the registered player. */
+export async function buildClaimRefundTx(params: {
+  contractId: string;
+  playerAddress: string;
+  submitterAddress: string;
+}): Promise<{ xdr: string; network: string }> {
+  parse(stellarContractId, params.contractId, "contractId");
+  parse(stellarPublicKey, params.playerAddress, "playerAddress");
+  parse(stellarPublicKey, params.submitterAddress, "submitterAddress");
+  const c = clientFor(params.contractId, params.submitterAddress);
+  const assembled = await c.claim_refund({ player: params.playerAddress });
+  return { xdr: await preparedXdr(assembled), network: networkName() };
 }
 
 /**
@@ -54,6 +95,7 @@ export async function buildInitializeTx(params: {
   tokenAddr: string;
   entryFee: bigint;
   distributionBps: [number, number, number];
+  settlementDeadline: bigint;
 }): Promise<{ xdr: string; network: string }> {
   parse(stellarContractId, params.contractId, "contractId");
   parse(stellarPublicKey, params.organizerAddress, "organizerAddress");
@@ -61,6 +103,7 @@ export async function buildInitializeTx(params: {
   parse(stellarContractId, params.tokenAddr, "tokenAddr");
   parse(i128Amount, params.entryFee, "entryFee");
   parse(bpsSchema, params.distributionBps, "distributionBps");
+  parse(u64Timestamp, params.settlementDeadline, "settlementDeadline");
   if (params.organizerAddress === params.refereeAddress) {
     throw new StellarError("INVALID_INPUT", "organizer must differ from referee");
   }
@@ -71,8 +114,9 @@ export async function buildInitializeTx(params: {
     token: params.tokenAddr,
     entry_fee: params.entryFee,
     distribution_bps: params.distributionBps,
+    settlement_deadline: params.settlementDeadline,
   });
-  return { xdr: assembled.toXDR(), network: networkName() };
+  return { xdr: await preparedXdr(assembled), network: networkName() };
 }
 
 export async function buildFinalizeTx(params: {
@@ -99,7 +143,7 @@ export async function buildFinalizeTx(params: {
     second: params.second,
     third: params.third,
   });
-  return { xdr: assembled.toXDR(), network: networkName() };
+  return { xdr: await preparedXdr(assembled), network: networkName() };
 }
 
 export async function buildCancelTx(params: {
@@ -110,7 +154,7 @@ export async function buildCancelTx(params: {
   parse(stellarPublicKey, params.organizerAddress, "organizerAddress");
   const c = clientFor(params.contractId, params.organizerAddress);
   const assembled = await c.cancel_tournament();
-  return { xdr: assembled.toXDR(), network: networkName() };
+  return { xdr: await preparedXdr(assembled), network: networkName() };
 }
 
 export async function buildDeployInitializeTx(params: {
@@ -119,12 +163,14 @@ export async function buildDeployInitializeTx(params: {
   tokenAddr: string;
   entryFee: bigint;
   distributionBps: [number, number, number];
+  settlementDeadline: bigint;
 }): Promise<{ xdr: string; network: string }> {
   parse(stellarPublicKey, params.organizerAddress, "organizerAddress");
   parse(stellarPublicKey, params.refereeAddress, "refereeAddress");
   parse(stellarContractId, params.tokenAddr, "tokenAddr");
   parse(i128Amount, params.entryFee, "entryFee");
   parse(bpsSchema, params.distributionBps, "distributionBps");
+  parse(u64Timestamp, params.settlementDeadline, "settlementDeadline");
   if (params.organizerAddress === params.refereeAddress) {
     throw new StellarError("INVALID_INPUT", "organizer must differ from referee");
   }
@@ -141,5 +187,5 @@ export async function buildDeployInitializeTx(params: {
     networkPassphrase: networkPassphrase(),
     rpcUrl: env.SOROBAN_RPC_URL,
   });
-  return { xdr: assembled.toXDR(), network: networkName() };
+  return { xdr: await preparedXdr(assembled), network: networkName() };
 }

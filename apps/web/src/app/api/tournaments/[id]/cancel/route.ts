@@ -19,16 +19,16 @@ export async function POST(
   }
 
   // 2. Auth: must be an authenticated ORGANIZER.
-  // requireUser redirects (NEXT_REDIRECT) when unauthenticated, throws AuthError(403) for wrong role.
+  // API routes return a JSON envelope instead of redirecting when unauthenticated.
   let user: { id: string; username: string; role: string };
   try {
-    user = await requireUser("ORGANIZER");
+    user = await requireUser("ORGANIZER", false);
   } catch (e) {
     if (e instanceof AuthError) {
       const code = e.status === 403 ? "FORBIDDEN" : "UNAUTHORIZED";
       return err(code, e.message, e.status);
     }
-    throw e; // re-throw NEXT_REDIRECT and any other non-auth errors
+    throw e;
   }
 
   const { id } = await ctx.params;

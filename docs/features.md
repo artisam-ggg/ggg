@@ -2,6 +2,21 @@
 
 Running log of shipped features (append one entry per change), per the auto-dev workflow.
 
+## Issue #245 — Clear duplicate tournament participation
+
+The join endpoint now checks the persisted participant record before building an unsigned join transaction. A wallet already recorded for the tournament receives a clear `409 CONFLICT` response (`You are already a participant in this tournament.`), avoiding an unnecessary signature and generic submission error. The Soroban contract remains the source of truth for races or subscriber lag.
+## Issue #243 — Structured Soroban deployment failures
+
+Tournament deployment submission now distinguishes malformed input/network errors, rejected signatures, protocol-malformed signed envelopes, simulation failures, RPC submission failures, on-chain failures, and confirmation timeouts with safe structured API errors. RPC rejection data is Zod-validated before classification and every rejection logs its safe protocol result code. A `txMalformed` response is returned as a non-retryable 400 that tells the organiser to refresh and sign a newly generated transaction; `txBadAuth` is reported as a rejected signature (which can include a wrong signing network), not as a confirmed network mismatch. The browser preserves the safe message and transaction hash, links to the relevant Stellar.Expert transaction when available, and continues to handle malformed proxy responses without exposing internals or JSON parser errors.
+
+## Issue #239 — Inline referee wallet validation
+
+Tournament creation now renders an invalid referee wallet error directly below its input. The input receives visible error styling, `aria-invalid`, and an `aria-describedby` link to the accessible alert; correcting the field clears that feedback.
+
+## Issue #217 — Deadline reference-app wiring
+
+Tournament creation now accepts UTC Unix-second deadlines, applies the one-hour minimum and #215's 90-day Testnet-safe horizon in the shared client/server schema, persists the exact instant, and sends the exact seconds to contract initialization. The API/UI expose confirmed deadlines and explicit legacy-contract state without inventing deadlines for pre-deadline deployments. Subscriber replay identity now uses the stable Soroban RPC event id with the transaction hash; confirmed `refund_claimed` events remain the source of per-player refund state.
+
 ## Phase 0 — Foundation
 
 Stood up the GGG pnpm 10 monorepo skeleton with zero business logic, so every later phase has a proven foundation:
@@ -26,9 +41,9 @@ Implemented the trustless tournament prize-escrow contract (`contracts/escrow`) 
 - `initialize` (organizer-only) with validation of distribution bps, entry fee, and organizer≠referee.
 - `join_tournament` (player-auth) pulls entry fee, dedupes players, emits `registered` event.
 - `finalize_results` (referee-only) pays 60/30/10 with deterministic dust to 1st place; emits `finalized` event.
-- `cancel_tournament` (organizer-only) refunds all players; emits `cancelled` event.
+- `cancel_tournament` (organizer-only) records cancellation; registered players claim refunds individually.
 - Read-only `get_pool`, `get_reward`, `is_finished`.
-- Exhaustive `#[cfg(test)]` suite (28 tests) covering happy paths and all reverts.
+- Exhaustive `#[cfg(test)]` suite (49 tests) covering happy paths and all reverts.
 - Built, optimized, and uploaded WASM to Testnet; recorded `ESCROW_WASM_HASH` in `apps/web/.env.example`.
 - Generated TypeScript bindings under `apps/web/src/contract-client` for Phase 2/4 consumption.
 
@@ -42,7 +57,7 @@ Built the server-side Stellar integration module (`apps/web/src/lib/stellar/`) t
 - Network-aware Stellar.Expert URL builders for transactions and contracts.
 - Shared Vitest fakes for RPC/Horizon plus canned simulation/transaction responses.
 - `simulateAndAssemble` pipeline that always simulates before returning XDR, and `submitSignedXdr` that submits a Freighter-signed XDR and polls `getTransaction` with bounded retries/timeouts.
-- Unsigned-XDR builders for `join_tournament`, `finalize_results`, `cancel_tournament`, and `deploy` (the generated Phase 1 binding deploys the contract; initialize is a known follow-up once the contract/binding supports constructor-style deploy or a manual multi-op transaction).
+- Unsigned-XDR builders for `join_tournament`, `claim_refund`, `finalize_results`, `cancel_tournament`, and `deploy` (the generated Phase 1 binding deploys the contract; initialize is a known follow-up once the contract/binding supports constructor-style deploy or a manual multi-op transaction).
 - Public barrel (`index.ts`) exporting the exact Phase-4 contract surface.
 - Gated Testnet integration test (`RUN_STELLAR_IT=1`) proving a deploy XDR simulates successfully against Testnet.
 - Added `@stellar/stellar-sdk` 15 to `apps/web` and adjusted the generated contract-client package for strict TypeScript/ESLint compatibility.
@@ -55,7 +70,7 @@ Stood up the standalone `apps/subscriber` worker that ingests on-chain activity 
 - `SubscriberCursor` model + migration (per-contract ledger cursor) and a `ContractEvent @@unique([txHash, type])` migration backing idempotent dedupe.
 - `apps/subscriber` package: Zod-validated `getEvents` wrapper, fail-closed env loader, Prisma singleton reusing the web-generated client through the `web` workspace dependency.
 - Per-contract ledger cursor with restart recovery (`getCursor`/`setCursor`), advanced only after a successful ingest+publish pass (at-least-once).
-- Idempotent reconciliation of `registered`/`finalized`/`cancelled` events into `ContractEvent`/`Participant`/`Payout`/`Tournament` inside one transaction, deduped on `txHash` (replays are no-ops); money handled as `BigInt`.
+- Idempotent reconciliation of `registered`/`finalized`/`cancelled`/`refund_claimed` events into `ContractEvent`/`Participant`/`Payout`/`Tournament` inside one transaction, deduped on `txHash` (replays are no-ops); money handled as `BigInt`.
 - Redis publish to `tournament:<id>` + `pollTournament` orchestration; service loop polls every `ACTIVE` tournament with a `contractId`, isolates per-tournament failures, and shuts down gracefully on SIGTERM/SIGINT.
 - `GET /api/tournaments/[id]/events` SSE route: replays recent confirmed `ContractEvent` rows from Postgres (source of truth) then streams the Redis channel, with heartbeats and a `?fallback=poll` mode.
 - `useTournamentEvents` EventSource hook with auto-reconnect; `<PrizePoolCounter>` ticks up off the stream (key-driven `pool-pop` keyframe, reduced-motion aware) and `<LiveFeed>` renders a human-readable gloss ticker (reduced-motion aware).
@@ -114,3 +129,36 @@ Disabled client prefetching for `/tournaments/new` CTAs. This prevents a prefetc
 ## Issue #198 — Clean up SSE subscribers on disconnect and setup failure
 
 The tournament SSE endpoint now uses one idempotent cleanup path for request aborts, stream cancellation, failed setup, and failed writes. Redis subscribers and heartbeat intervals are released in every path; focused tests cover cancellation and replay/subscription failures.
+
+## Issue #233 — Restore settlement deadline integration and TTL safety
+
+Threaded the organiser-selected UTC settlement deadline through tournament creation, persistence, the Stellar transaction builder, and regenerated contract bindings. The conservative 90-day maximum settlement horizon is Testnet-safe and deliberately enforced uniformly on every supported network, so client and contract validation cannot diverge. Contract mutations are responsible for keeping instance and code TTL at 120 days, covering that horizon plus a 30-day margin; if either entry is nevertheless archived, the transaction submitter must restore it before invoking the contract. A CI regenerate-and-diff check guards against future contract/binding ABI drift; legacy tournament rows retain a nullable deadline for forward-migration compatibility and cannot generate a new initialize transaction without one.
+
+Deploy confirmation now keeps a tournament in `DRAFT` until its separate `initialize` transaction confirms. A missing or expired settlement deadline fails closed before activation; a regression test covers expiry during deploy confirmation, ensuring no initialization XDR is returned for an unusable escrow.
+
+## Issue #216 — Permissionless claimant refunds
+
+`claim_refund(player)` is permissionless: after the inclusive settlement deadline, or immediately after cancellation, any caller can submit a claim but the entry fee is always transferred only to that registered player. Each player can claim once; unknown players and finalized escrows are rejected. Cancellation now only records its terminal state, so no transaction loops over participants; individual refund claims are O(1) and preserve transfer atomicity. The contract enforces a Testnet-simulated `MAX_PLAYERS` ceiling of 100 registrations, with tests at the limit and one-over-limit, while refund tests cover deadline/state boundaries, arbitrary callers, exact events, failed transfers, and conservation.
+## Issue #240 — Identify participant timestamp timezones
+
+Participant registration times now render in UTC and expose the exact UTC instant through an accessible label.
+
+## Issue #241 — Prevent stale authenticated tournament forms after logout
+
+Authenticated tournament creation is dynamically rendered and sent with no-store cache control. Logout replaces the current history entry, API creation checks the current server session, and the form safely reports authentication or non-JSON failures.
+
+## Issue #242 — Support wallet switching and disconnection
+
+Wallet controls now let a user re-check Freighter after changing accounts and explicitly disconnect from the current GGG flow. Both actions update the shared parent wallet state, so join, create, refund, and referee settlement actions cannot continue using a stale address.
+
+## Issue #246 — Secure tournament cover uploads
+
+Cover image uploads now pass through the authenticated server route, which accepts only PNG, JPEG, and WEBP files up to 5 MB after MIME and file-signature validation. Rejected uploads are not written to object storage, and the creation form displays the safe API error message rather than an error object.
+
+## Issue #244 - Persist tournament creation drafts
+
+The create-tournament form now restores a validated `ggg:tournament-create-draft` browser draft after reload and offers Clear Draft. It stores only serializable public form fields; the connected organizer wallet and cover-image upload state are intentionally fetched live and never persisted.
+
+## Issue #259 — Assemble initialization transactions after contract deployment
+
+New tournament contracts now re-simulate and assemble their generated `initialize` invocation after deployment, ensuring the wallet signs Soroban resource data and fees for the newly-created instance. The opt-in Testnet integration test covers the full signed deploy-to-initialize sequence; existing DRAFT contracts with a deployed `contractId` can safely retry initialization through the existing deployment-recovery path.
