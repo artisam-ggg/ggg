@@ -191,7 +191,7 @@ describe("POST /api/tournaments/[id]/submit", () => {
     expect(updateData.deployTxHash).toBe("TX1");
   });
 
-  it("sets ACTIVE only after initialize succeeds", async () => {
+  it("sets ACTIVE only after confirmed initialize state matches", async () => {
     findUniqueMock.mockResolvedValueOnce({ ...dbTournament, contractId: "CDEPLOYED" });
 
     const res = await POST(
@@ -213,6 +213,9 @@ describe("POST /api/tournaments/[id]/submit", () => {
     });
     expect(validateInitializeMock).toHaveBeenCalledWith(
       VALID_XDR,
+      expect.objectContaining({ contractId: "CDEPLOYED" }),
+    );
+    expect(readSettlementDeadlineMock).toHaveBeenCalledWith(
       expect.objectContaining({ contractId: "CDEPLOYED" }),
     );
   });
