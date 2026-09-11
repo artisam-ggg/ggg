@@ -2,6 +2,10 @@
 
 Running log of shipped features (append one entry per change), per the auto-dev workflow.
 
+## Issue #245 — Clear duplicate tournament participation
+
+The join endpoint now checks the persisted participant record before building an unsigned join transaction. A wallet already recorded for the tournament receives a clear `409 CONFLICT` response (`You are already a participant in this tournament.`), avoiding an unnecessary signature and generic submission error. The Soroban contract remains the source of truth for races or subscriber lag.
+
 ## Issue #217 — Deadline reference-app wiring
 
 Tournament creation now accepts UTC Unix-second deadlines, applies the one-hour minimum and #215's 90-day Testnet-safe horizon in the shared client/server schema, persists the exact instant, and sends the exact seconds to contract initialization. The API/UI expose confirmed deadlines and explicit legacy-contract state without inventing deadlines for pre-deadline deployments. Subscriber replay identity now uses the stable Soroban RPC event id with the transaction hash; confirmed `refund_claimed` events remain the source of per-player refund state.

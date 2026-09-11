@@ -14,6 +14,7 @@ import {
   submitSignedXdr,
   validateInitializeXdr,
 } from "@/lib/stellar";
+
 import type {
   CreateTournamentInput,
   FinalizeInput,
@@ -348,6 +349,14 @@ export async function buildJoin(
   }
   if (t.status !== "ACTIVE" || !t.contractId) {
     throw Object.assign(new Error("Tournament is not open for joining"), { status: 409 });
+  }
+  const participant = await prisma.participant.findUnique({
+    where: { tournamentId_playerAddr: { tournamentId: id, playerAddr: playerAddress } },
+  });
+  if (participant) {
+    throw Object.assign(new Error("You are already a participant in this tournament."), {
+      status: 409,
+    });
   }
   const { xdr, network } = await buildJoinTx({
     contractId: t.contractId,
