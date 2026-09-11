@@ -89,6 +89,7 @@ describe("POST /api/uploads", () => {
 
     expect(res.status).toBe(status);
     await expect(res.json()).resolves.toEqual({ ok: false, error: { code, message } });
+    expect(requireUserMock).toHaveBeenCalledWith(undefined, false);
     expect(uploadCoverImageMock).not.toHaveBeenCalled();
   });
 
