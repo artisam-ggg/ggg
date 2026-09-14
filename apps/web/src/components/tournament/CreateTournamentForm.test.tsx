@@ -225,6 +225,75 @@ describe("CreateTournamentForm", () => {
     expect(screen.getByText(/the matching UTC instant is stored on-chain/i)).toBeInTheDocument();
   });
 
+  it.each([
+    ["spring-forward gap", "2027-02-01T00:00:00Z", "2027-03-14T02:30"],
+    ["fall-back repeated hour", "2026-10-01T00:00:00Z", "2026-11-01T01:30"],
+  ])("rejects a %s before submission", async (_case, now, deadline) => {
+    vi.stubEnv("TZ", "America/New_York");
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.parse(now));
+    const mockFetch = vi.fn();
+    vi.stubGlobal("fetch", mockFetch);
+    try {
+      render(<CreateTournamentForm expectedPassphrase="P" />);
+      fireEvent.change(screen.getByLabelText(/tournament name/i), { target: { value: "Cup" } });
+      fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
+      fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
+      fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+      fireEvent.change(screen.getByLabelText(/settlement deadline/i), {
+        target: { value: deadline },
+      });
+      fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+      await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
+      fireEvent.click(screen.getByRole("button", { name: /deploy soroban contract/i }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        /not skipped or repeated by daylight saving/i,
+      );
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(signAndSubmit).not.toHaveBeenCalled();
+    } finally {
+      clock.mockRestore();
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("submits an unambiguous local time after the fall-back transition", async () => {
+    vi.stubEnv("TZ", "America/New_York");
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-01T00:00:00Z"));
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          data: { tournamentId: "t_1", unsignedXdr: "XDR_UNSIGNED", network: "testnet" },
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", mockFetch);
+    try {
+      render(<CreateTournamentForm expectedPassphrase="P" />);
+      fireEvent.change(screen.getByLabelText(/tournament name/i), { target: { value: "Cup" } });
+      fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
+      fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
+      fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+      fireEvent.change(screen.getByLabelText(/settlement deadline/i), {
+        target: { value: "2026-11-01T02:30" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+      await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
+      fireEvent.click(screen.getByRole("button", { name: /deploy soroban contract/i }));
+
+      await waitFor(() => expect(mockFetch).toHaveBeenCalled());
+      const payload = JSON.parse(mockFetch.mock.calls[0]![1].body as string);
+      expect(payload.settlementDeadline).toBe(Date.parse("2026-11-01T07:30:00Z") / 1000);
+    } finally {
+      clock.mockRestore();
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("shows split-sum error when percentages do not sum to 100", () => {
     render(<CreateTournamentForm expectedPassphrase="P" />);
     // Change 1st to 50% — now sum = 50+30+10 = 90

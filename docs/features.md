@@ -169,4 +169,4 @@ Public tournament pages display an uploaded cover when one exists. A read route 
 
 ## Issue #265 — Show settlement deadlines in local time
 
-Tournament detail pages keep the exact UTC settlement deadline visible without JavaScript and add the viewer's local date and time, including its timezone abbreviation or offset, after hydration. Browser timezone conversion handles date rollover and daylight saving; the stored and on-chain UTC deadline is unchanged. The creation form labels its date-time input as local time and explains the UTC storage behavior.
+Tournament detail pages keep the exact UTC settlement deadline visible without JavaScript and add the viewer's local date and time, including its timezone abbreviation or offset, after hydration. Browser timezone conversion handles date rollover and daylight saving; the stored and on-chain UTC deadline is unchanged. The creation form labels its date-time input as local time, explains the UTC storage behavior, and rejects skipped or repeated local times around daylight-saving changes before submission.

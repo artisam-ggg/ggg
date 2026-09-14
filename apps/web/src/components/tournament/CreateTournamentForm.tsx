@@ -313,6 +313,19 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         setError("Settlement deadline is required");
         return;
       }
+      const localMinute = (ms: number) =>
+        new Date(ms - new Date(ms).getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+      const selectedMinute = settlementDeadline.slice(0, 16);
+      const offset = new Date(deadlineMs).getTimezoneOffset();
+      const ambiguous = [-86_400_000, 86_400_000].some((delta) => {
+        const otherOffset = new Date(deadlineMs + delta).getTimezoneOffset();
+        const alternative = deadlineMs + (otherOffset - offset) * 60_000;
+        return otherOffset !== offset && localMinute(alternative) === selectedMinute;
+      });
+      if (localMinute(deadlineMs) !== selectedMinute || ambiguous) {
+        setError("Choose a local time that is not skipped or repeated by daylight saving.");
+        return;
+      }
 
       const payload = {
         name,
