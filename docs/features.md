@@ -162,3 +162,7 @@ The create-tournament form now restores a validated `ggg:tournament-create-draft
 ## Issue #259 — Assemble initialization transactions after contract deployment
 
 New tournament contracts now re-simulate and assemble their generated `initialize` invocation after deployment, ensuring the wallet signs Soroban resource data and fees for the newly-created instance. The opt-in Testnet integration test covers the full signed deploy-to-initialize sequence; existing DRAFT contracts with a deployed `contractId` can safely retry initialization through the existing deployment-recovery path.
+
+## Issue #263 — Show tournament cover images
+
+Public tournament pages display an uploaded cover when one exists. A read route looks up the cover key by tournament ID, validates its `covers/<UUID>` image path, and serves only that stored object with the matching image content type. Tournaments without covers keep the existing layout, and a missing or unavailable image is hidden without interrupting the page.
