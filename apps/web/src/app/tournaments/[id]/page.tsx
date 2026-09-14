@@ -3,6 +3,7 @@ import { env } from "@/lib/env";
 import { getCurrentUser } from "@/lib/auth-guards";
 import { getTournamentDetail } from "@/server/services/tournaments";
 import { StatusChip } from "@/components/tournament/StatusChip";
+import { TournamentCover } from "@/components/tournament/TournamentCover";
 import { ContractAddress } from "@/components/tournament/ContractAddress";
 import { PrizePoolCounter } from "@/components/tournament/PrizePoolCounter";
 import { JoinCard } from "@/components/tournament/JoinCard";
@@ -71,6 +72,8 @@ export default async function TournamentDetailPage({
         </div>
         <StatusChip status={t.status} />
       </header>
+
+      {t.coverImageUrl && <TournamentCover src={t.coverImageUrl} name={t.name} />}
 
       <p className="data-mono mt-3 text-sm text-on-surface-variant">
         {t.settlementDeadline

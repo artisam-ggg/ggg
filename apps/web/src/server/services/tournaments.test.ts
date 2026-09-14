@@ -59,6 +59,7 @@ describe("getTournamentDetail", () => {
       id: "t_1",
       name: "Tournament",
       gameTitle: "Game",
+      coverImageKey: "covers/123e4567-e89b-12d3-a456-426614174000.png",
       status: "CANCELLED",
       asset: "XLM",
       entryFee: 10_000_000n,
@@ -86,6 +87,7 @@ describe("getTournamentDetail", () => {
 
     await expect(getTournamentDetail("t_1")).resolves.toMatchObject({
       pool: "20000000",
+      coverImageUrl: "/api/tournaments/t_1/cover",
       refundClaimedPlayers: ["GA"],
       settlementDeadline: null,
       contractVersion: "LEGACY",
@@ -114,7 +116,10 @@ describe("getTournamentDetail", () => {
       events: [{ payload: { player: "GA", amount: "10000000" } }],
     });
 
-    await expect(getTournamentDetail("t_1")).resolves.toMatchObject({ pool: "0" });
+    await expect(getTournamentDetail("t_1")).resolves.toMatchObject({
+      pool: "0",
+      coverImageUrl: null,
+    });
   });
 
   it("does not present a draft deadline as confirmed", async () => {

@@ -41,6 +41,10 @@ const i128AmountFromString = z
 
 // --- createTournamentSchema ---
 
+export const coverImageKeySchema = z
+  .string()
+  .regex(/^covers\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(png|jpg|webp)$/);
+
 export const createTournamentSchema = z
   .object({
     name: z.string().min(1).max(120),
@@ -56,12 +60,7 @@ export const createTournamentSchema = z
       z.number().int().min(0).max(10000),
       z.number().int().min(0).max(10000),
     ]),
-    coverImageKey: z
-      .string()
-      .regex(
-        /^covers\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(png|jpg|webp)$/,
-      )
-      .optional(),
+    coverImageKey: coverImageKeySchema.optional(),
   })
   .refine((v) => v.distributionBps[0] + v.distributionBps[1] + v.distributionBps[2] === 10000, {
     message: "Split must sum to 10000 basis points",

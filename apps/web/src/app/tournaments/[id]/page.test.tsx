@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ---------------------------------------------------------------------------
@@ -44,6 +44,7 @@ const ACTIVE_TOURNAMENT = {
   id: "t_1",
   name: "Summer Cup",
   gameTitle: "Street Fighter 6",
+  coverImageUrl: null,
   status: "ACTIVE" as const,
   asset: "XLM" as const,
   entryFee: "10000000",
@@ -106,6 +107,36 @@ describe("/tournaments/[id] — public detail page", () => {
   // (a) ACTIVE tournament — header, status, pool, join card, participants
   // -------------------------------------------------------------------------
   describe("ACTIVE tournament", () => {
+    it("shows an uploaded cover on the public page", async () => {
+      mockGetTournamentDetail.mockResolvedValue({
+        ...ACTIVE_TOURNAMENT,
+        coverImageUrl: "/api/tournaments/t_1/cover",
+      });
+      render(await Page({ params: Promise.resolve({ id: "t_1" }) }));
+
+      expect(
+        screen.getByRole("img", { name: "Summer Cup tournament cover" }).getAttribute("src"),
+      ).toMatch(/\/api\/tournaments\/t_1\/cover$/);
+    });
+
+    it("keeps the default layout when there is no cover", async () => {
+      mockGetTournamentDetail.mockResolvedValue(ACTIVE_TOURNAMENT);
+      render(await Page({ params: Promise.resolve({ id: "t_1" }) }));
+      expect(screen.queryByRole("img", { name: /tournament cover/i })).not.toBeInTheDocument();
+    });
+
+    it("hides a cover that fails to load without hiding tournament details", async () => {
+      mockGetTournamentDetail.mockResolvedValue({
+        ...ACTIVE_TOURNAMENT,
+        coverImageUrl: "/api/tournaments/t_1/cover",
+      });
+      render(await Page({ params: Promise.resolve({ id: "t_1" }) }));
+
+      fireEvent.error(screen.getByRole("img", { name: "Summer Cup tournament cover" }));
+      expect(screen.queryByRole("img", { name: /tournament cover/i })).not.toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Summer Cup" })).toBeInTheDocument();
+    });
+
     it("renders the tournament name as h1", async () => {
       mockGetTournamentDetail.mockResolvedValue(ACTIVE_TOURNAMENT);
       render(await Page({ params: Promise.resolve({ id: "t_1" }) }));

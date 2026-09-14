@@ -516,6 +516,7 @@ export async function getTournamentDetail(id: string) {
     id: t.id,
     name: t.name,
     gameTitle: t.gameTitle,
+    coverImageUrl: t.coverImageKey ? `/api/tournaments/${encodeURIComponent(t.id)}/cover` : null,
     status: t.status,
     asset: t.asset,
     entryFee: t.entryFee.toString(),
