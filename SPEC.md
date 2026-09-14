@@ -17,7 +17,7 @@ The signature demo: open the dashboard → create a tournament with an XLM entry
 | Actor     | Auth                                                              | On-chain identity                                   |
 | --------- | ----------------------------------------------------------------- | --------------------------------------------------- |
 | Admin     | Username + password (seeded)                                      | Optional Freighter                                  |
-| Organiser | Username + password (self-register)                               | Freighter wallet (source of `initialize`, `cancel`) |
+| Organiser | Username + password (self-register)                               | Freighter wallet (source of constructor deployment, `cancel`) |
 | Referee   | Username + password; identified by wallet address on a tournament | Freighter wallet (source of `finalize_results`)     |
 | Player    | No app account required                                           | Freighter-compatible wallet (source of `join`)      |
 
@@ -99,7 +99,7 @@ Polls Soroban RPC `getEvents` for each active tournament's contract, persists re
 
 ## 4. Smart contract — Tournament Escrow (Soroban)
 
-Written in Rust with `soroban-sdk` 26, compiled to WASM, deployed once, instantiated per tournament. Entry fees and payouts move a **token** — for native XLM this is the Stellar Asset Contract (SAC) address of native; USDC is the issuer's SAC. The token contract address is supplied at initialization so the escrow is asset-agnostic.
+Written in Rust with `soroban-sdk` 26, compiled to WASM, deployed once, instantiated per tournament. Entry fees and payouts move a **token** — for native XLM this is the Stellar Asset Contract (SAC) address of native; USDC is the issuer's SAC. The token contract address is supplied to the constructor so the escrow is asset-agnostic.
 
 ### Storage / state
 
@@ -118,7 +118,7 @@ Written in Rust with `soroban-sdk` 26, compiled to WASM, deployed once, instanti
 ### Functions
 
 ```rust
-initialize(
+__constructor(
     organizer: Address,
     referee: Address,
     token: Address,
@@ -128,7 +128,7 @@ initialize(
 )
 ```
 
-Creates the tournament. **Requires `organizer.require_auth()`.** Validates: `distribution_bps.len() == 3`, sum == 10000, `entry_fee > 0`, `organizer != referee`, and a future deadline within the Testnet-safe horizon. Callable once; panics if already initialized.
+Creates the tournament atomically with deployment. **Requires `organizer.require_auth()`.** Validates: `distribution_bps.len() == 3`, sum == 10000, `entry_fee > 0`, `organizer != referee`, and a future deadline within the Testnet-safe horizon. A failed constructor rolls back deployment.
 
 ```rust
 join_tournament(player: Address)
@@ -181,7 +181,7 @@ Permissionless. After the inclusive settlement deadline, or immediately after ca
 
 ### Security invariants
 
-- Only `organizer` may `initialize` and `cancel`.
+- The deployment constructor requires `organizer` authorization; only `organizer` may `cancel`.
 - Only `referee` may `finalize_results`.
 - Funds leave the contract **only** via payout or refund logic — there is no withdraw function.
 - Idempotency: `finalize`/`cancel` cannot run twice; `join` cannot double-register; each player can claim one refund.
@@ -192,7 +192,7 @@ Permissionless. After the inclusive settlement deadline, or immediately after ca
 
 - `stellar contract build` → `target/wasm32v1-none/release/ggg_escrow.wasm`
 - Upload WASM once (`stellar contract upload`) → record the **WASM hash**.
-- Per tournament: `stellar contract deploy --wasm-hash <hash>` then invoke `initialize`. The server orchestrates this via Soroban RPC and the organiser's Freighter signature.
+- Per tournament: deploy the uploaded WASM with all six `__constructor` arguments in one transaction. The server builds and submits via Soroban RPC; the organiser signs with Freighter.
 - Generate TypeScript bindings for the frontend/server: `npx @stellar/stellar-sdk generate --wasm <wasm> --output-dir src/contract-client --contract-name ggg-escrow`.
 - Ship a full unit/integration test suite using the SDK's test utils (`Env::default()`), covering each invariant above.
 
@@ -240,7 +240,7 @@ Base path `/api`. JSON in/out. All inputs validated with Zod; all responses use 
 
 ### Tournaments
 
-**`POST /api/tournaments`** — _Organiser._ Create a tournament record and build the deploy + `initialize` transaction.
+**`POST /api/tournaments`** — _Organiser._ Create a draft tournament record and build the atomic deploy + constructor transaction.
 
 - Body: `{ name, gameTitle, entryFee, asset: "XLM"|"USDC", refereeAddress, distributionBps: [number,number,number], organizerAddress, settlementDeadline, coverImageKey? }`
 - Validation: split sums to 10000; `refereeAddress`/`organizerAddress` valid `G...`; `entryFee > 0`; `organizer != referee`; deadline is future and within the supported horizon.
@@ -248,7 +248,7 @@ Base path `/api`. JSON in/out. All inputs validated with Zod; all responses use 
 
 **`POST /api/tournaments/[id]/submit`** — _Authenticated user._ Accept a signed XDR, submit via Soroban RPC, and poll for result. On success, persist lifecycle state for deploy, finalize, and cancel; a refund claim leaves the cancelled tournament state unchanged.
 
-- Body: `{ signedXdr, intent: "deploy"|"initialize"|"join"|"claim_refund"|"finalize"|"cancel" }`
+- Body: `{ signedXdr, intent: "deploy"|"join"|"claim_refund"|"finalize"|"cancel" }`
 
 **`GET /api/tournaments`** — _Organiser._ List tournaments for the authenticated user. Supports `?status=` filter and pagination.
 
@@ -443,7 +443,7 @@ A `prisma/seed.ts` that creates the seeded **admin** user from `ADMIN_USERNAME`/
 
 ## 13. Operational flows
 
-**Flow 01 — Tournament creation.** Organiser logs in → fills `/tournaments/new` → connects Freighter → `POST /api/tournaments` builds the deploy + `initialize` XDR (organiser as source) → Freighter signs → `POST /api/tournaments/[id]/submit` submits & polls → on confirmation, `contractId` stored, status `ACTIVE`, QR + URI generated.
+**Flow 01 — Tournament creation.** Organiser logs in → fills `/tournaments/new` → connects Freighter → `POST /api/tournaments` builds the atomic deploy + constructor XDR (organiser as source) → Freighter signs once → `POST /api/tournaments/[id]/submit` submits & polls → on confirmation, `contractId` stored, status `ACTIVE`, QR + URI generated.
 
 **Flow 02 — Player joins.** Player scans QR / opens detail page → "Join" → `POST /api/tournaments/[id]/join` builds the `join_tournament` XDR (entry-fee transfer) → Freighter signs → submitted → contract records registration → subscriber updates pool → UI updates live over SSE.
 

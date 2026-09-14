@@ -40,7 +40,7 @@ pub enum DataKey {
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum Error {
-    AlreadyInitialized = 1,
+    AlreadyInitialized = 1, // retained error code for compatibility with existing deployments
     BadDistributionLen = 2,
     BadDistributionSum = 3,
     NonPositiveEntryFee = 4,
@@ -89,7 +89,7 @@ pub struct Escrow;
 
 #[contractimpl]
 impl Escrow {
-    pub fn initialize(
+    pub fn __constructor(
         env: Env,
         organizer: Address,
         referee: Address,
@@ -98,9 +98,6 @@ impl Escrow {
         distribution_bps: Vec<u32>,
         settlement_deadline: u64,
     ) {
-        if env.storage().instance().has(&DataKey::Organizer) {
-            panic_with_error!(&env, Error::AlreadyInitialized);
-        }
         organizer.require_auth();
 
         if distribution_bps.len() != 3 {

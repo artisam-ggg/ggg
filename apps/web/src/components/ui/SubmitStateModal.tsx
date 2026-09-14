@@ -2,7 +2,7 @@
 
 import { CheckCircle2, AlertTriangle } from "lucide-react";
 
-type Phase = "idle" | "signing" | "submitting" | "initializing" | "success" | "error";
+type Phase = "idle" | "signing" | "submitting" | "success" | "error";
 
 interface SubmitStateModalProps {
   open: boolean;
@@ -15,7 +15,6 @@ const phaseLabel: Record<Phase, string> = {
   idle: "",
   signing: "SIGNING…",
   submitting: "SUBMITTING…",
-  initializing: "INITIALISING…",
   success: "SETTLED",
   error: "FAILED",
 };
@@ -24,7 +23,6 @@ const phaseAriaLabel: Record<Phase, string> = {
   idle: "Transaction",
   signing: "Signing transaction",
   submitting: "Submitting transaction",
-  initializing: "Initialising contract",
   success: "Transaction settled",
   error: "Transaction failed",
 };

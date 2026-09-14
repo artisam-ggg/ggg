@@ -2,14 +2,8 @@
 // Pure Stellar XDR-builder logic with no DOM; runs in node so Keypair.random()
 // gets a real WebCrypto seed (jsdom's crypto yields the wrong seed type).
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import {
-  Account,
-  Keypair,
-  nativeToScVal,
-  Operation,
-  scValToNative,
-  TransactionBuilder,
-} from "@stellar/stellar-sdk";
+import { createHash } from "node:crypto";
+import { Account, Keypair, Operation, TransactionBuilder } from "@stellar/stellar-sdk";
 
 const pipeline = vi.hoisted(() => ({ simulateAndAssemble: vi.fn() }));
 
@@ -18,7 +12,6 @@ const joinFn = vi.fn();
 const claimRefundFn = vi.fn();
 const finalizeFn = vi.fn();
 const cancelFn = vi.fn();
-const initializeFn = vi.fn();
 const getSettlementDeadlineFn = vi.fn();
 const deployFn = vi.fn();
 const ClientCtor = vi.fn().mockImplementation(function () {
@@ -27,7 +20,6 @@ const ClientCtor = vi.fn().mockImplementation(function () {
     claim_refund: claimRefundFn,
     finalize_results: finalizeFn,
     cancel_tournament: cancelFn,
-    initialize: initializeFn,
     get_settlement_deadline: getSettlementDeadlineFn,
   };
 });
@@ -50,27 +42,6 @@ const G = Keypair.random().publicKey();
 const G2 = Keypair.random().publicKey();
 const G3 = Keypair.random().publicKey();
 const C = "CCJZ5DGASBWQXR5MPFCJXMBI333XE5U3FSJTNQU7RIKE3P5GN2K2WYD5";
-const INITIALIZE_XDR = new TransactionBuilder(new Account(G, "1"), {
-  fee: "100",
-  networkPassphrase: "Test SDF Network ; September 2015",
-})
-  .addOperation(
-    Operation.invokeContractFunction({
-      contract: C,
-      function: "initialize",
-      args: [
-        nativeToScVal(G, { type: "address" }),
-        nativeToScVal(G2, { type: "address" }),
-        nativeToScVal(C, { type: "address" }),
-        nativeToScVal(10_000_000n, { type: "i128" }),
-        nativeToScVal([6000, 3000, 1000], { type: ["u32"] }),
-        nativeToScVal(1_800_000_000n, { type: "u64" }),
-      ],
-    }),
-  )
-  .setTimeout(0)
-  .build()
-  .toXDR();
 const RAW_XDR = new TransactionBuilder(new Account(G, "1"), {
   fee: "100",
   networkPassphrase: "Test SDF Network ; September 2015",
@@ -85,14 +56,12 @@ beforeEach(() => {
   claimRefundFn.mockClear();
   finalizeFn.mockClear();
   cancelFn.mockClear();
-  initializeFn.mockClear();
   getSettlementDeadlineFn.mockReset();
   ClientCtor.mockClear();
   joinFn.mockResolvedValue(built(RAW_XDR));
   claimRefundFn.mockResolvedValue(built(RAW_XDR));
   finalizeFn.mockResolvedValue(built(RAW_XDR));
   cancelFn.mockResolvedValue(built(RAW_XDR));
-  initializeFn.mockResolvedValue(built(INITIALIZE_XDR));
   getSettlementDeadlineFn.mockResolvedValue({ result: null });
   deployFn.mockResolvedValue(built(RAW_XDR));
   pipeline.simulateAndAssemble.mockReset();
@@ -150,43 +119,6 @@ describe("readSettlementDeadline", () => {
   });
 });
 
-describe("buildInitializeTx", () => {
-  it("assembles the expected initialize invocation before returning its XDR", async () => {
-    const { buildInitializeTx } = await import("./builders");
-    const settlementDeadline = 1_800_000_000n;
-    const res = await buildInitializeTx({
-      contractId: C,
-      organizerAddress: G,
-      refereeAddress: G2,
-      tokenAddr: C,
-      entryFee: 10000000n,
-      distributionBps: [6000, 3000, 1000],
-      settlementDeadline,
-    });
-
-    expect(res).toEqual({ xdr: "PREPARED_XDR", network: "testnet" });
-    expect(initializeFn).toHaveBeenCalledWith(
-      expect.objectContaining({ settlement_deadline: settlementDeadline }),
-    );
-    expect(pipeline.simulateAndAssemble).toHaveBeenCalledOnce();
-    const prepared = pipeline.simulateAndAssemble.mock.calls[0]![0];
-    expect(prepared.toXDR()).toBe(INITIALIZE_XDR);
-    const op = prepared.operations[0] as unknown as {
-      func: {
-        value(): { functionName(): { toString(encoding: string): string }; args(): unknown[] };
-      };
-    };
-    expect(op.func.value().functionName().toString("utf-8")).toBe("initialize");
-    const values = op.func
-      .value()
-      .args()
-      .map((arg) => scValToNative(arg as never));
-    expect(values.slice(0, 4)).toEqual([G, G2, C, 10_000_000n]);
-    expect((values[4] as (number | bigint)[]).map(Number)).toEqual([6000, 3000, 1000]);
-    expect(values[5]).toBe(settlementDeadline);
-  });
-});
-
 describe("buildFinalizeTx", () => {
   it("passes referee as source and three winners", async () => {
     const { buildFinalizeTx } = await import("./builders");
@@ -221,6 +153,7 @@ describe("buildDeployInitializeTx", () => {
   it("returns simulated deploy+initialize XDR with token + bps", async () => {
     const { buildDeployInitializeTx } = await import("./builders");
     const res = await buildDeployInitializeTx({
+      tournamentId: "t_1",
       organizerAddress: G,
       refereeAddress: G2,
       tokenAddr: C,
@@ -229,11 +162,27 @@ describe("buildDeployInitializeTx", () => {
       settlementDeadline: 1_800_000_000n,
     });
     expect(res).toEqual({ xdr: "PREPARED_XDR", network: "testnet" });
+    expect(deployFn).toHaveBeenCalledWith(
+      {
+        organizer: G,
+        referee: G2,
+        token: C,
+        entry_fee: 10000000n,
+        distribution_bps: [6000, 3000, 1000],
+        settlement_deadline: 1_800_000_000n,
+      },
+      expect.objectContaining({
+        publicKey: G,
+        salt: createHash("sha256").update("t_1").digest(),
+      }),
+    );
+    expect(pipeline.simulateAndAssemble).toHaveBeenCalledOnce();
   });
   it("rejects when organizer === referee", async () => {
     const { buildDeployInitializeTx } = await import("./builders");
     await expect(
       buildDeployInitializeTx({
+        tournamentId: "t_1",
         organizerAddress: G,
         refereeAddress: G,
         tokenAddr: C,
@@ -247,6 +196,7 @@ describe("buildDeployInitializeTx", () => {
     const { buildDeployInitializeTx } = await import("./builders");
     await expect(
       buildDeployInitializeTx({
+        tournamentId: "t_1",
         organizerAddress: G,
         refereeAddress: G2,
         tokenAddr: C,
@@ -260,6 +210,7 @@ describe("buildDeployInitializeTx", () => {
     const { buildDeployInitializeTx } = await import("./builders");
     await expect(
       buildDeployInitializeTx({
+        tournamentId: "t_1",
         organizerAddress: G,
         refereeAddress: G2,
         tokenAddr: C,

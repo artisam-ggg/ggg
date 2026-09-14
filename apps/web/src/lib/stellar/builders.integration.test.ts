@@ -6,19 +6,25 @@ const enabled = process.env.RUN_STELLAR_IT === "1";
 const d = enabled ? describe : describe.skip;
 
 d("Testnet integration", () => {
-  it("deploys then initializes a contract with two signed Testnet transactions", async () => {
+  it("deploys an immediately joinable escrow in one signed Testnet transaction", async () => {
     const organizer = Keypair.random();
     const referee = Keypair.random();
+    const player = Keypair.random();
     // fund organizer via Friendbot
     const res = await fetch(
       `https://friendbot.stellar.org/?addr=${encodeURIComponent(organizer.publicKey())}`,
     );
     expect(res.ok).toBe(true);
+    const fundedPlayer = await fetch(
+      `https://friendbot.stellar.org/?addr=${encodeURIComponent(player.publicKey())}`,
+    );
+    expect(fundedPlayer.ok).toBe(true);
 
-    const { buildDeployInitializeTx, buildInitializeTx, readSettlementDeadline, submitSignedXdr } =
+    const { buildDeployInitializeTx, buildJoinTx, readSettlementDeadline, submitSignedXdr } =
       await import("./index");
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 24 * 60 * 60);
     const out = await buildDeployInitializeTx({
+      tournamentId: `testnet-${organizer.publicKey()}`,
       organizerAddress: organizer.publicKey(),
       refereeAddress: referee.publicKey(),
       // Avoid resolveSacAddress here: the test must not depend on NATIVE_SAC_ADDRESS.
@@ -28,42 +34,35 @@ d("Testnet integration", () => {
       settlementDeadline: deadline,
     });
     const deploy = TransactionBuilder.fromXDR(out.xdr, PASSPHRASE);
+    expect(deploy.operations).toHaveLength(1);
+    const operation = deploy.operations[0] as {
+      func?: { switch(): { name: string }; value(): { constructorArgs(): unknown[] } };
+    };
+    expect(operation.func?.switch().name).toBe("hostFunctionTypeCreateContractV2");
+    expect(operation.func?.value().constructorArgs()).toHaveLength(6);
+    const sorobanData = deploy.toEnvelope().v1().tx().ext().value();
+    expect(BigInt(sorobanData!.resourceFee().toString())).toBeGreaterThan(0n);
     deploy.sign(organizer);
     const deployed = await submitSignedXdr(deploy.toEnvelope().toXDR("base64"), "deploy");
     expect(deployed.status).toBe("SUCCESS");
     expect(deployed.contractId).toBeDefined();
 
-    const initialize = await buildInitializeTx({
-      contractId: deployed.contractId!,
-      organizerAddress: organizer.publicKey(),
-      refereeAddress: referee.publicKey(),
-      tokenAddr: Asset.native().contractId(PASSPHRASE),
-      entryFee: 10_000_000n,
-      distributionBps: [6000, 3000, 1000],
-      settlementDeadline: deadline,
-    });
-    const initializeTx = TransactionBuilder.fromXDR(initialize.xdr, PASSPHRASE);
-    const sorobanData = initializeTx.toEnvelope().v1().tx().ext().value();
-    expect(sorobanData).toBeDefined();
-    expect(BigInt(sorobanData!.resourceFee().toString())).toBeGreaterThan(0n);
-    const operation = initializeTx.operations[0] as { auth?: unknown[] } | undefined;
-    expect(operation?.auth).toBeDefined();
-    expect(operation?.auth).not.toHaveLength(0);
-    initializeTx.sign(organizer);
-    const signedInitializeXdr = initializeTx.toEnvelope().toXDR("base64");
-    const signedInitialize = TransactionBuilder.fromXDR(signedInitializeXdr, PASSPHRASE);
-    expect(signedInitialize.signatures).toHaveLength(1);
-    expect(
-      organizer.verify(signedInitialize.hash(), signedInitialize.signatures[0]!.signature()),
-    ).toBe(true);
-    await expect(submitSignedXdr(signedInitializeXdr, "initialize")).resolves.toMatchObject({
-      status: "SUCCESS",
-    });
     await expect(
       readSettlementDeadline({
         contractId: deployed.contractId!,
         sourceAddress: organizer.publicKey(),
       }),
     ).resolves.toBe(deadline);
+    const join = await buildJoinTx({
+      contractId: deployed.contractId!,
+      playerAddress: player.publicKey(),
+    });
+    const joinTx = TransactionBuilder.fromXDR(join.xdr, PASSPHRASE);
+    joinTx.sign(player);
+    await expect(
+      submitSignedXdr(joinTx.toEnvelope().toXDR("base64"), "join"),
+    ).resolves.toMatchObject({
+      status: "SUCCESS",
+    });
   }, 120_000);
 });
