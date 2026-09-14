@@ -165,9 +165,26 @@ export async function submitTournamentTx(
     result = recoveredDeployment ?? (await submitSignedXdr(input.signedXdr, input.intent));
   } catch (error) {
     if (input.intent === "deploy" && error instanceof StellarError && error.retryable === false) {
-      await prisma.tournament.update({ where: { id }, data: { pendingDeployTxHash: null } });
+      const currentHash = deploymentTxHash(input.signedXdr);
+      const landed = await lookupDeployment(currentHash);
+      if (landed?.status === "SUCCESS") {
+        result = landed;
+      } else if (
+        landed?.status === "FAILED" ||
+        (tournament.pendingDeployTxHash !== currentHash &&
+          (error.code === "TX_BAD_AUTH" || error.code === "TX_MALFORMED"))
+      ) {
+        await prisma.tournament.update({ where: { id }, data: { pendingDeployTxHash: null } });
+        throw error;
+      } else {
+        throw new StellarError("TX_TIMEOUT", "Deployment result is still unconfirmed", {
+          txHash: currentHash,
+          retryable: true,
+        });
+      }
+    } else {
+      throw error;
     }
-    throw error;
   }
 
   if (result.status === "FAILED") {

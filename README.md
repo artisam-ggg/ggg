@@ -31,7 +31,7 @@ For the Stellar ecosystem, GGG is a concrete use case for Soroban: it turns paid
 - **Version:** `0.0.0` (workspace manifests) · contract crate `ggg-escrow` `0.1.0`
 - **Status:** Live on Stellar Testnet at https://ggg.quest
 - **Default network:** Stellar Testnet (`STELLAR_NETWORK=testnet`)
-- **Escrow WASM hash:** `56faadf3395536f14b10c263c6369dda77dd2bc3ec9c24c6ce39fada518986ac` (recorded in `apps/web/.env.example`).
+- **Current live escrow WASM hash:** `56faadf3395536f14b10c263c6369dda77dd2bc3ec9c24c6ce39fada518986ac`. This pre-constructor hash cannot be used by this branch; set `ESCROW_WASM_HASH` only after uploading and verifying this branch's constructor WASM.
 - **License:** Released under the MIT License. Copyright © 2026 Artisam Labs.
 
 ---
@@ -78,7 +78,7 @@ GGG removes the custodian: **no party holds the funds — the contract does.** M
 - One WASM escrow contract deployed per tournament; entry fees pulled into escrow on join.
 - Referee-signed finalisation pays the configured split in a single transaction, with rounding dust deterministically assigned to 1st place.
 - Organiser-signed cancellation makes one permissionless refund claim available per registered player.
-- Tournament creation is a **two-transaction flow**: the organiser signs a `deploy`, then a second `initialize` transaction that sets the entry fee, referee, and split (see [Known deviations from SPEC.md](#known-deviations-from-specmd) below).
+- Tournament creation is one organiser-signed deployment transaction. Its `__constructor` sets the entry fee, referee, split, and settlement deadline atomically.
 
 **Wallet + funding**
 - Client-side signing via **Freighter** (`@stellar/freighter-api`); server never sees a key.
@@ -153,7 +153,7 @@ flowchart TD
 
 ### 1. Hero flow — create tournament (organiser)
 
-Tournament creation is a **two-transaction** flow: the generated Soroban binding's `deploy()` cannot pass `initialize` arguments in the same call (Soroban contracts expose `initialize` as a regular function, not a constructor), so the organiser signs deploy first, then a second `initialize` transaction actually sets the entry fee, referee, and split. See [`apps/web/src/lib/stellar/builders.ts`](./apps/web/src/lib/stellar/builders.ts) (`buildDeployInitializeTx`) and [`apps/web/src/server/services/tournaments.ts`](./apps/web/src/server/services/tournaments.ts).
+Tournament creation uses one deployment transaction whose `__constructor` receives all escrow configuration. The organiser signs once in Freighter. The server stores the contract ID and activates the tournament only after the deployment is confirmed. See [`apps/web/src/lib/stellar/builders.ts`](./apps/web/src/lib/stellar/builders.ts) (`buildDeployInitializeTx`) and [`apps/web/src/server/services/tournaments.ts`](./apps/web/src/server/services/tournaments.ts).
 
 ```mermaid
 sequenceDiagram
@@ -168,20 +168,13 @@ sequenceDiagram
     Org->>UI: Fill /tournaments/new
     UI->>API: POST /api/tournaments
     API->>DB: Create tournament (status DRAFT)
-    API-->>UI: { tournamentId, unsignedXdr (deploy), network }
-    UI->>FR: signTransaction(deployXdr)
+    API-->>UI: { tournamentId, unsignedXdr (deploy + constructor), network }
+    UI->>FR: signTransaction(unsignedXdr)
     FR-->>UI: signedXdr
     UI->>SUB: POST /submit (intent=deploy)
     SUB->>RPC: submit + poll getTransaction
-    RPC-->>SUB: contractId (deployed, not yet initialized)
-    SUB->>DB: Persist contractId, status DRAFT
-    SUB-->>UI: { initializeXdr }
-    UI->>FR: signTransaction(initializeXdr)
-    FR-->>UI: signedXdr
-    UI->>SUB: POST /submit (intent=initialize)
-    SUB->>RPC: submit + poll getTransaction
-    RPC-->>SUB: initialize confirmed (entry fee, referee, split set)
-    SUB->>DB: Set status ACTIVE
+    RPC-->>SUB: deployment + constructor confirmed, contractId
+    SUB->>DB: Persist contractId, set status ACTIVE
     SUB-->>UI: ok → tournament join QR shown
 ```
 
@@ -248,7 +241,7 @@ Contract crates found in the repo:
 
 | Crate | Path | Purpose |
 |---|---|---|
-| `ggg-escrow` | [`contracts/escrow`](./contracts/escrow) | Per-tournament prize escrow: `initialize`, `join_tournament`, `finalize_results`, `cancel_tournament`, `claim_refund`, and read-only `get_pool` / `get_reward` / `is_finished`. Emits `registered` / `finalized` / `cancelled` / `refund_claimed` events. Built with `soroban-sdk` 26. 49 unit tests. |
+| `ggg-escrow` | [`contracts/escrow`](./contracts/escrow) | Per-tournament prize escrow: `__constructor`, `join_tournament`, `finalize_results`, `cancel_tournament`, `claim_refund`, and read-only `get_pool` / `get_reward` / `is_finished`. Emits `registered` / `finalized` / `cancelled` / `refund_claimed` events. Built with `soroban-sdk` 26. 49 unit tests. |
 
 Function signatures, storage model, events, and security invariants are specified in [`SPEC.md`](./SPEC.md) §4; the source of truth is `contracts/escrow/src/lib.rs` with 49 tests in `contracts/escrow/src/test.rs`.
 
@@ -256,7 +249,6 @@ Function signatures, storage model, events, and security invariants are specifie
 
 ## Known deviations from SPEC.md
 
-- **Two-signature tournament creation**, not one. [`SPEC.md`](./SPEC.md) §6 describes `POST /api/tournaments` as building "the deploy + initialize transaction" as a single unit. The current implementation cannot do this atomically — see the TODO in [`apps/web/src/lib/stellar/builders.ts`](./apps/web/src/lib/stellar/builders.ts) — so it is two organiser-signed transactions (`deploy`, then `initialize`) instead of one. This is being addressed in the current sprint.
 - **Admin scope grew beyond SPEC.md.** §5 originally described `/admin` as "user management, platform overview." The shipped admin surface also includes full tournament oversight (list/detail/edit/force-cancel) and a role hierarchy (`ADMIN` ⊇ `ORGANIZER`) — a superset of spec, not a gap.
 - **USDC is fully wired but environment-gated.** Asset selector, SAC resolution, and all UI surfaces branch correctly on `"XLM" | "USDC"` — but resolving USDC requires `USDC_ISSUER` / `USDC_SAC_ADDRESS` to be set per network; without them, only XLM resolves.
 

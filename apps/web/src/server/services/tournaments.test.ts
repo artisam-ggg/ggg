@@ -49,6 +49,7 @@ vi.mock("@/lib/stellar", () => ({
 }));
 
 import { getTournamentDetail, submitTournamentTx } from "./tournaments";
+import { StellarError } from "@/lib/stellar";
 
 describe("getTournamentDetail", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -400,6 +401,41 @@ describe("submitTournamentTx constructor deployment", () => {
       where: { id: "t_1" },
       data: { pendingDeployTxHash: "CURRENT_HASH" },
     });
+  });
+
+  it("recovers a deployment confirmed between lookup and a rejected retry", async () => {
+    findUniqueMock.mockResolvedValue({ ...draft, pendingDeployTxHash: "CURRENT_HASH" });
+    lookupDeployMock.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      hash: "CURRENT_HASH",
+      status: "SUCCESS",
+      contractId: "CDEPLOYED",
+    });
+    submitMock.mockRejectedValueOnce(
+      new StellarError("SUBMIT_FAILED", "Sequence number already used", { retryable: false }),
+    );
+
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "deploy" }, "user_1"),
+    ).resolves.toMatchObject({ status: "ACTIVE", contractId: "CDEPLOYED" });
+    expect(lookupDeployMock).toHaveBeenCalledTimes(2);
+    expect(updateMock).toHaveBeenCalledTimes(1);
+    expect(updateMock).toHaveBeenCalledWith({
+      where: { id: "t_1" },
+      data: expect.objectContaining({ status: "ACTIVE", deployTxHash: "CURRENT_HASH" }),
+    });
+  });
+
+  it("keeps an uncertain deployment hash after a rejected retry", async () => {
+    findUniqueMock.mockResolvedValue({ ...draft, pendingDeployTxHash: "CURRENT_HASH" });
+    submitMock.mockRejectedValueOnce(
+      new StellarError("SUBMIT_FAILED", "Sequence number already used", { retryable: false }),
+    );
+
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "deploy" }, "user_1"),
+    ).rejects.toMatchObject({ code: "TX_TIMEOUT", txHash: "CURRENT_HASH" });
+    expect(lookupDeployMock).toHaveBeenCalledTimes(2);
+    expect(updateMock).not.toHaveBeenCalled();
   });
 
   it("refuses a second deployment before broadcasting", async () => {
