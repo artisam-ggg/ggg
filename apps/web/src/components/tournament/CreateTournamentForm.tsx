@@ -503,7 +503,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       {/* Settlement Deadline */}
       <div className="mt-6">
         <label className={labelClass} htmlFor="settlementDeadline">
-          Settlement Deadline
+          Settlement Deadline (your local time)
         </label>
         <input
           id="settlementDeadline"
@@ -515,8 +515,8 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
           aria-describedby="settlement-deadline-help"
         />
         <p id="settlement-deadline-help" className="mt-1 text-sm text-on-surface-variant">
-          Choose a time at least one hour and no more than 90 days away. It is stored on-chain as
-          UTC.
+          Enter the date and time in your local timezone. The matching UTC instant is stored
+          on-chain. Choose a time at least one hour and no more than 90 days away.
         </p>
       </div>
 

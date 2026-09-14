@@ -216,6 +216,15 @@ describe("CreateTournamentForm", () => {
     expect(screen.getByText(/6000 \/ 3000 \/ 1000 bps/i)).toBeInTheDocument();
   });
 
+  it("explains that the deadline input is local and the saved instant is UTC", () => {
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    expect(screen.getByLabelText(/settlement deadline \(your local time\)/i)).toHaveAttribute(
+      "type",
+      "datetime-local",
+    );
+    expect(screen.getByText(/the matching UTC instant is stored on-chain/i)).toBeInTheDocument();
+  });
+
   it("shows split-sum error when percentages do not sum to 100", () => {
     render(<CreateTournamentForm expectedPassphrase="P" />);
     // Change 1st to 50% — now sum = 50+30+10 = 90
