@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export function CopyTournamentLink({ url }: { url: string }) {
   const [feedback, setFeedback] = useState<"copied" | "error" | null>(null);
+  const latestCopy = useRef(0);
 
   useEffect(() => {
     if (feedback !== "copied") return;
@@ -12,12 +13,13 @@ export function CopyTournamentLink({ url }: { url: string }) {
   }, [feedback]);
 
   async function copy() {
+    const request = ++latestCopy.current;
     setFeedback(null);
     try {
       await navigator.clipboard.writeText(url);
-      setFeedback("copied");
+      if (request === latestCopy.current) setFeedback("copied");
     } catch {
-      setFeedback("error");
+      if (request === latestCopy.current) setFeedback("error");
     }
   }
 

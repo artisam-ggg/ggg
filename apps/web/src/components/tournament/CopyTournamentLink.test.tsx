@@ -48,6 +48,25 @@ it("clears success so another copy can be announced", async () => {
   }
 });
 
+it("ignores an earlier clipboard failure after a later copy succeeds", async () => {
+  let rejectFirst!: (error: Error) => void;
+  const writeText = vi
+    .fn()
+    .mockImplementationOnce(() => new Promise<void>((_, reject) => (rejectFirst = reject)))
+    .mockResolvedValueOnce(undefined);
+  Object.assign(navigator, { clipboard: { writeText } });
+  render(<CopyTournamentLink url={url} />);
+
+  const button = screen.getByRole("button", { name: "Copy tournament link" });
+  fireEvent.click(button);
+  fireEvent.click(button);
+  await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Link copied"));
+
+  await act(async () => rejectFirst(new Error("First copy failed")));
+  expect(screen.getByRole("status")).toHaveTextContent("Link copied");
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
+
 it("announces clipboard failure without printing the URL", async () => {
   Object.assign(navigator, {
     clipboard: { writeText: vi.fn().mockRejectedValue(new Error("Clipboard unavailable")) },
