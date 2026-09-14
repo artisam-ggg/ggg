@@ -303,6 +303,19 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         setError("Settlement deadline is required");
         return;
       }
+      const localMinute = (ms: number) =>
+        new Date(ms - new Date(ms).getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+      const selectedMinute = settlementDeadline.slice(0, 16);
+      const offset = new Date(deadlineMs).getTimezoneOffset();
+      const ambiguous = [-86_400_000, 86_400_000].some((delta) => {
+        const otherOffset = new Date(deadlineMs + delta).getTimezoneOffset();
+        const alternative = deadlineMs + (otherOffset - offset) * 60_000;
+        return otherOffset !== offset && localMinute(alternative) === selectedMinute;
+      });
+      if (localMinute(deadlineMs) !== selectedMinute || ambiguous) {
+        setError("Choose a local time that is not skipped or repeated by daylight saving.");
+        return;
+      }
 
       const payload = {
         name,
@@ -493,7 +506,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       {/* Settlement Deadline */}
       <div className="mt-6">
         <label className={labelClass} htmlFor="settlementDeadline">
-          Settlement Deadline
+          Settlement Deadline (your local time)
         </label>
         <input
           id="settlementDeadline"
@@ -505,8 +518,8 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
           aria-describedby="settlement-deadline-help"
         />
         <p id="settlement-deadline-help" className="mt-1 text-sm text-on-surface-variant">
-          Choose a time at least one hour and no more than 90 days away. It is stored on-chain as
-          UTC.
+          Enter the date and time in your local timezone. The matching UTC instant is stored
+          on-chain. Choose a time at least one hour and no more than 90 days away.
         </p>
       </div>
 
