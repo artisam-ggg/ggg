@@ -18,6 +18,23 @@ pub const TESTNET_INSTANCE_TTL_EXTEND_TO_LEDGERS: u32 = 120 * LEDGERS_PER_DAY;
 /// Testnet-simulated operational ceiling. Refunds are individual O(1) claims,
 /// so this limit is about bounded registration storage, not refund batching.
 pub const MAX_PLAYERS: u32 = 100;
+pub const MAX_WINNERS: u32 = 10;
+
+/// Stable read-helper ABI for contracts deployed with the N-winner WASM.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TournamentInfo {
+    pub organizer: Address,
+    pub referee: Address,
+    pub token: Address,
+    pub entry_fee: i128,
+    pub distribution_bps: Vec<u32>,
+    pub settlement_deadline: u64,
+    pub player_count: u32,
+    pub finished: bool,
+    pub cancelled: bool,
+    pub winners: Vec<Address>,
+}
 
 #[contracttype]
 #[derive(Clone)]
@@ -31,6 +48,7 @@ pub enum DataKey {
     Finished,
     Cancelled,
     Winners,
+    PayoutAmounts,
     SettlementDeadline,
     Registered(Address),
     RefundClaimed(Address),
@@ -58,6 +76,10 @@ pub enum Error {
     RefundAlreadyClaimed = 16,
     MaxPlayersReached = 17,
     DeadlineReached = 18,
+    BadWinnersLen = 19,
+    WinnerCountMismatch = 20,
+    InvalidDistributionBps = 21,
+    InvalidPool = 22,
 }
 
 /// Stable for #216: topics are ("refund_claimed", player); data is { amount }.
@@ -84,6 +106,36 @@ fn extend_instance_ttl(env: &Env, threshold: u32) {
         .extend_ttl(threshold, TESTNET_INSTANCE_TTL_EXTEND_TO_LEDGERS);
 }
 
+fn payout_amounts(env: &Env, pool: i128, distribution_bps: &Vec<u32>) -> Vec<i128> {
+    if pool < 0 {
+        panic_with_error!(env, Error::InvalidPool);
+    }
+    let whole = pool.checked_div(10_000).expect("pool div overflow");
+    let remainder = pool.checked_rem(10_000).expect("pool rem overflow");
+    let mut amounts = Vec::new(env);
+    let mut distributed = 0i128;
+    for bps in distribution_bps.iter() {
+        let bps = i128::from(bps);
+        let amount = whole
+            .checked_mul(bps)
+            .and_then(|base| {
+                remainder
+                    .checked_mul(bps)
+                    .and_then(|fraction| fraction.checked_div(10_000))
+                    .and_then(|fraction| base.checked_add(fraction))
+            })
+            .expect("payout overflow");
+        distributed = distributed
+            .checked_add(amount)
+            .expect("payout sum overflow");
+        amounts.push_back(amount);
+    }
+    let dust = pool.checked_sub(distributed).expect("payouts exceed pool");
+    let first = amounts.get(0).expect("empty payout vector");
+    amounts.set(0, first.checked_add(dust).expect("dust overflow"));
+    amounts
+}
+
 #[contract]
 pub struct Escrow;
 
@@ -100,11 +152,14 @@ impl Escrow {
     ) {
         organizer.require_auth();
 
-        if distribution_bps.len() != 3 {
+        if distribution_bps.is_empty() || distribution_bps.len() > MAX_WINNERS {
             panic_with_error!(&env, Error::BadDistributionLen);
         }
         let mut sum: u32 = 0;
         for b in distribution_bps.iter() {
+            if b == 0 || b > 10_000 {
+                panic_with_error!(&env, Error::InvalidDistributionBps);
+            }
             sum = sum.checked_add(b).expect("bps sum overflow");
         }
         if sum != 10_000 {
@@ -147,6 +202,32 @@ impl Escrow {
             .unwrap_or(0)
     }
 
+    /// Returns registration-ordered players; length never exceeds MAX_PLAYERS.
+    pub fn get_players(env: Env) -> Vec<Address> {
+        env.storage()
+            .instance()
+            .get(&DataKey::Players)
+            .unwrap_or(Vec::new(&env))
+    }
+
+    /// Returns immutable configuration plus current status and ranked winners.
+    pub fn get_tournament(env: Env) -> TournamentInfo {
+        let storage = env.storage().instance();
+        let players: Vec<Address> = storage.get(&DataKey::Players).unwrap();
+        TournamentInfo {
+            organizer: storage.get(&DataKey::Organizer).unwrap(),
+            referee: storage.get(&DataKey::Referee).unwrap(),
+            token: storage.get(&DataKey::Token).unwrap(),
+            entry_fee: storage.get(&DataKey::EntryFee).unwrap(),
+            distribution_bps: storage.get(&DataKey::DistributionBps).unwrap(),
+            settlement_deadline: storage.get(&DataKey::SettlementDeadline).unwrap(),
+            player_count: players.len(),
+            finished: storage.get(&DataKey::Finished).unwrap_or(false),
+            cancelled: storage.get(&DataKey::Cancelled).unwrap_or(false),
+            winners: storage.get(&DataKey::Winners).unwrap_or(Vec::new(&env)),
+        }
+    }
+
     /// Returns the initialized UTC Unix settlement deadline for state reconciliation.
     pub fn get_settlement_deadline(env: Env) -> Option<u64> {
         env.storage().instance().get(&DataKey::SettlementDeadline)
@@ -165,42 +246,14 @@ impl Escrow {
         if !finished {
             return 0;
         }
-        let winners: Option<(Address, Address, Address)> = storage.get(&DataKey::Winners);
-        let (first, second, third) = match winners {
-            Some(w) => w,
-            None => return 0,
-        };
-
-        let players: Vec<Address> = storage.get(&DataKey::Players).unwrap();
-        let entry_fee: i128 = storage.get(&DataKey::EntryFee).unwrap();
-        let pool: i128 = (players.len() as i128)
-            .checked_mul(entry_fee)
-            .expect("pool overflow");
-        let dist: Vec<u32> = storage.get(&DataKey::DistributionBps).unwrap();
-
-        let mut amounts: Vec<i128> = Vec::new(&env);
-        let mut distributed: i128 = 0;
-        for b in dist.iter() {
-            let amt = pool
-                .checked_mul(b as i128)
-                .expect("mul overflow")
-                .checked_div(10_000)
-                .expect("div");
-            amounts.push_back(amt);
-            distributed = distributed.checked_add(amt).expect("dist overflow");
+        let winners: Vec<Address> = storage.get(&DataKey::Winners).unwrap();
+        let amounts: Vec<i128> = storage.get(&DataKey::PayoutAmounts).unwrap();
+        for i in 0..winners.len() {
+            if winners.get(i).unwrap() == player {
+                return amounts.get(i).unwrap();
+            }
         }
-        let dust = pool.checked_sub(distributed).expect("dust underflow");
-        let first_amt = amounts.get(0).unwrap().checked_add(dust).expect("dust add");
-
-        if player == first {
-            first_amt
-        } else if player == second {
-            amounts.get(1).unwrap()
-        } else if player == third {
-            amounts.get(2).unwrap()
-        } else {
-            0
-        }
+        0
     }
 
     pub fn join_tournament(env: Env, player: Address) {
@@ -246,7 +299,7 @@ impl Escrow {
             .publish((Symbol::new(&env, "registered"), player), pool_after);
     }
 
-    pub fn finalize_results(env: Env, first: Address, second: Address, third: Address) {
+    pub fn finalize_results(env: Env, winners: Vec<Address>) {
         let storage = env.storage().instance();
         if !storage.has(&DataKey::Organizer) {
             panic_with_error!(&env, Error::NotInitialized);
@@ -264,56 +317,43 @@ impl Escrow {
         }
         require_before_deadline(&env, storage.get(&DataKey::SettlementDeadline).unwrap());
 
-        // Distinct.
-        if first == second || first == third || second == third {
-            panic_with_error!(&env, Error::WinnersNotDistinct);
-        }
-
-        // Registered.
-        let players: Vec<Address> = storage.get(&DataKey::Players).unwrap();
-        if !players.contains(&first) || !players.contains(&second) || !players.contains(&third) {
-            panic_with_error!(&env, Error::WinnerNotRegistered);
-        }
-
-        let entry_fee: i128 = storage.get(&DataKey::EntryFee).unwrap();
-        let pool: i128 = (players.len() as i128)
-            .checked_mul(entry_fee)
-            .expect("pool overflow");
         let dist: Vec<u32> = storage.get(&DataKey::DistributionBps).unwrap();
-
-        // prize[i] = pool * bps[i] / 10000, checked.
-        let mut amounts: Vec<i128> = Vec::new(&env);
-        let mut distributed: i128 = 0;
-        for b in dist.iter() {
-            let amt = pool
-                .checked_mul(b as i128)
-                .expect("prize mul overflow")
-                .checked_div(10_000)
-                .expect("prize div");
-            amounts.push_back(amt);
-            distributed = distributed.checked_add(amt).expect("dist overflow");
+        if winners.is_empty() || winners.len() > MAX_WINNERS {
+            panic_with_error!(&env, Error::BadWinnersLen);
         }
-        // Deterministic dust → 1st place.
-        let dust = pool.checked_sub(distributed).expect("dust underflow");
-        let first_amt = amounts.get(0).unwrap().checked_add(dust).expect("dust add");
-        amounts.set(0, first_amt);
+        if winners.len() != dist.len() {
+            panic_with_error!(&env, Error::WinnerCountMismatch);
+        }
+        let players: Vec<Address> = storage.get(&DataKey::Players).unwrap();
+        let mut seen = Vec::<Address>::new(&env);
+        for winner in winners.iter() {
+            if seen.contains(&winner) {
+                panic_with_error!(&env, Error::WinnersNotDistinct);
+            }
+            if !players.contains(&winner) {
+                panic_with_error!(&env, Error::WinnerNotRegistered);
+            }
+            seen.push_back(winner);
+        }
 
         let token: Address = storage.get(&DataKey::Token).unwrap();
         let client = token::TokenClient::new(&env, &token);
         let contract = env.current_contract_address();
-        client.transfer(&contract, &first, &amounts.get(0).unwrap());
-        client.transfer(&contract, &second, &amounts.get(1).unwrap());
-        client.transfer(&contract, &third, &amounts.get(2).unwrap());
+        let amounts = payout_amounts(&env, client.balance(&contract), &dist);
+        for i in 0..winners.len() {
+            let amount = amounts.get(i).unwrap();
+            if amount > 0 {
+                client.transfer(&contract, &winners.get(i).unwrap(), &amount);
+            }
+        }
 
         storage.set(&DataKey::Finished, &true);
-        storage.set(
-            &DataKey::Winners,
-            &(first.clone(), second.clone(), third.clone()),
-        );
+        storage.set(&DataKey::Winners, &winners);
+        storage.set(&DataKey::PayoutAmounts, &amounts);
         extend_instance_ttl(&env, TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS);
 
         env.events()
-            .publish((symbol_short!("finalized"), first, second, third), amounts);
+            .publish((symbol_short!("finalized"),), (winners, amounts));
     }
 
     pub fn cancel_tournament(env: Env) {

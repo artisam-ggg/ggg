@@ -99,9 +99,7 @@ export async function buildFinalizeTx(params: {
   if (winners.size !== 3) throw new StellarError("INVALID_INPUT", "Winners must be distinct");
   const c = clientFor(params.contractId, params.refereeAddress);
   const assembled = await c.finalize_results({
-    first: params.first,
-    second: params.second,
-    third: params.third,
+    winners: [params.first, params.second, params.third],
   });
   return { xdr: await preparedXdr(assembled), network: networkName() };
 }

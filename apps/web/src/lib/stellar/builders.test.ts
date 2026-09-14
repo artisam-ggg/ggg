@@ -130,7 +130,7 @@ describe("buildFinalizeTx", () => {
       third: G3,
     });
     expect(res.xdr).toBe("PREPARED_XDR");
-    expect(finalizeFn).toHaveBeenCalledWith({ first: G, second: G2, third: G3 });
+    expect(finalizeFn).toHaveBeenCalledWith({ winners: [G, G2, G3] });
   });
   it("rejects non-distinct winners", async () => {
     const { buildFinalizeTx } = await import("./builders");
