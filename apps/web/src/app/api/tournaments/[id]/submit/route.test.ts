@@ -19,6 +19,8 @@ vi.mock("@/lib/stellar", async (orig) => {
   return {
     ...actual,
     submitSignedXdr: submitMock,
+    deploymentTxHash: vi.fn(() => "CURRENT_HASH"),
+    lookupDeployment: vi.fn(),
     validateDeployXdr: validateDeployMock,
     explorerTxUrl: (_hash: string) => `https://stellar.expert/tx/${_hash}`,
   };
@@ -81,6 +83,7 @@ const dbTournament = {
   settlementDeadline: new Date("2099-01-01T00:00:00.000Z"),
   status: "DRAFT",
   contractId: null,
+  pendingDeployTxHash: null,
 };
 vi.mock("@/lib/db", () => ({
   prisma: {
@@ -166,6 +169,7 @@ describe("POST /api/tournaments/[id]/submit", () => {
       data: {
         contractId: "CDEPLOYED",
         deployTxHash: "TX1",
+        pendingDeployTxHash: null,
         status: "ACTIVE",
         deadlineConfirmedAt: expect.any(Date),
       },
@@ -217,6 +221,16 @@ describe("POST /api/tournaments/[id]/submit", () => {
     expect(submitMock).toHaveBeenCalledTimes(1);
   });
 
+  it("does not return the organizer's cached deployment to another user", async () => {
+    await POST(makeReq("first") as Parameters<typeof POST>[0], ctx);
+    requireUserMock.mockResolvedValue({ id: "user_2", username: "stranger", role: "ORGANIZER" });
+
+    const res = await POST(makeReq("second") as Parameters<typeof POST>[0], ctx);
+    expect(res.status).toBe(403);
+    expect((await res.json()).error.code).toBe("FORBIDDEN");
+    expect(submitMock).toHaveBeenCalledTimes(1);
+  });
+
   // Failed on-chain transaction must NOT persist success state
   // ---------------------------------------------------------------------------
 
@@ -229,7 +243,9 @@ describe("POST /api/tournaments/[id]/submit", () => {
     expect(res.status).toBe(422);
     expect(json.ok).toBe(false);
     expect(json.error).toMatchObject({ code: "TX_FAILED", txHash: "TX_FAIL" });
-    expect(updateMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "ACTIVE" }) }),
+    );
   });
 
   // ---------------------------------------------------------------------------

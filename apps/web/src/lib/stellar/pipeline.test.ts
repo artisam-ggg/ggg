@@ -267,6 +267,50 @@ describe("submitSignedXdr", () => {
   });
 });
 
+describe("deployment retry reconciliation", () => {
+  const contractId = "CCJZ5DGASBWQXR5MPFCJXMBI333XE5U3FSJTNQU7RIKE3P5GN2K2WYD5";
+
+  it("derives the same hash from the signed XDR", async () => {
+    const { deploymentTxHash } = await import("./pipeline");
+    expect(deploymentTxHash("AAAAAgAAAAA=")).toBe(Buffer.from("HASH").toString("hex"));
+  });
+
+  it("recovers a confirmed deployment and its contract ID", async () => {
+    rpcRef.current = makeFakeRpc({
+      getTransaction: vi.fn().mockResolvedValue({
+        status: "SUCCESS",
+        returnValue: Address.fromString(contractId).toScVal(),
+      }),
+    });
+    const { lookupDeployment } = await import("./pipeline");
+    await expect(lookupDeployment("hash")).resolves.toEqual({
+      hash: "hash",
+      status: "SUCCESS",
+      contractId,
+    });
+  });
+
+  it("distinguishes a failed deployment from an unconfirmed one", async () => {
+    const { lookupDeployment } = await import("./pipeline");
+    rpcRef.current = makeFakeRpc({ getTransaction: txStatus("FAILED") });
+    await expect(lookupDeployment("hash")).resolves.toEqual({ hash: "hash", status: "FAILED" });
+    rpcRef.current = makeFakeRpc({ getTransaction: txStatus("NOT_FOUND") });
+    await expect(lookupDeployment("hash")).resolves.toBeNull();
+  });
+
+  it("fails closed when the retry lookup cannot reach RPC", async () => {
+    rpcRef.current = makeFakeRpc({
+      getTransaction: vi.fn().mockRejectedValue(new Error("RPC unavailable")),
+    });
+    const { lookupDeployment } = await import("./pipeline");
+    await expect(lookupDeployment("hash")).rejects.toMatchObject({
+      code: "SUBMIT_FAILED",
+      txHash: "hash",
+      retryable: true,
+    });
+  });
+});
+
 describe("validateDeployXdr", () => {
   const tokenAddr = "CCJZ5DGASBWQXR5MPFCJXMBI333XE5U3FSJTNQU7RIKE3P5GN2K2WYD5";
   const terms = {

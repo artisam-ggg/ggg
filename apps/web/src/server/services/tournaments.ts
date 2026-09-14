@@ -6,8 +6,10 @@ import {
   buildFinalizeTx,
   buildClaimRefundTx,
   buildJoinTx,
+  deploymentTxHash,
   explorerContractUrl,
   explorerTxUrl,
+  lookupDeployment,
   resolveSacAddress,
   StellarError,
   submitSignedXdr,
@@ -104,11 +106,17 @@ export async function submitTournamentTx(
     throw Object.assign(new Error("Forbidden"), { status: 403 });
   }
 
+  let recoveredDeployment: Awaited<ReturnType<typeof submitSignedXdr>> | null = null;
   if (input.intent === "deploy") {
     if (tournament.status !== "DRAFT" || tournament.contractId || tournament.deployTxHash) {
       throw Object.assign(new Error("Tournament has already been deployed"), { status: 409 });
     }
-    const settlementDeadline = requireFutureSettlementDeadline(tournament.settlementDeadline);
+    const settlementDeadline = tournament.settlementDeadline;
+    if (!settlementDeadline) {
+      throw Object.assign(new Error("Tournament is missing a settlement deadline"), {
+        status: 409,
+      });
+    }
     if (!tournament.tokenAddr) {
       throw Object.assign(new Error("Tournament is missing its escrow token"), { status: 409 });
     }
@@ -121,11 +129,51 @@ export async function submitTournamentTx(
       distributionBps: [tournament.firstBps, tournament.secondBps, tournament.thirdBps],
       settlementDeadline: BigInt(Math.floor(settlementDeadline.getTime() / 1000)),
     });
+
+    const currentHash = deploymentTxHash(input.signedXdr);
+    const pendingHash = tournament.pendingDeployTxHash;
+    if (pendingHash) {
+      const prior = await lookupDeployment(pendingHash);
+      if (prior?.status === "SUCCESS") {
+        recoveredDeployment = prior;
+      } else if (prior?.status === "FAILED" && pendingHash === currentHash) {
+        await prisma.tournament.update({ where: { id }, data: { pendingDeployTxHash: null } });
+        throw new StellarError("TX_FAILED", "Transaction failed on-chain", {
+          txHash: pendingHash,
+          retryable: false,
+        });
+      } else if (!prior && pendingHash !== currentHash) {
+        throw new StellarError("TX_TIMEOUT", "Previous deployment is still unconfirmed", {
+          txHash: pendingHash,
+          retryable: true,
+        });
+      }
+    }
+    if (!recoveredDeployment) {
+      requireFutureSettlementDeadline(settlementDeadline);
+      if (pendingHash !== currentHash) {
+        await prisma.tournament.update({
+          where: { id },
+          data: { pendingDeployTxHash: currentHash },
+        });
+      }
+    }
   }
 
-  const result = await submitSignedXdr(input.signedXdr, input.intent);
+  let result: Awaited<ReturnType<typeof submitSignedXdr>>;
+  try {
+    result = recoveredDeployment ?? (await submitSignedXdr(input.signedXdr, input.intent));
+  } catch (error) {
+    if (input.intent === "deploy" && error instanceof StellarError && error.retryable === false) {
+      await prisma.tournament.update({ where: { id }, data: { pendingDeployTxHash: null } });
+    }
+    throw error;
+  }
 
   if (result.status === "FAILED") {
+    if (input.intent === "deploy") {
+      await prisma.tournament.update({ where: { id }, data: { pendingDeployTxHash: null } });
+    }
     // Do NOT mutate tournament to any success state.
     throw new StellarError("TX_FAILED", "Transaction failed on-chain", {
       txHash: result.hash,
@@ -143,6 +191,7 @@ export async function submitTournamentTx(
       data: {
         contractId: result.contractId,
         deployTxHash: result.hash,
+        pendingDeployTxHash: null,
         status: "ACTIVE",
         deadlineConfirmedAt: new Date(),
       },

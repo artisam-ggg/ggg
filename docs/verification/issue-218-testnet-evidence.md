@@ -2,7 +2,7 @@
 
 Status: **prepared, not run**. This covers only #218's single-transaction claim for #266; the N-winner, TTL, and read-helper evidence belongs to their own issues. No Testnet upload, deployment, or live join has been performed for this change. Obtain operator approval before running the transaction-bearing test.
 
-The operator should build the branch's `contracts/escrow` WASM, upload that exact binary to Testnet, and set the local `ESCROW_WASM_HASH` to the returned hash. The previously published hash in `.env.example` is for older code and cannot prove this constructor path. Do not commit a private key or the test's funded keypairs.
+The operator should build the branch's `contracts/escrow` WASM, upload that exact binary to Testnet, and set the local `ESCROW_WASM_HASH` to the returned hash. The sample hash in `.env.example` identifies this local constructor build; it is not evidence that the code was uploaded to Testnet. Do not commit a private key or the test's funded keypairs.
 
 Local `stellar contract build` produced `contracts/escrow/target/wasm32v1-none/release/ggg_escrow.wasm` with hash `7b9cfb9120ff5fad534c0173990b09b408581f83739aad6b313599c4d0f8735e`. This is a build result, not an uploaded or deployed Testnet hash.
 

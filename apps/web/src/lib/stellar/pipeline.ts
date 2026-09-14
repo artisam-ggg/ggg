@@ -45,6 +45,36 @@ export interface SubmitResult {
   status: "SUCCESS" | "FAILED";
 }
 
+/** Hash the signed transaction independently of its signatures for retry reconciliation. */
+export function deploymentTxHash(signedXdrStr: string): string {
+  const parsed = signedXdrSchema.safeParse(signedXdrStr);
+  if (!parsed.success) throw new StellarError("INVALID_INPUT", "Malformed signed XDR");
+  try {
+    return TransactionBuilder.fromXDR(parsed.data, networkPassphrase()).hash().toString("hex");
+  } catch {
+    throw new StellarError("INVALID_INPUT", "Malformed signed XDR");
+  }
+}
+
+/** Return a confirmed deployment result, or null while RPC has no final result. */
+export async function lookupDeployment(hash: string): Promise<SubmitResult | null> {
+  let got: Awaited<ReturnType<ReturnType<typeof getRpc>["getTransaction"]>>;
+  try {
+    got = await getRpc().getTransaction(hash);
+  } catch {
+    throw new StellarError("SUBMIT_FAILED", "Transaction confirmation could not be completed", {
+      txHash: hash,
+      retryable: true,
+    });
+  }
+  if (got.status === "FAILED") return { hash, status: "FAILED" };
+  if (got.status === "SUCCESS") {
+    const contractId = extractContractId("deploy", got);
+    return contractId ? { hash, status: "SUCCESS", contractId } : { hash, status: "SUCCESS" };
+  }
+  return null;
+}
+
 /** The persisted escrow terms a signed constructor deployment must match. */
 export interface DeployTerms {
   tournamentId: string;
