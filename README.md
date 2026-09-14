@@ -31,7 +31,7 @@ For the Stellar ecosystem, GGG is a concrete use case for Soroban: it turns paid
 - **Version:** `0.0.0` (workspace manifests) · contract crate `ggg-escrow` `0.1.0`
 - **Status:** Live on Stellar Testnet at https://ggg.quest
 - **Default network:** Stellar Testnet (`STELLAR_NETWORK=testnet`)
-- **Current uploaded escrow WASM hash (#218):** `6cd5beaee7382d6033b09b19f741d41e2f499651a3804ad81be0a4ede39c5b72` (recorded in `apps/web/.env.example`). It has the three-winner ABI and is incompatible with the #219 binding. The #219 WASM must be uploaded and verified before use; see `docs/verification/issue-219-payout-evidence.md`.
+- **Current uploaded escrow WASM hash (#219):** `1356f43a70552178836e1028aab105c113f863a51a51dd72a094a6bf643d3e2d` (recorded in `apps/web/.env.example`). It supports 1–10 winners and the read helpers; see `docs/verification/issue-219-payout-evidence.md` for Testnet upload verification. Set a Railway environment to this hash only when its deployed code uses the #219 binding.
 - **License:** Released under the MIT License. Copyright © 2026 Artisam Labs.
 
 ---
