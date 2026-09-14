@@ -1,19 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const {
-  findUniqueMock,
-  updateMock,
-  submitMock,
-  buildInitializeMock,
-  validateInitializeMock,
-  readSettlementDeadlineMock,
-} = vi.hoisted(() => ({
+const { findUniqueMock, updateMock, submitMock, validateDeployMock } = vi.hoisted(() => ({
   findUniqueMock: vi.fn(),
   updateMock: vi.fn(),
   submitMock: vi.fn(),
-  buildInitializeMock: vi.fn(),
-  validateInitializeMock: vi.fn(),
-  readSettlementDeadlineMock: vi.fn(),
+  validateDeployMock: vi.fn(),
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -30,7 +21,6 @@ vi.mock("@/lib/env", () => ({ env: { STELLAR_NETWORK: "testnet" } }));
 vi.mock("@/lib/stellar", () => ({
   buildCancelTx: vi.fn(),
   buildDeployInitializeTx: vi.fn(),
-  buildInitializeTx: buildInitializeMock,
   buildFinalizeTx: vi.fn(),
   buildJoinTx: vi.fn(),
   explorerContractUrl: vi.fn(),
@@ -45,8 +35,7 @@ vi.mock("@/lib/stellar", () => ({
     }
   },
   submitSignedXdr: submitMock,
-  validateInitializeXdr: validateInitializeMock,
-  readSettlementDeadline: readSettlementDeadlineMock,
+  validateDeployXdr: validateDeployMock,
 }));
 
 import { getTournamentDetail, submitTournamentTx } from "./tournaments";
@@ -230,172 +219,89 @@ describe("getTournamentDetail", () => {
   });
 });
 
-describe("submitTournamentTx", () => {
+describe("submitTournamentTx constructor deployment", () => {
+  const deadline = new Date("2030-09-10T00:00:00.000Z");
+  const draft = {
+    id: "t_1",
+    organizerId: "user_1",
+    organizerAddr: "GORG",
+    refereeAddr: "GREF",
+    tokenAddr: "CTOKEN",
+    entryFee: 10n,
+    firstBps: 6000,
+    secondBps: 3000,
+    thirdBps: 1000,
+    settlementDeadline: deadline,
+    status: "DRAFT",
+    contractId: null,
+    deployTxHash: null,
+  };
   beforeEach(() => {
     vi.useFakeTimers();
+    vi.setSystemTime(new Date("2030-09-09T00:00:00.000Z"));
     vi.clearAllMocks();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it("does not activate or initialize a deployment whose deadline expires during confirmation", async () => {
-    const deadline = new Date("2026-09-08T00:00:00.000Z");
-    vi.setSystemTime(new Date(deadline.getTime() - 1_000));
-    findUniqueMock.mockResolvedValue({
-      id: "t_1",
-      organizerId: "user_1",
-      organizerAddr: "GORG",
-      refereeAddr: "GREF",
-      tokenAddr: "CTOKEN",
-      entryFee: 10n,
-      firstBps: 6000,
-      secondBps: 3000,
-      thirdBps: 1000,
-      settlementDeadline: deadline,
-      status: "DRAFT",
-      contractId: null,
-      deployTxHash: null,
-    });
-    submitMock.mockImplementation(async () => {
-      vi.setSystemTime(deadline);
-      return { hash: "TX_DEPLOY", contractId: "CDEPLOYED", status: "SUCCESS" };
-    });
+    findUniqueMock.mockResolvedValue(draft);
     updateMock.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
-      status: "DRAFT",
-      contractId: data.contractId,
-      deployTxHash: data.deployTxHash,
-      settlementDeadline: deadline,
-      tokenAddr: "CTOKEN",
-      organizerAddr: "GORG",
-      refereeAddr: "GREF",
-      entryFee: 10n,
-      firstBps: 6000,
-      secondBps: 3000,
-      thirdBps: 1000,
+      ...draft,
+      ...data,
     }));
+  });
+  afterEach(() => vi.useRealTimers());
 
+  it("persists a confirmed constructor deployment as immediately active", async () => {
+    submitMock.mockResolvedValue({ hash: "TX_DEPLOY", contractId: "CDEPLOYED", status: "SUCCESS" });
     await expect(
       submitTournamentTx("t_1", { signedXdr: "XDR", intent: "deploy" }, "user_1"),
-    ).rejects.toMatchObject({ message: "Settlement deadline has expired", status: 409 });
-
+    ).resolves.toMatchObject({ txHash: "TX_DEPLOY", contractId: "CDEPLOYED", status: "ACTIVE" });
+    expect(validateDeployMock).toHaveBeenCalledWith("XDR", {
+      tournamentId: "t_1",
+      organizerAddress: "GORG",
+      refereeAddress: "GREF",
+      tokenAddr: "CTOKEN",
+      entryFee: 10n,
+      distributionBps: [6000, 3000, 1000],
+      settlementDeadline: BigInt(Math.floor(deadline.getTime() / 1000)),
+    });
     expect(updateMock).toHaveBeenCalledWith({
       where: { id: "t_1" },
-      data: { contractId: "CDEPLOYED", deployTxHash: "TX_DEPLOY" },
+      data: {
+        contractId: "CDEPLOYED",
+        deployTxHash: "TX_DEPLOY",
+        status: "ACTIVE",
+        deadlineConfirmedAt: expect.any(Date),
+      },
     });
-    expect(buildInitializeMock).not.toHaveBeenCalled();
   });
 
-  it("does not broadcast initialize after its deadline has expired", async () => {
-    const deadline = new Date("2026-09-08T00:00:00.000Z");
+  it("does not persist a failed deployment", async () => {
+    submitMock.mockResolvedValue({ hash: "TX_FAILED", status: "FAILED" });
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "deploy" }, "user_1"),
+    ).rejects.toMatchObject({ code: "TX_FAILED" });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("does not persist success without a contract ID", async () => {
+    submitMock.mockResolvedValue({ hash: "TX_DEPLOY", status: "SUCCESS" });
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "deploy" }, "user_1"),
+    ).rejects.toMatchObject({ status: 502 });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses a second deployment before broadcasting", async () => {
+    findUniqueMock.mockResolvedValue({ ...draft, contractId: "CDEPLOYED", status: "ACTIVE" });
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "deploy" }, "user_1"),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(submitMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects an expired deadline before broadcasting", async () => {
     vi.setSystemTime(deadline);
-    findUniqueMock.mockResolvedValue({
-      id: "t_1",
-      organizerId: "user_1",
-      settlementDeadline: deadline,
-      status: "DRAFT",
-      contractId: "CDEPLOYED",
-    });
-
     await expect(
-      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "initialize" }, "user_1"),
-    ).rejects.toMatchObject({ message: "Settlement deadline has expired", status: 409 });
-
-    expect(validateInitializeMock).not.toHaveBeenCalled();
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "deploy" }, "user_1"),
+    ).rejects.toMatchObject({ status: 409 });
     expect(submitMock).not.toHaveBeenCalled();
-    expect(updateMock).not.toHaveBeenCalled();
-  });
-
-  it("does not activate a contract whose confirmed deadline differs from the persisted value", async () => {
-    const deadline = new Date("2026-09-10T00:00:00.000Z");
-    vi.setSystemTime(new Date("2026-09-09T00:00:00.000Z"));
-    findUniqueMock.mockResolvedValue({
-      id: "t_1",
-      organizerId: "user_1",
-      organizerAddr: "GORG",
-      refereeAddr: "GREF",
-      tokenAddr: "CTOKEN",
-      entryFee: 10n,
-      firstBps: 6000,
-      secondBps: 3000,
-      thirdBps: 1000,
-      settlementDeadline: deadline,
-      status: "DRAFT",
-      contractId: "CDEPLOYED",
-    });
-    submitMock.mockResolvedValue({ hash: "TX_INIT", status: "SUCCESS" });
-    readSettlementDeadlineMock.mockResolvedValueOnce(undefined).mockResolvedValue(1_800_000_000n);
-
-    await expect(
-      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "initialize" }, "user_1"),
-    ).rejects.toMatchObject({
-      message: "On-chain settlement deadline does not match this tournament",
-      status: 502,
-    });
-    expect(submitMock).toHaveBeenCalledTimes(1);
-    expect(updateMock).toHaveBeenCalledWith({
-      where: { id: "t_1" },
-      data: { initializeTxHash: "TX_INIT" },
-    });
-  });
-
-  it("does not activate when on-chain initialization cannot be confirmed", async () => {
-    const deadline = new Date("2026-09-10T00:00:00.000Z");
-    vi.setSystemTime(new Date("2026-09-09T00:00:00.000Z"));
-    findUniqueMock.mockResolvedValue({
-      id: "t_1",
-      organizerId: "user_1",
-      organizerAddr: "GORG",
-      refereeAddr: "GREF",
-      tokenAddr: "CTOKEN",
-      entryFee: 10n,
-      firstBps: 6000,
-      secondBps: 3000,
-      thirdBps: 1000,
-      settlementDeadline: deadline,
-      status: "DRAFT",
-      contractId: "CDEPLOYED",
-      deployTxHash: "TX_DEPLOY",
-    });
-    submitMock.mockResolvedValue({ hash: "TX_INIT", status: "SUCCESS" });
-    readSettlementDeadlineMock.mockRejectedValue(new Error("missing getter"));
-
-    await expect(
-      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "initialize" }, "user_1"),
-    ).rejects.toMatchObject({ message: "Unable to confirm on-chain initialization", status: 502 });
-    expect(submitMock).toHaveBeenCalledTimes(1);
-    expect(updateMock).toHaveBeenCalledWith({
-      where: { id: "t_1" },
-      data: { initializeTxHash: "TX_INIT" },
-    });
-  });
-
-  it("does not replay initialize while reconciliation is unavailable", async () => {
-    const deadline = new Date("2026-09-10T00:00:00.000Z");
-    vi.setSystemTime(new Date("2026-09-09T00:00:00.000Z"));
-    findUniqueMock.mockResolvedValue({
-      id: "t_1",
-      organizerId: "user_1",
-      organizerAddr: "GORG",
-      refereeAddr: "GREF",
-      tokenAddr: "CTOKEN",
-      entryFee: 10n,
-      firstBps: 6000,
-      secondBps: 3000,
-      thirdBps: 1000,
-      settlementDeadline: deadline,
-      status: "DRAFT",
-      contractId: "CDEPLOYED",
-      initializeTxHash: "TX_INIT",
-    });
-    readSettlementDeadlineMock.mockRejectedValue(new Error("RPC unavailable"));
-
-    await expect(
-      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "initialize" }, "user_1"),
-    ).rejects.toMatchObject({ message: "Unable to confirm on-chain initialization", status: 502 });
-
-    expect(submitMock).not.toHaveBeenCalled();
-    expect(updateMock).not.toHaveBeenCalled();
   });
 });

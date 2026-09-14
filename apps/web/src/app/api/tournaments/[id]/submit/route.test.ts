@@ -5,26 +5,21 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // vi.hoisted is used so that submitMock is available inside the hoisted vi.mock call.
 // ---------------------------------------------------------------------------
 
-const { submitMock, buildInitializeMock, validateInitializeMock, readSettlementDeadlineMock } =
-  vi.hoisted(() => ({
-    submitMock: vi.fn(async () => ({
-      hash: "TX1" as string,
-      contractId: "CDEPLOYED" as string | undefined,
-      status: "SUCCESS" as "SUCCESS" | "FAILED",
-    })),
-    buildInitializeMock: vi.fn(async () => ({ xdr: "INITIALIZE_XDR", network: "testnet" })),
-    validateInitializeMock: vi.fn(),
-    readSettlementDeadlineMock: vi.fn(),
-  }));
+const { submitMock, validateDeployMock } = vi.hoisted(() => ({
+  submitMock: vi.fn(async () => ({
+    hash: "TX1" as string,
+    contractId: "CDEPLOYED" as string | undefined,
+    status: "SUCCESS" as "SUCCESS" | "FAILED",
+  })),
+  validateDeployMock: vi.fn(),
+}));
 
 vi.mock("@/lib/stellar", async (orig) => {
   const actual = await orig<typeof import("@/lib/stellar")>();
   return {
     ...actual,
-    buildInitializeTx: buildInitializeMock,
     submitSignedXdr: submitMock,
-    validateInitializeXdr: validateInitializeMock,
-    readSettlementDeadline: readSettlementDeadlineMock,
+    validateDeployXdr: validateDeployMock,
     explorerTxUrl: (_hash: string) => `https://stellar.expert/tx/${_hash}`,
   };
 });
@@ -148,12 +143,7 @@ describe("POST /api/tournaments/[id]/submit", () => {
     vi.clearAllMocks();
     store.clear();
     submitMock.mockResolvedValue({ hash: "TX1", contractId: "CDEPLOYED", status: "SUCCESS" });
-    buildInitializeMock.mockResolvedValue({ xdr: "INITIALIZE_XDR", network: "testnet" });
-    validateInitializeMock.mockReturnValue(undefined);
-    readSettlementDeadlineMock
-      .mockReset()
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValue(4_070_908_800n);
+    validateDeployMock.mockReturnValue(undefined);
     assertSameOriginMock.mockReturnValue(undefined);
     requireUserMock.mockResolvedValue({ id: "user_1", username: "organizer", role: "ORGANIZER" });
     rateLimitMock.mockResolvedValue({ ok: true, remaining: 19 });
@@ -165,158 +155,35 @@ describe("POST /api/tournaments/[id]/submit", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Happy path: deploy persists contractId but remains DRAFT until initialize.
-  // ---------------------------------------------------------------------------
-
-  it("submits deploy and returns initialize XDR while tournament remains DRAFT (200)", async () => {
+  it("confirms a constructor deployment and returns an immediately active tournament", async () => {
     const res = await POST(makeReq("k1") as Parameters<typeof POST>[0], ctx);
     const json = await res.json();
-
     expect(res.status).toBe(200);
-    expect(json.ok).toBe(true);
-    expect(json.data.txHash).toBe("TX1");
-    expect(json.data.contractId).toBe("CDEPLOYED");
-    expect(json.data.status).toBe("DRAFT");
-    expect(json.data.initializeXdr).toBe("INITIALIZE_XDR");
-    expect(json.data.explorerUrl).toContain("TX1");
+    expect(json.data).toMatchObject({ txHash: "TX1", contractId: "CDEPLOYED", status: "ACTIVE" });
+    expect(json.data).not.toHaveProperty("initializeXdr");
+    expect(updateMock).toHaveBeenCalledWith({
+      where: { id: "t_1" },
+      data: {
+        contractId: "CDEPLOYED",
+        deployTxHash: "TX1",
+        status: "ACTIVE",
+        deadlineConfirmedAt: expect.any(Date),
+      },
+    });
   });
 
-  it("calls prisma.tournament.update with contractId and deployTxHash on deploy", async () => {
-    await POST(makeReq("k1") as Parameters<typeof POST>[0], ctx);
-
-    expect(updateMock).toHaveBeenCalledOnce();
-    const updateData = updateMock.mock.calls[0]![0].data;
-    expect(updateData.contractId).toBe("CDEPLOYED");
-    expect(updateData.status).toBeUndefined();
-    expect(updateData.deployTxHash).toBe("TX1");
-  });
-
-  it("sets ACTIVE only after confirmed initialize state matches", async () => {
-    findUniqueMock.mockResolvedValueOnce({ ...dbTournament, contractId: "CDEPLOYED" });
-
+  it("rejects the legacy initialize intent before it can reach the chain", async () => {
     const res = await POST(
-      makeReq("k_initialize", { signedXdr: VALID_XDR, intent: "initialize" }) as Parameters<
+      makeReq("legacy", { signedXdr: VALID_XDR, intent: "initialize" }) as Parameters<
         typeof POST
       >[0],
       ctx,
     );
-    const json = await res.json();
-
-    expect(res.status).toBe(200);
-    expect(json.data.status).toBe("ACTIVE");
-    expect(updateMock).toHaveBeenCalledWith({
-      where: { id: "t_1" },
-      data: expect.objectContaining({
-        status: "ACTIVE",
-        deadlineConfirmedAt: expect.any(Date),
-      }),
-    });
-    expect(validateInitializeMock).toHaveBeenCalledWith(
-      VALID_XDR,
-      expect.objectContaining({ contractId: "CDEPLOYED" }),
-    );
-    expect(readSettlementDeadlineMock).toHaveBeenCalledWith(
-      expect.objectContaining({ contractId: "CDEPLOYED" }),
-    );
-  });
-
-  it("does not activate when the confirmed deadline differs", async () => {
-    findUniqueMock.mockResolvedValueOnce({ ...dbTournament, contractId: "CDEPLOYED" });
-    readSettlementDeadlineMock
-      .mockReset()
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(1n);
-
-    const res = await POST(
-      makeReq("k_initialize_mismatch", {
-        signedXdr: VALID_XDR,
-        intent: "initialize",
-      }) as Parameters<typeof POST>[0],
-      ctx,
-    );
-    const json = await res.json();
-
-    expect(res.status).toBe(502);
-    expect(json.ok).toBe(false);
-    expect(updateMock).toHaveBeenCalledWith({
-      where: { id: "t_1" },
-      data: { initializeTxHash: "TX1" },
-    });
-  });
-
-  it("reports deploy recovery when initialize simulation fails after deployment", async () => {
-    const { StellarError } = await import("@/lib/stellar");
-    buildInitializeMock.mockRejectedValueOnce(
-      new StellarError("SIMULATION_FAILED", "Transaction simulation failed"),
-    );
-
-    const res = await POST(makeReq("k_deploy_recovery") as Parameters<typeof POST>[0], ctx);
-    const json = await res.json();
-
-    expect(res.status).toBe(422);
-    expect(json.error.message).toBe(
-      "Contract deployed successfully, but initialization needs to be retried.",
-    );
-    expect(updateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ contractId: "CDEPLOYED" }) }),
-    );
-  });
-
-  it("reports deploy recovery when initialize preparation has an RPC error", async () => {
-    buildInitializeMock.mockRejectedValueOnce(new Error("RPC unavailable"));
-
-    const res = await POST(makeReq("k_deploy_rpc_error") as Parameters<typeof POST>[0], ctx);
-    const json = await res.json();
-
-    expect(res.status).toBe(422);
-    expect(json.error.message).toBe(
-      "Contract deployed successfully, but initialization needs to be retried.",
-    );
-  });
-
-  it("rejects initialize before an escrow contract has been deployed", async () => {
-    const res = await POST(
-      makeReq("k_initialize_undeployed", {
-        signedXdr: VALID_XDR,
-        intent: "initialize",
-      }) as Parameters<typeof POST>[0],
-      ctx,
-    );
-    const json = await res.json();
-
-    expect(res.status).toBe(409);
-    expect(json.ok).toBe(false);
-    expect(json.error.code).toBe("CONFLICT");
-    expect(validateInitializeMock).not.toHaveBeenCalled();
+    expect(res.status).toBe(400);
     expect(submitMock).not.toHaveBeenCalled();
     expect(updateMock).not.toHaveBeenCalled();
   });
 
-  it("rejects initialize for a cancelled tournament", async () => {
-    findUniqueMock.mockResolvedValueOnce({
-      ...dbTournament,
-      contractId: "CDEPLOYED",
-      status: "CANCELLED",
-    });
-
-    const res = await POST(
-      makeReq("k_initialize_cancelled", {
-        signedXdr: VALID_XDR,
-        intent: "initialize",
-      }) as Parameters<typeof POST>[0],
-      ctx,
-    );
-    const json = await res.json();
-
-    expect(res.status).toBe(409);
-    expect(json.ok).toBe(false);
-    expect(json.error.code).toBe("CONFLICT");
-    expect(validateInitializeMock).not.toHaveBeenCalled();
-    expect(submitMock).not.toHaveBeenCalled();
-    expect(updateMock).not.toHaveBeenCalled();
-  });
-
-  // ---------------------------------------------------------------------------
   // Idempotency: second call with same key returns cached result, no re-submit
   // ---------------------------------------------------------------------------
 
@@ -332,31 +199,24 @@ describe("POST /api/tournaments/[id]/submit", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Fix 2: confirmed-state dedupe — already ACTIVE deploy must NOT re-submit
-  // ---------------------------------------------------------------------------
-
-  it("returns existing contractId WITHOUT calling submitSignedXdr when tournament is already deployed", async () => {
-    // Simulate an already-deployed, not-yet-initialized tournament.
+  it("refuses an already deployed tournament without broadcasting", async () => {
     findUniqueMock.mockResolvedValueOnce({
       ...dbTournament,
       contractId: "C_EXISTING",
-      deployTxHash: "TX_EXISTING",
+      status: "ACTIVE",
     });
-
     const res = await POST(makeReq("k_active") as Parameters<typeof POST>[0], ctx);
-    const json = await res.json();
-
-    expect(res.status).toBe(200);
-    expect(json.ok).toBe(true);
-    expect(json.data.contractId).toBe("C_EXISTING");
-    expect(json.data.txHash).toBe("TX_EXISTING");
-    expect(json.data.status).toBe("DRAFT");
-    expect(json.data.initializeXdr).toBe("INITIALIZE_XDR");
-    // The key assertion: on-chain submission must NOT happen.
+    expect(res.status).toBe(409);
     expect(submitMock).not.toHaveBeenCalled();
   });
 
-  // ---------------------------------------------------------------------------
+  it("dedupes deployment across different idempotency keys", async () => {
+    await POST(makeReq("first") as Parameters<typeof POST>[0], ctx);
+    const res = await POST(makeReq("second") as Parameters<typeof POST>[0], ctx);
+    expect(res.status).toBe(200);
+    expect(submitMock).toHaveBeenCalledTimes(1);
+  });
+
   // Failed on-chain transaction must NOT persist success state
   // ---------------------------------------------------------------------------
 
