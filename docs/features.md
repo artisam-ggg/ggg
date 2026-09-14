@@ -166,3 +166,7 @@ New tournament contracts now re-simulate and assemble their generated `initializ
 ## Issue #263 — Show tournament cover images
 
 Public tournament pages display an uploaded cover when one exists. A read route looks up the cover key by tournament ID, validates its `covers/<UUID>` image path, and serves only that stored object with the matching image content type. Tournaments without covers keep the existing layout, and a missing or unavailable image is hidden without interrupting the page.
+
+## Issue #264 — Keep tournament links available after joining closes
+
+Deployed tournament pages keep a Copy tournament link action in the header while active, refund-claimable, finished, or cancelled. The action copies the canonical public URL and announces success or failure accessibly without printing the full URL on the page. The QR and wallet controls remain in the join card and disappear when joining closes.

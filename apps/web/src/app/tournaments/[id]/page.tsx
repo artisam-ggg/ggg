@@ -5,6 +5,7 @@ import { getTournamentDetail } from "@/server/services/tournaments";
 import { StatusChip } from "@/components/tournament/StatusChip";
 import { TournamentCover } from "@/components/tournament/TournamentCover";
 import { ContractAddress } from "@/components/tournament/ContractAddress";
+import { CopyTournamentLink } from "@/components/tournament/CopyTournamentLink";
 import { PrizePoolCounter } from "@/components/tournament/PrizePoolCounter";
 import { JoinCard } from "@/components/tournament/JoinCard";
 import { ParticipantList } from "@/components/tournament/ParticipantList";
@@ -55,6 +56,7 @@ export default async function TournamentDetailPage({
           </h1>
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <span className="data-mono text-xs text-on-surface-variant">ID {t.id}</span>
+            {t.contractId && <CopyTournamentLink url={joinUrl} />}
             {t.contractId && <ContractAddress value={t.contractId} />}
             {t.contractUrl && t.contractId && (
               <a
