@@ -1,9 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export function CopyTournamentLink({ url }: { url: string }) {
   const [feedback, setFeedback] = useState<"copied" | "error" | null>(null);
+
+  useEffect(() => {
+    if (feedback !== "copied") return;
+    const timer = setTimeout(() => setFeedback(null), 2000);
+    return () => clearTimeout(timer);
+  }, [feedback]);
 
   async function copy() {
     setFeedback(null);
@@ -24,11 +30,9 @@ export function CopyTournamentLink({ url }: { url: string }) {
       >
         Copy tournament link
       </button>
-      {feedback === "copied" && (
-        <span role="status" className="text-xs text-on-surface-variant">
-          Link copied
-        </span>
-      )}
+      <span role="status" aria-live="polite" className="text-xs text-on-surface-variant">
+        {feedback === "copied" ? "Link copied" : ""}
+      </span>
       {feedback === "error" && (
         <span role="alert" className="text-xs text-error">
           Could not copy tournament link

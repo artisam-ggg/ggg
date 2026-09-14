@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { CopyTournamentLink } from "./CopyTournamentLink";
 
@@ -13,10 +13,39 @@ it("copies the URL with visible and screen-reader success feedback", async () =>
   button.focus();
   expect(button).toHaveFocus();
   expect(screen.queryByText(url)).not.toBeInTheDocument();
+  expect(screen.getByRole("status")).toBeEmptyDOMElement();
   fireEvent.click(button);
 
   await waitFor(() => expect(writeText).toHaveBeenCalledWith(url));
   expect(screen.getByRole("status")).toHaveTextContent("Link copied");
+});
+
+it("clears success so another copy can be announced", async () => {
+  vi.useFakeTimers();
+  try {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    render(<CopyTournamentLink url={url} />);
+
+    const button = screen.getByRole("button", { name: "Copy tournament link" });
+    await act(async () => {
+      fireEvent.click(button);
+      await Promise.resolve();
+    });
+    expect(screen.getByRole("status")).toHaveTextContent("Link copied");
+
+    act(() => vi.advanceTimersByTime(2000));
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+
+    await act(async () => {
+      fireEvent.click(button);
+      await Promise.resolve();
+    });
+    expect(writeText).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole("status")).toHaveTextContent("Link copied");
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 it("announces clipboard failure without printing the URL", async () => {
