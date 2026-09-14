@@ -87,6 +87,7 @@ const CANCELLED_TOURNAMENT = {
   name: "Cancelled Cup",
   status: "CANCELLED" as const,
   contractId: null,
+  refundsClaimable: true,
 };
 
 const ORGANIZER_USER = { id: "user_org_1", username: "organizer", role: "ORGANIZER" as const };

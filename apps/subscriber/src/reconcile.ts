@@ -1,9 +1,12 @@
 import { Prisma } from "web/src/generated/prisma/client";
+import { refundClaimPayloadSchema } from "web/src/lib/validation/refund-claim";
 import { prisma } from "./db";
 
-export type EventType = "REGISTERED" | "FINALIZED" | "CANCELLED";
+export type EventType = "REGISTERED" | "FINALIZED" | "CANCELLED" | "REFUND_CLAIMED";
 
 export interface DecodedEvent {
+  /** Stable Soroban RPC event identity; combined with txHash for safe replay. */
+  eventId: string;
   type: EventType;
   ledger: number;
   txHash: string;
@@ -16,9 +19,13 @@ export interface Change {
   data: Record<string, unknown>;
 }
 
+function isRefundClaim(data: Record<string, unknown>): data is { player: string; amount: string } {
+  return refundClaimPayloadSchema.safeParse(data).success;
+}
+
 /**
  * Apply a decoded contract event to Postgres inside one transaction, deduped on
- * `(txHash, type)`. A replay of the same event is a no-op and returns `null`
+ * `(txHash, eventId)`. A replay of the same event is a no-op and returns `null`
  * (at-least-once delivery → exactly-once persistence).
  */
 export async function applyEvent(
@@ -31,12 +38,19 @@ export async function applyEvent(
   },
   evt: DecodedEvent,
 ): Promise<Change | null> {
+  if (evt.type === "REFUND_CLAIMED" && !isRefundClaim(evt.data)) return null;
+
   return prisma.$transaction(async (tx) => {
-    // Idempotency: dedupe on (txHash, type).
+    // Idempotency: Soroban's stable event id distinguishes same-type events in one tx.
     const existing = await tx.contractEvent.findUnique({
-      where: { txHash_type: { txHash: evt.txHash, type: evt.type } },
+      where: { txHash_eventId: { txHash: evt.txHash, eventId: evt.eventId } },
     });
     if (existing) return null;
+
+    const legacyEvent = await tx.contractEvent.findFirst({
+      where: { tournamentId: tournament.id, txHash: evt.txHash, type: evt.type, eventId: null },
+    });
+    if (legacyEvent) return null;
 
     await tx.contractEvent.create({
       data: {
@@ -44,6 +58,7 @@ export async function applyEvent(
         type: evt.type,
         ledger: evt.ledger,
         txHash: evt.txHash,
+        eventId: evt.eventId,
         payload: evt.data as Prisma.InputJsonValue,
       },
     });
@@ -73,7 +88,7 @@ export async function applyEvent(
         where: { id: tournament.id },
         data: { status: "FINISHED", finalizedAt: new Date() },
       });
-    } else {
+    } else if (evt.type === "CANCELLED") {
       await tx.tournament.update({
         where: { id: tournament.id },
         data: { status: "CANCELLED", cancelledAt: new Date() },

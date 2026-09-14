@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 
 export interface LiveEvent {
-  type: "REGISTERED" | "FINALIZED" | "CANCELLED";
+  type: "REGISTERED" | "FINALIZED" | "CANCELLED" | "REFUND_CLAIMED";
   txHash: string | null;
   data: Record<string, unknown>;
 }

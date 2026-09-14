@@ -22,7 +22,7 @@ describe("LiveFeed", () => {
     expect(screen.getByText(/waiting for on-chain activity/i)).toBeInTheDocument();
   });
 
-  it("renders registration + finalisation rows with human-readable gloss", () => {
+  it("renders registration and finalisation rows with human-readable gloss", () => {
     useTournamentEvents.mockReturnValue({
       events: [
         {
@@ -39,15 +39,22 @@ describe("LiveFeed", () => {
     });
     render(<LiveFeed tournamentId="t_1" />);
     expect(screen.getByText(/joined/i)).toBeInTheDocument();
-    expect(screen.getByText(/Payouts sent/i)).toBeInTheDocument();
-    expect(screen.getByText(/GABCDE…MNOP/)).toBeInTheDocument(); // truncated mono addr
+    expect(screen.getByText(/payouts sent/i)).toBeInTheDocument();
   });
 
-  it("glosses a cancellation with the refunded count", () => {
+  it("glosses cancellation claims and a completed refund claim", () => {
     useTournamentEvents.mockReturnValue({
-      events: [{ type: "CANCELLED", txHash: "tx3", data: { refundedCount: 4 } }],
+      events: [
+        { type: "CANCELLED", txHash: "tx3", data: { claimableCount: 4 } },
+        {
+          type: "REFUND_CLAIMED",
+          txHash: "tx4",
+          data: { player: "GPLAYER", amount: "10000000" },
+        },
+      ],
     });
     render(<LiveFeed tournamentId="t_1" />);
-    expect(screen.getByText(/cancelled — 4 players refunded/i)).toBeInTheDocument();
+    expect(screen.getByText(/refunds available to claim/i)).toBeInTheDocument();
+    expect(screen.getByText(/claimed 1\.0000000/i)).toBeInTheDocument();
   });
 });

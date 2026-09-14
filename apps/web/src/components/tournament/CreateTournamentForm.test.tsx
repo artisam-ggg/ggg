@@ -1,4 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { act } from "react";
+import { hydrateRoot } from "react-dom/client";
+import { renderToString } from "react-dom/server";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Valid Stellar public keys (56 chars, real base32-encoded Ed25519)
@@ -9,17 +12,34 @@ const REF = "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI";
 vi.mock("@/lib/wallet", () => ({
   ensureWallet: vi.fn(async () => MOCK_ORGANIZER),
   signAndSubmit: vi.fn(async () => ({ txHash: "TX123", contractId: "C1", status: "ACTIVE" })),
+  SubmissionError: class SubmissionError extends Error {
+    details: { code?: string; txHash?: string; retryable?: boolean };
+
+    constructor(message: string, details: { code?: string; txHash?: string; retryable?: boolean }) {
+      super(message);
+      this.name = "SubmissionError";
+      this.details = details;
+    }
+  },
 }));
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 
 import { CreateTournamentForm } from "./CreateTournamentForm";
-import { ensureWallet, signAndSubmit } from "@/lib/wallet";
+import { ensureWallet, signAndSubmit, SubmissionError } from "@/lib/wallet";
+
+function fillSettlementDeadline() {
+  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
+  fireEvent.change(screen.getByLabelText(/settlement deadline/i), {
+    target: { value: tomorrow },
+  });
+}
 
 describe("CreateTournamentForm", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     (ensureWallet as ReturnType<typeof vi.fn>).mockResolvedValue(MOCK_ORGANIZER);
     (signAndSubmit as ReturnType<typeof vi.fn>).mockResolvedValue({
       txHash: "TX123",
@@ -29,12 +49,166 @@ describe("CreateTournamentForm", () => {
     push.mockReset();
   });
 
+  it("restores a saved draft after reload without persisting the organizer wallet", async () => {
+    localStorage.setItem(
+      "ggg:tournament-create-draft",
+      JSON.stringify({
+        name: "Saved Cup",
+        gameTitle: "SF6",
+        entryFee: "1.5",
+        asset: "USDC",
+        refereeAddress: REF,
+        settlementDeadline: "2026-10-01T12:00",
+        splits: [50, 30, 20],
+        organizerAddress: MOCK_ORGANIZER,
+      }),
+    );
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+
+    expect(await screen.findByDisplayValue("Saved Cup")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("SF6")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("1.5")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("USDC")).toBeInTheDocument();
+    expect(screen.getByDisplayValue(REF)).toBeInTheDocument();
+    expect(screen.getByDisplayValue("50")).toBeInTheDocument();
+    expect(localStorage.getItem("ggg:tournament-create-draft")).not.toContain(MOCK_ORGANIZER);
+  });
+
+  it("restores a preloaded draft during hydration without deleting it", async () => {
+    const draft = {
+      name: "Hydrated Cup",
+      gameTitle: "SF6",
+      entryFee: "1.5",
+      asset: "USDC",
+      refereeAddress: REF,
+      settlementDeadline: "2026-10-01T12:00",
+      splits: [50, 30, 20],
+    };
+    const container = document.createElement("div");
+    container.innerHTML = renderToString(<CreateTournamentForm expectedPassphrase="P" />);
+    document.body.appendChild(container);
+    localStorage.setItem("ggg:tournament-create-draft", JSON.stringify(draft));
+    Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
+
+    let root: ReturnType<typeof hydrateRoot> | undefined;
+    await act(async () => {
+      root = hydrateRoot(container, <CreateTournamentForm expectedPassphrase="P" />);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    try {
+      expect(container.querySelector("#name")).toHaveValue("Hydrated Cup");
+      expect(localStorage.getItem("ggg:tournament-create-draft")).toContain("Hydrated Cup");
+    } finally {
+      await act(async () => root?.unmount());
+      container.remove();
+      Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", false);
+    }
+  });
+
+  it("ignores malformed browser storage", () => {
+    localStorage.setItem("ggg:tournament-create-draft", "not-json");
+
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+
+    expect(screen.getByLabelText(/tournament name/i)).toHaveValue("");
+  });
+
+  it("clears the saved draft and form values on request", async () => {
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    expect(screen.queryByRole("button", { name: /clear draft/i })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/tournament name/i), { target: { value: "Saved Cup" } });
+    await waitFor(() =>
+      expect(localStorage.getItem("ggg:tournament-create-draft")).toContain("Saved Cup"),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /clear draft/i }));
+
+    expect(screen.getByLabelText(/tournament name/i)).toHaveValue("");
+    expect(localStorage.getItem("ggg:tournament-create-draft")).toBeNull();
+  });
+
+  it("keeps the connected wallet and cover upload after a storage event", async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            data: { uploadUrl: "https://s3.example.com/presigned", key: "covers/img.png" },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 200 }));
+    vi.stubGlobal("fetch", mockFetch);
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await screen.findByLabelText(`Wallet ${MOCK_ORGANIZER}`);
+    fireEvent.change(screen.getByLabelText(/cover image/i), {
+      target: { files: [new File(["img"], "cover.png", { type: "image/png" })] },
+    });
+    await screen.findByText("Uploaded: covers/img.png");
+
+    localStorage.setItem(
+      "ggg:tournament-create-draft",
+      JSON.stringify({
+        name: "Other tab",
+        gameTitle: "",
+        entryFee: "",
+        asset: "XLM",
+        refereeAddress: "",
+        settlementDeadline: "",
+        splits: [60, 30, 10],
+      }),
+    );
+    window.dispatchEvent(new StorageEvent("storage", { key: "ggg:tournament-create-draft" }));
+
+    expect(screen.getByLabelText(`Wallet ${MOCK_ORGANIZER}`)).toBeInTheDocument();
+    expect(screen.getByText("Uploaded: covers/img.png")).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps the deploy phase after a storage event", async () => {
+    const mockFetch = vi.fn(() => new Promise<Response>(() => {}));
+    vi.stubGlobal("fetch", mockFetch);
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/tournament name/i), { target: { value: "Cup" } });
+    fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
+    fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: /deploy soroban contract/i }));
+    await screen.findByRole("dialog");
+
+    localStorage.setItem(
+      "ggg:tournament-create-draft",
+      JSON.stringify({
+        name: "Other tab",
+        gameTitle: "",
+        entryFee: "",
+        asset: "XLM",
+        refereeAddress: "",
+        settlementDeadline: "",
+        splits: [60, 30, 10],
+      }),
+    );
+    window.dispatchEvent(new StorageEvent("storage", { key: "ggg:tournament-create-draft" }));
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
   it("renders all required fields", () => {
     render(<CreateTournamentForm expectedPassphrase="P" />);
     expect(screen.getByLabelText(/tournament name/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/game title/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/entry fee/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/referee/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/settlement deadline/i)).toBeInTheDocument();
   });
 
   it("shows bps summary for default 60/30/10 split", () => {
@@ -47,6 +221,43 @@ describe("CreateTournamentForm", () => {
     // Change 1st to 50% — now sum = 50+30+10 = 90
     fireEvent.change(screen.getByLabelText(/1st %/i), { target: { value: "50" } });
     expect(screen.getByText(/must sum to 100/i)).toBeInTheDocument();
+  });
+
+  it("renders an invalid referee wallet error beside the input with accessible feedback", async () => {
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/tournament name/i), { target: { value: "Cup" } });
+    fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
+    fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: "1" } });
+    fillSettlementDeadline();
+
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: /deploy soroban contract/i }));
+
+    const input = screen.getByLabelText(/referee wallet address/i);
+    const feedback = await screen.findByText(/invalid stellar public key/i);
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input).toHaveAttribute("aria-describedby", feedback.id);
+    expect(feedback).toHaveAttribute("role", "alert");
+  });
+
+  it("shows referee and other validation errors together", async () => {
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/tournament name/i), { target: { value: "Cup" } });
+    fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
+    fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText(/settlement deadline/i), {
+      target: { value: new Date(Date.now() + 91 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16) },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: /deploy soroban contract/i }));
+
+    expect(await screen.findByText(/invalid stellar public key/i)).toBeInTheDocument();
+    expect(await screen.findByText(/within 90 days/i)).toBeInTheDocument();
   });
 
   it("clears split-sum error when percentages sum to 100 again", () => {
@@ -101,6 +312,7 @@ describe("CreateTournamentForm", () => {
     fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
     fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1.5" } });
     fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
 
     // Connect wallet
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
@@ -132,6 +344,7 @@ describe("CreateTournamentForm", () => {
     expect(body.gameTitle).toBe("SF6");
     expect(body.organizerAddress).toBe(MOCK_ORGANIZER);
     expect(body.refereeAddress).toBe(REF);
+    expect(body.settlementDeadline).toBeGreaterThan(Math.floor(Date.now() / 1000));
     // default splits 60/30/10 → bps [6000,3000,1000]
     expect(body.distributionBps).toEqual([6000, 3000, 1000]);
 
@@ -147,16 +360,23 @@ describe("CreateTournamentForm", () => {
 
     // Redirect on success
     await waitFor(() => expect(push).toHaveBeenCalledWith("/tournaments/t_1"));
+    expect(localStorage.getItem("ggg:tournament-create-draft")).toBeNull();
 
     vi.unstubAllGlobals();
   });
 
-  it("shows error and does NOT redirect when POST /api/tournaments returns ok:false", async () => {
+  it("preserves a server error message even when it matches the former parser sentinel", async () => {
     const mockFetch = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ ok: false, error: "Name already taken" }), {
-        status: 422,
-        headers: { "content-type": "application/json" },
-      }),
+      new Response(
+        JSON.stringify({
+          ok: false,
+          error: { code: "INVALID_REQUEST", message: "Invalid API response" },
+        }),
+        {
+          status: 422,
+          headers: { "content-type": "application/json" },
+        },
+      ),
     );
     vi.stubGlobal("fetch", mockFetch);
 
@@ -165,13 +385,16 @@ describe("CreateTournamentForm", () => {
     fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
     fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
     fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
 
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
 
     fireEvent.click(screen.getByRole("button", { name: /deploy soroban contract/i }));
 
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Name already taken"));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent("Invalid API response"),
+    );
     expect(push).not.toHaveBeenCalled();
     expect(signAndSubmit).not.toHaveBeenCalled();
 
@@ -198,6 +421,7 @@ describe("CreateTournamentForm", () => {
     fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
     fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
     fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
 
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
@@ -212,22 +436,106 @@ describe("CreateTournamentForm", () => {
     vi.unstubAllGlobals();
   });
 
-  it("cover image upload: PUTs to presigned URL and includes coverImageKey in create body", async () => {
-    // First call = /api/uploads presign, second call = PUT to presignedUrl, third = /api/tournaments
+  it("shows a structured on-chain failure and transaction explorer link", async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          data: { tournamentId: "t_failed", unsignedXdr: "XDR", network: "testnet" },
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", mockFetch);
+    (signAndSubmit as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new SubmissionError("Transaction failed on-chain", {
+        code: "TX_FAILED",
+        txHash: "TX_FAIL",
+        retryable: false,
+      }),
+    );
+
+    render(<CreateTournamentForm expectedPassphrase="Test SDF Network ; September 2015" />);
+    fireEvent.change(screen.getByLabelText(/tournament name/i), { target: { value: "Cup" } });
+    fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
+    fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
+
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: /deploy soroban contract/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent("Transaction failed on-chain"),
+    );
+    expect(screen.getByRole("link", { name: /view transaction/i })).toHaveAttribute(
+      "href",
+      "https://stellar.expert/explorer/testnet/tx/TX_FAIL",
+    );
+    expect(push).not.toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
+  });
+
+  it("retries initialization for a tournament whose deployment already succeeded", async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          data: { tournamentId: "t_recover", unsignedXdr: "DEPLOY_XDR", network: "testnet" },
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", mockFetch);
+    (signAndSubmit as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ txHash: "TX_DEPLOY", initializeXdr: "INITIALIZE_XDR" })
+      .mockRejectedValueOnce(
+        new Error("Contract deployed successfully, but initialization needs to be retried."),
+      )
+      .mockResolvedValueOnce({ txHash: "TX_DEPLOY", initializeXdr: "INITIALIZE_XDR" })
+      .mockResolvedValueOnce({ txHash: "TX_INIT", status: "ACTIVE" });
+
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/tournament name/i), { target: { value: "Cup" } });
+    fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
+    fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole("button", { name: /deploy soroban contract/i }));
+    await screen.findByRole("dialog", { name: /transaction failed/i });
+    fireEvent.click(screen.getByRole("button", { name: /close/i }));
+    fireEvent.click(screen.getByRole("button", { name: /retry initialization/i }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/tournaments/t_recover"));
+    expect(signAndSubmit).toHaveBeenCalledTimes(4);
+    expect(signAndSubmit).toHaveBeenNthCalledWith(
+      3,
+      "DEPLOY_XDR",
+      "deploy",
+      "/api/tournaments/t_recover/submit",
+      "P",
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it("cover image upload: sends the file to the server and includes coverImageKey in create body", async () => {
     const mockFetch = vi
       .fn()
-      // upload presign
+      // server upload
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
             ok: true,
-            data: { uploadUrl: "https://s3.example.com/presigned", key: "covers/img.png" },
+            data: { key: "covers/123e4567-e89b-12d3-a456-426614174000.png" },
           }),
           { status: 200, headers: { "content-type": "application/json" } },
         ),
       )
-      // PUT to presigned URL
-      .mockResolvedValueOnce(new Response(null, { status: 200 }))
       // POST /api/tournaments
       .mockResolvedValueOnce(
         new Response(
@@ -245,22 +553,17 @@ describe("CreateTournamentForm", () => {
     fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
     fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
     fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
 
     // Upload a cover image
     const file = new File(["img bytes"], "cover.png", { type: "image/png" });
     fireEvent.change(screen.getByLabelText(/cover image/i), { target: { files: [file] } });
 
-    // Wait for upload to complete (presign + PUT)
+    // Wait for server upload to complete.
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
         "/api/uploads",
         expect.objectContaining({ method: "POST" }),
-      );
-    });
-    await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith(
-        "https://s3.example.com/presigned",
-        expect.objectContaining({ method: "PUT" }),
       );
     });
 
@@ -277,7 +580,7 @@ describe("CreateTournamentForm", () => {
       );
       expect(tournamentCall).toBeDefined();
       const body = JSON.parse((tournamentCall![1] as RequestInit).body as string);
-      expect(body.coverImageKey).toBe("covers/img.png");
+      expect(body.coverImageKey).toBe("covers/123e4567-e89b-12d3-a456-426614174000.png");
     });
 
     vi.unstubAllGlobals();
@@ -306,6 +609,7 @@ describe("CreateTournamentForm", () => {
     fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
     fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
     fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
 
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
@@ -339,6 +643,7 @@ describe("CreateTournamentForm", () => {
     fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
     fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
     fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
 
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
@@ -374,6 +679,7 @@ describe("CreateTournamentForm", () => {
     fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
     fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "0.5" } });
     fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
 
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
@@ -412,6 +718,7 @@ describe("CreateTournamentForm", () => {
       fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
       fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: feeValue } });
       fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+      fillSettlementDeadline();
 
       // Connect wallet so the submit button is enabled
       fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
@@ -441,6 +748,7 @@ describe("CreateTournamentForm", () => {
     fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
     fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1.12345678" } });
     fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
 
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
@@ -474,6 +782,7 @@ describe("CreateTournamentForm", () => {
     // 1.1234567 XLM → 11234567 stroops
     fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1.1234567" } });
     fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
 
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
@@ -492,34 +801,101 @@ describe("CreateTournamentForm", () => {
     vi.unstubAllGlobals();
   });
 
-  it("cover PUT returning ok:false → surfaces error and does NOT set coverImageKey", async () => {
-    const mockFetch = vi
-      .fn()
-      // presign succeeds
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            ok: true,
-            data: { uploadUrl: "https://s3.example.com/presigned", key: "covers/img.png" },
-          }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        ),
-      )
-      // PUT fails with 403
-      .mockResolvedValueOnce(new Response(null, { status: 403 }));
+  it("a failed optional cover upload can be removed so deployment is re-enabled", async () => {
+    const mockFetch = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ ok: false, error: { message: "Invalid file type." } }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      }),
+    );
     vi.stubGlobal("fetch", mockFetch);
 
     render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/tournament name/i), { target: { value: "Cup" } });
+    fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
+    fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
 
     const file = new File(["img bytes"], "cover.png", { type: "image/png" });
     fireEvent.change(screen.getByLabelText(/cover image/i), { target: { files: [file] } });
 
-    // Error should appear; coverImageKey "Uploaded:" text should NOT appear
-    await waitFor(() =>
-      expect(screen.getByRole("alert")).toHaveTextContent(/cover image upload failed/i),
-    );
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Invalid file type."));
     expect(screen.queryByText(/Uploaded:/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /deploy soroban contract/i })).toBeDisabled();
 
+    fireEvent.click(screen.getByRole("button", { name: /remove cover image/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /deploy soroban contract/i })).toBeEnabled(),
+    );
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("stale authenticated form", () => {
+  it("shows a login message instead of parsing a non-JSON 401 response", async () => {
+    vi.clearAllMocks();
+    (ensureWallet as ReturnType<typeof vi.fn>).mockResolvedValue(MOCK_ORGANIZER);
+    (signAndSubmit as ReturnType<typeof vi.fn>).mockResolvedValue({ txHash: "TX123" });
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue(new Response("METHOD NOT ALLOWED", { status: 401 }));
+    vi.stubGlobal("fetch", mockFetch);
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/tournament name/i), { target: { value: "Cup" } });
+    fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
+    fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: /deploy soroban contract/i }));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Your session has ended. Please log in again.",
+      ),
+    );
+    expect(signAndSubmit).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    [401, "UNAUTHORIZED"],
+    [403, "FORBIDDEN"],
+  ] as const)("handles a structured %i response without submitting", async (status, code) => {
+    vi.clearAllMocks();
+    (ensureWallet as ReturnType<typeof vi.fn>).mockResolvedValue(MOCK_ORGANIZER);
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ ok: false, error: { code, message: "Authentication required" } }),
+          { status, headers: { "content-type": "application/json" } },
+        ),
+      );
+    vi.stubGlobal("fetch", mockFetch);
+
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/tournament name/i), { target: { value: "Cup" } });
+    fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
+    fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fillSettlementDeadline();
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: /deploy soroban contract/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Your session has ended. Please log in again.",
+      ),
+    );
+    expect(signAndSubmit).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
 });

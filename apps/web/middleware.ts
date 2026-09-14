@@ -15,10 +15,13 @@ export function isProtectedPath(pathname: string): boolean {
 }
 
 export default withAuth(
-  function middleware() {
+  function middleware(request) {
     // Authentication is enforced by the withAuth authorized callback below.
     // This function runs only for allowed requests and applies security headers.
     const response = NextResponse.next();
+    if (isProtectedPath(request.nextUrl.pathname)) {
+      response.headers.set("Cache-Control", "no-store, max-age=0");
+    }
 
     for (const [key, value] of buildSecurityHeaders()) {
       response.headers.set(key, value);

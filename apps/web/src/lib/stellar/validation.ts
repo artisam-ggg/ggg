@@ -2,6 +2,7 @@ import { z } from "zod";
 import { StrKey } from "@stellar/stellar-sdk";
 
 const I128_MAX = (1n << 127n) - 1n;
+const U64_MAX = (1n << 64n) - 1n;
 
 export const stellarPublicKey = z
   .string()
@@ -14,6 +15,10 @@ export const stellarContractId = z
 export const i128Amount = z
   .bigint()
   .refine((v) => v > 0n && v <= I128_MAX, { message: "Amount must be a positive i128" });
+
+export const u64Timestamp = z
+  .bigint()
+  .refine((v) => v > 0n && v <= U64_MAX, { message: "Timestamp must be a positive u64" });
 
 export const signedXdr = z
   .string()

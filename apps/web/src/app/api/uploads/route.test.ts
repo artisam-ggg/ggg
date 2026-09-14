@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock all external boundaries before importing the route
 vi.mock("@/lib/auth-guards", () => ({
   requireUser: vi.fn(async () => ({ id: "user_1", username: "alice", role: "ORGANIZER" })),
   AuthError: class AuthError extends Error {
-    readonly status: number;
-    constructor(message: string, status: number) {
+    constructor(
+      message: string,
+      readonly status: number,
+    ) {
       super(message);
       this.name = "AuthError";
-      this.status = status;
     }
   },
 }));
@@ -21,36 +21,33 @@ vi.mock("@/lib/csrf", () => ({
     }
   },
 }));
-vi.mock("@/lib/rate-limit", () => ({
-  rateLimit: vi.fn(async () => ({ ok: true, remaining: 19 })),
-}));
+vi.mock("@/lib/rate-limit", () => ({ rateLimit: vi.fn(async () => ({ ok: true })) }));
 vi.mock("@/server/services/uploads", () => ({
-  createPresignedUpload: vi.fn(async () => ({
-    uploadUrl: "https://minio/presigned",
-    key: "covers/abc-123.png",
-  })),
+  MAX_COVER_IMAGE_BYTES: 5 * 1024 * 1024,
+  CoverImageValidationError: class CoverImageValidationError extends Error {
+    readonly status = 400;
+  },
+  uploadCoverImage: vi.fn(async () => ({ key: "covers/abc.png" })),
 }));
 
-import { requireUser, AuthError } from "@/lib/auth-guards";
+import { AuthError, requireUser } from "@/lib/auth-guards";
 import { assertSameOrigin, CsrfError } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
-import { createPresignedUpload } from "@/server/services/uploads";
+import { uploadCoverImage } from "@/server/services/uploads";
 import { POST } from "./route";
 
+const rateLimitMock = rateLimit as ReturnType<typeof vi.fn>;
 const requireUserMock = requireUser as ReturnType<typeof vi.fn>;
 const assertSameOriginMock = assertSameOrigin as ReturnType<typeof vi.fn>;
-const rateLimitMock = rateLimit as ReturnType<typeof vi.fn>;
-const createPresignedUploadMock = createPresignedUpload as ReturnType<typeof vi.fn>;
+const uploadCoverImageMock = uploadCoverImage as ReturnType<typeof vi.fn>;
 
-function makeReq(body: unknown, headers: Record<string, string> = {}) {
+function uploadRequest(file?: File) {
+  const body = new FormData();
+  if (file) body.set("file", file);
   return new Request("http://localhost:3000/api/uploads", {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      origin: "http://localhost:3000",
-      ...headers,
-    },
-    body: JSON.stringify(body),
+    headers: { origin: "http://localhost:3000" },
+    body,
   }) as Parameters<typeof POST>[0];
 }
 
@@ -59,159 +56,135 @@ describe("POST /api/uploads", () => {
     vi.clearAllMocks();
     assertSameOriginMock.mockReturnValue(undefined);
     requireUserMock.mockResolvedValue({ id: "user_1", username: "alice", role: "ORGANIZER" });
-    rateLimitMock.mockResolvedValue({ ok: true, remaining: 19 });
-    createPresignedUploadMock.mockResolvedValue({
-      uploadUrl: "https://minio/presigned",
-      key: "covers/abc-123.png",
-    });
+    rateLimitMock.mockResolvedValue({ ok: true });
+    uploadCoverImageMock.mockResolvedValue({ key: "covers/abc.png" });
   });
 
-  it("returns presigned uploadUrl and key on valid request", async () => {
-    const res = await POST(makeReq({ contentType: "image/png", contentLength: 1000 }));
-    const json = await res.json();
+  it("accepts a file and returns the standard success envelope", async () => {
+    const res = await POST(uploadRequest(new File(["image"], "cover.png", { type: "image/png" })));
 
     expect(res.status).toBe(200);
-    expect(json.ok).toBe(true);
-    expect(json.data.uploadUrl).toBe("https://minio/presigned");
-    expect(json.data.key).toBe("covers/abc-123.png");
+    await expect(res.json()).resolves.toEqual({ ok: true, data: { key: "covers/abc.png" } });
+    expect(uploadCoverImageMock).toHaveBeenCalledOnce();
   });
 
-  it("delegates to createPresignedUpload with validated contentType and contentLength", async () => {
-    await POST(makeReq({ contentType: "image/jpeg", contentLength: 2048 }));
-
-    expect(createPresignedUploadMock).toHaveBeenCalledOnce();
-    expect(createPresignedUploadMock).toHaveBeenCalledWith("image/jpeg", 2048);
-  });
-
-  it("returns 400 for invalid MIME type", async () => {
-    const res = await POST(makeReq({ contentType: "application/zip", contentLength: 1000 }));
-    const json = await res.json();
+  it("blocks creation of an upload when no file is supplied", async () => {
+    const res = await POST(uploadRequest());
 
     expect(res.status).toBe(400);
-    expect(json.ok).toBe(false);
-    expect(createPresignedUploadMock).not.toHaveBeenCalled();
+    await expect(res.json()).resolves.toMatchObject({
+      ok: false,
+      error: { message: "An image file is required" },
+    });
+    expect(uploadCoverImageMock).not.toHaveBeenCalled();
   });
 
-  it("returns 400 for missing contentType", async () => {
-    const res = await POST(makeReq({ contentLength: 1000 }));
-    const json = await res.json();
+  it.each([
+    [401, "UNAUTHORIZED", "Unauthenticated"],
+    [403, "FORBIDDEN", "Forbidden"],
+  ])("returns the %i auth envelope without uploading", async (status, code, message) => {
+    requireUserMock.mockRejectedValueOnce(new AuthError(message, status));
 
-    expect(res.status).toBe(400);
-    expect(json.ok).toBe(false);
+    const res = await POST(uploadRequest(new File(["image"], "cover.png", { type: "image/png" })));
+
+    expect(res.status).toBe(status);
+    await expect(res.json()).resolves.toEqual({ ok: false, error: { code, message } });
+    expect(requireUserMock).toHaveBeenCalledWith(undefined, false);
+    expect(uploadCoverImageMock).not.toHaveBeenCalled();
   });
 
-  it("returns 400 for oversized contentLength (>5MB)", async () => {
-    const res = await POST(makeReq({ contentType: "image/png", contentLength: 6 * 1024 * 1024 }));
-    const json = await res.json();
-
-    expect(res.status).toBe(400);
-    expect(json.ok).toBe(false);
-    expect(createPresignedUploadMock).not.toHaveBeenCalled();
-  });
-
-  it("returns 400 for zero contentLength", async () => {
-    const res = await POST(makeReq({ contentType: "image/png", contentLength: 0 }));
-    const json = await res.json();
-
-    expect(res.status).toBe(400);
-    expect(json.ok).toBe(false);
-  });
-
-  it("returns 400 for invalid JSON body", async () => {
-    const req = new Request("http://localhost:3000/api/uploads", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        origin: "http://localhost:3000",
-      },
-      body: "not json",
-    }) as Parameters<typeof POST>[0];
-
-    const res = await POST(req);
-    const json = await res.json();
-
-    expect(res.status).toBe(400);
-    expect(json.ok).toBe(false);
-  });
-
-  it("re-throws NEXT_REDIRECT when unauthenticated", async () => {
-    const redirectError = Object.assign(new Error("NEXT_REDIRECT"), { digest: "NEXT_REDIRECT" });
-    requireUserMock.mockRejectedValue(redirectError);
-
-    await expect(POST(makeReq({ contentType: "image/png", contentLength: 1000 }))).rejects.toThrow(
-      "NEXT_REDIRECT",
-    );
-    expect(createPresignedUploadMock).not.toHaveBeenCalled();
-  });
-
-  it("returns 403 for wrong-role requests (AuthError)", async () => {
-    requireUserMock.mockRejectedValue(new AuthError("Forbidden", 403));
-
-    const res = await POST(makeReq({ contentType: "image/png", contentLength: 1000 }));
-    const json = await res.json();
-
-    expect(res.status).toBe(403);
-    expect(json.ok).toBe(false);
-    expect(json.error.code).toBe("FORBIDDEN");
-    expect(createPresignedUploadMock).not.toHaveBeenCalled();
-  });
-
-  it("returns 403 for cross-origin requests (CSRF)", async () => {
-    assertSameOriginMock.mockImplementation(() => {
+  it("rejects a CSRF violation without uploading", async () => {
+    assertSameOriginMock.mockImplementationOnce(() => {
       throw new CsrfError();
     });
 
-    const res = await POST(
-      makeReq(
-        { contentType: "image/png", contentLength: 1000 },
-        { origin: "https://evil.example.com" },
-      ),
-    );
-    const json = await res.json();
+    const res = await POST(uploadRequest(new File(["image"], "cover.png", { type: "image/png" })));
 
     expect(res.status).toBe(403);
-    expect(json.ok).toBe(false);
-    expect(json.error.code).toBe("CSRF_VIOLATION");
-    expect(createPresignedUploadMock).not.toHaveBeenCalled();
+    await expect(res.json()).resolves.toEqual({
+      ok: false,
+      error: { code: "CSRF_VIOLATION", message: "Cross-origin request rejected" },
+    });
+    expect(uploadCoverImageMock).not.toHaveBeenCalled();
   });
 
-  it("returns 429 when rate limit is exceeded", async () => {
-    rateLimitMock.mockResolvedValue({ ok: false, remaining: 0 });
+  it("rejects an oversized declared body before parsing multipart data", async () => {
+    const formData = vi.fn();
+    const req = {
+      headers: new Headers({ "content-length": String(5 * 1024 * 1024 + 64 * 1024 + 1) }),
+      formData,
+    } as unknown as Parameters<typeof POST>[0];
 
-    const res = await POST(makeReq({ contentType: "image/png", contentLength: 1000 }));
-    const json = await res.json();
+    const res = await POST(req);
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      ok: false,
+      error: { message: "Image must be no larger than 5 MB." },
+    });
+    expect(formData).not.toHaveBeenCalled();
+  });
+
+  it("accepts a file at the exact size limit when multipart framing is included", async () => {
+    const form = new FormData();
+    form.set(
+      "file",
+      new File([new Uint8Array(5 * 1024 * 1024)], "cover.png", { type: "image/png" }),
+    );
+    const base = new Request("http://localhost:3000/api/uploads", {
+      method: "POST",
+      headers: { origin: "http://localhost:3000" },
+      body: form,
+    });
+    const contentLength = (await base.clone().arrayBuffer()).byteLength;
+    const req = new Request(base, {
+      headers: {
+        origin: "http://localhost:3000",
+        "content-length": String(contentLength),
+        "content-type": base.headers.get("content-type") ?? "",
+      },
+    }) as Parameters<typeof POST>[0];
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    expect(uploadCoverImageMock).toHaveBeenCalledOnce();
+  });
+
+  it("returns the file validation message for a disallowed MIME type", async () => {
+    const res = await POST(
+      uploadRequest(new File(["not an image"], "cover.txt", { type: "text/plain" })),
+    );
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      ok: false,
+      error: { message: "Invalid file type. Upload a PNG, JPEG, or WEBP image." },
+    });
+  });
+
+  it("does not process a file after rate limiting", async () => {
+    rateLimitMock.mockResolvedValue({ ok: false });
+    const res = await POST(uploadRequest(new File(["image"], "cover.png", { type: "image/png" })));
 
     expect(res.status).toBe(429);
-    expect(json.ok).toBe(false);
-    expect(createPresignedUploadMock).not.toHaveBeenCalled();
+    expect(uploadCoverImageMock).not.toHaveBeenCalled();
   });
 
-  it("rate-limits per user (passes upload:<userId> as key)", async () => {
-    await POST(makeReq({ contentType: "image/png", contentLength: 1000 }));
+  it("does not expose an object storage error", async () => {
+    uploadCoverImageMock.mockRejectedValue(new Error("S3 bucket internal detail"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-    expect(rateLimitMock).toHaveBeenCalledOnce();
-    expect(rateLimitMock).toHaveBeenCalledWith(
-      "upload:user_1",
-      expect.objectContaining({ limit: 20 }),
-    );
-  });
+    const res = await POST(uploadRequest(new File(["image"], "cover.png", { type: "image/png" })));
 
-  it("accepts all three supported MIME types", async () => {
-    for (const contentType of ["image/png", "image/jpeg", "image/webp"] as const) {
-      vi.clearAllMocks();
-      assertSameOriginMock.mockReturnValue(undefined);
-      requireUserMock.mockResolvedValue({ id: "user_1", username: "alice", role: "ORGANIZER" });
-      rateLimitMock.mockResolvedValue({ ok: true, remaining: 19 });
-      createPresignedUploadMock.mockResolvedValue({
-        uploadUrl: "https://minio/presigned",
-        key: "covers/abc-123.png",
-      });
-
-      const res = await POST(makeReq({ contentType, contentLength: 1000 }));
-      const json = await res.json();
-
-      expect(res.status).toBe(200);
-      expect(json.ok).toBe(true);
-    }
+    expect(res.status).toBe(500);
+    await expect(res.json()).resolves.toMatchObject({
+      ok: false,
+      error: { message: "Cover image upload failed. Try again later." },
+    });
+    expect(errorSpy).toHaveBeenCalledWith("Cover image upload failed", {
+      error: expect.any(Error),
+    });
+    errorSpy.mockRestore();
   });
 });

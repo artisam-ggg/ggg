@@ -33,7 +33,11 @@ afterEach(() => {
   delete (globalThis as unknown as { matchMedia?: unknown }).matchMedia;
 });
 
-function renderCounter(initialPool = "30000000", participantCount = 3) {
+function renderCounter(
+  initialPool = "30000000",
+  participantCount = 3,
+  initialRefundPlayers?: string[],
+) {
   return render(
     <PrizePoolCounter
       tournamentId="t_1"
@@ -41,6 +45,7 @@ function renderCounter(initialPool = "30000000", participantCount = 3) {
       asset="XLM"
       participantCount={participantCount}
       entryFee="10000000"
+      {...(initialRefundPlayers ? { initialRefundPlayers } : {})}
     />,
   );
 }
@@ -82,5 +87,29 @@ describe("PrizePoolCounter", () => {
       }),
     );
     expect(screen.getByTestId("pool-amount")).toHaveTextContent("3.0000000");
+  });
+
+  it("decreases the pool once for a live refund claim", () => {
+    renderCounter();
+    act(() =>
+      FakeES.instances[0]!.emit({
+        type: "REFUND_CLAIMED",
+        txHash: "tx-refund",
+        data: { player: "GA", amount: "10000000" },
+      }),
+    );
+    expect(screen.getByTestId("pool-amount")).toHaveTextContent("2.0000000");
+  });
+
+  it("does not replay a refund already reflected in the initial pool", () => {
+    renderCounter("20000000", 3, ["GA"]);
+    act(() =>
+      FakeES.instances[0]!.emit({
+        type: "REFUND_CLAIMED",
+        txHash: "tx-refund",
+        data: { player: "GA", amount: "10000000" },
+      }),
+    );
+    expect(screen.getByTestId("pool-amount")).toHaveTextContent("2.0000000");
   });
 });

@@ -1,10 +1,12 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { WalletButton } from "./WalletButton";
 import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
-import { signAndSubmit } from "@/lib/wallet";
+import { signAndSubmit, SubmissionError } from "@/lib/wallet";
 import { createTournamentSchema } from "@/lib/validation/tournament";
+import { apiResponseSchema } from "@/lib/api";
+import { z } from "zod";
 
 // 1 XLM = 10,000,000 stroops (7 decimal places)
 const STROOP_FACTOR = 10_000_000n;
@@ -15,6 +17,61 @@ const STROOP_FACTOR = 10_000_000n;
  * Valid examples: "1", "1.5", "0.0000001", "123.4567890" (exactly 7 dec.)
  */
 const ENTRY_FEE_REGEX = /^\d+(\.\d{1,7})?$/;
+const TESTNET_PASSPHRASE = "Test SDF Network ; September 2015";
+
+const createTournamentResponseSchema = apiResponseSchema(
+  z.object({
+    tournamentId: z.string().min(1),
+    unsignedXdr: z.string().min(1),
+    network: z.string(),
+  }),
+);
+
+const DRAFT_STORAGE_KEY = "ggg:tournament-create-draft";
+
+const draftSchema = z.object({
+  name: z.string().max(120),
+  gameTitle: z.string().max(120),
+  entryFee: z.string().max(32),
+  asset: z.enum(["XLM", "USDC"]),
+  refereeAddress: z.string().max(56),
+  settlementDeadline: z.string().max(32),
+  splits: z.tuple([
+    z.number().int().min(0).max(100),
+    z.number().int().min(0).max(100),
+    z.number().int().min(0).max(100),
+  ]),
+});
+
+type TournamentDraft = z.infer<typeof draftSchema>;
+
+const emptyDraft: TournamentDraft = {
+  name: "",
+  gameTitle: "",
+  entryFee: "",
+  asset: "XLM",
+  refereeAddress: "",
+  settlementDeadline: "",
+  splits: [60, 30, 10],
+};
+
+function loadDraft(): TournamentDraft {
+  try {
+    const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+    const parsed = draftSchema.safeParse(JSON.parse(raw ?? "null"));
+    return parsed.success ? parsed.data : emptyDraft;
+  } catch {
+    return emptyDraft;
+  }
+}
+
+function removeStoredDraft() {
+  try {
+    localStorage.removeItem(DRAFT_STORAGE_KEY);
+  } catch {
+    // Browser storage is unavailable.
+  }
+}
 
 /**
  * Validate an entry-fee string. Returns an error message or null if valid.
@@ -49,7 +106,14 @@ function xlmToStroops(xlm: string): string {
   return (BigInt(whole) * STROOP_FACTOR + BigInt(fracPadded)).toString();
 }
 
+function transactionExplorerUrl(txHash: string, passphrase: string) {
+  const network = passphrase === TESTNET_PASSPHRASE ? "testnet" : "public";
+  return `https://stellar.expert/explorer/${network}/tx/${encodeURIComponent(txHash)}`;
+}
+
 type Phase = "idle" | "signing" | "submitting" | "initializing" | "success" | "error";
+type CoverUploadStatus = "idle" | "uploading" | "failed" | "complete";
+type PendingDeployment = { tournamentId: string; unsignedXdr: string };
 
 interface CreateTournamentFormProps {
   expectedPassphrase: string;
@@ -65,13 +129,79 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   const [asset, setAsset] = useState<"XLM" | "USDC">("XLM");
   const [refereeAddress, setRefereeAddress] = useState("");
   const [organizerAddress, setOrganizerAddress] = useState("");
+  const [settlementDeadline, setSettlementDeadline] = useState("");
   const [splits, setSplits] = useState<[number, number, number]>([60, 30, 10]);
   const [coverImageKey, setCoverImageKey] = useState<string | undefined>();
+  const [coverUploadStatus, setCoverUploadStatus] = useState<CoverUploadStatus>("idle");
+  const coverUploadRequest = useRef(0);
+  const coverImageInput = useRef<HTMLInputElement>(null);
+  const [restored, setRestored] = useState(false);
 
   // UI state
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [errorTxHash, setErrorTxHash] = useState<string | null>(null);
+  const [pendingDeployment, setPendingDeployment] = useState<PendingDeployment | null>(null);
   const [entryFeeError, setEntryFeeError] = useState<string | null>(null);
+  const [refereeError, setRefereeError] = useState<string | null>(null);
+  const hasDraft =
+    !!name ||
+    !!gameTitle ||
+    !!entryFee ||
+    !!refereeAddress ||
+    !!settlementDeadline ||
+    asset !== "XLM" ||
+    splits.join(",") !== "60,30,10";
+
+  useEffect(() => {
+    const draft = loadDraft();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Restore browser-only draft after hydration.
+    setName(draft.name);
+    setGameTitle(draft.gameTitle);
+    setEntryFee(draft.entryFee);
+    setAsset(draft.asset);
+    setRefereeAddress(draft.refereeAddress);
+    setSettlementDeadline(draft.settlementDeadline);
+    setSplits(draft.splits);
+    setRestored(true);
+  }, []);
+
+  useEffect(() => {
+    if (!restored) return;
+
+    // Wallet and upload state are deliberately excluded; both must be fetched live.
+    const draft = { name, gameTitle, entryFee, asset, refereeAddress, settlementDeadline, splits };
+    if (!hasDraft) {
+      removeStoredDraft();
+    } else {
+      try {
+        localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+      } catch {
+        // Browser storage is unavailable.
+      }
+    }
+  }, [
+    asset,
+    entryFee,
+    gameTitle,
+    hasDraft,
+    name,
+    refereeAddress,
+    restored,
+    settlementDeadline,
+    splits,
+  ]);
+
+  function clearDraft() {
+    removeStoredDraft();
+    setName("");
+    setGameTitle("");
+    setEntryFee("");
+    setAsset("XLM");
+    setRefereeAddress("");
+    setSettlementDeadline("");
+    setSplits([60, 30, 10]);
+  }
 
   // Derived values
   const bps = splits.map((s) => s * 100) as [number, number, number];
@@ -79,31 +209,94 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   const splitValid = splitSum === 100;
 
   async function handleCoverUpload(file: File) {
+    const request = ++coverUploadRequest.current;
     setError(null);
-    const presignRes = await fetch("/api/uploads", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ contentType: file.type, contentLength: file.size }),
-    });
-    const presign = (await presignRes.json()) as {
-      ok: boolean;
-      data?: { uploadUrl: string; key: string };
-      error?: string;
-    };
-    if (!presign.ok) throw new Error(presign.error ?? "Upload presign failed");
+    setCoverUploadStatus("uploading");
+    try {
+      const form = new FormData();
+      form.set("file", file);
+      const uploadRes = await fetch("/api/uploads", {
+        method: "POST",
+        body: form,
+      });
+      const upload = (await uploadRes.json()) as {
+        ok: boolean;
+        data?: { key: string };
+        error?: { message?: string } | string;
+      };
+      if (!uploadRes.ok || !upload.ok) {
+        throw new Error(
+          typeof upload.error === "string"
+            ? upload.error
+            : (upload.error?.message ?? "Cover image upload failed"),
+        );
+      }
+      if (request === coverUploadRequest.current) {
+        setCoverImageKey(upload.data!.key);
+        setCoverUploadStatus("complete");
+      }
+    } catch (err: unknown) {
+      if (request === coverUploadRequest.current) {
+        setCoverUploadStatus("failed");
+        setError(err instanceof Error ? err.message : "Upload failed");
+      }
+    }
+  }
 
-    const putRes = await fetch(presign.data!.uploadUrl, {
-      method: "PUT",
-      headers: { "content-type": file.type },
-      body: file,
-    });
-    if (!putRes.ok) throw new Error(`Cover image upload failed (HTTP ${putRes.status})`);
+  function removeCoverImage() {
+    ++coverUploadRequest.current;
+    setCoverImageKey(undefined);
+    setCoverUploadStatus("idle");
+    setError(null);
+    if (coverImageInput.current) coverImageInput.current.value = "";
+  }
 
-    setCoverImageKey(presign.data!.key);
+  async function submitDeployment(pending: PendingDeployment) {
+    setPhase("signing");
+    const submitUrl = `/api/tournaments/${pending.tournamentId}/submit`;
+    const deployRes = await signAndSubmit(
+      pending.unsignedXdr,
+      "deploy",
+      submitUrl,
+      expectedPassphrase,
+    );
+
+    if (deployRes.initializeXdr) {
+      setPhase("initializing");
+      await signAndSubmit(deployRes.initializeXdr, "initialize", submitUrl, expectedPassphrase);
+    }
+
+    setPendingDeployment(null);
+    removeStoredDraft();
+    setPhase("success");
+    router.push(`/tournaments/${pending.tournamentId}`);
+  }
+
+  function handleDeploymentError(e: unknown) {
+    setPhase("error");
+    setError(e instanceof Error ? e.message : "An unexpected error occurred");
+    setErrorTxHash(e instanceof SubmissionError ? (e.details.txHash ?? null) : null);
+  }
+
+  async function retryInitialization() {
+    if (!pendingDeployment) return;
+    setError(null);
+    setErrorTxHash(null);
+    try {
+      await submitDeployment(pendingDeployment);
+    } catch (e: unknown) {
+      handleDeploymentError(e);
+    }
   }
 
   async function handleDeploy() {
     setError(null);
+    setErrorTxHash(null);
+    setRefereeError(null);
+    if (coverUploadStatus === "uploading" || coverUploadStatus === "failed") {
+      setError("Resolve the cover image upload before deploying.");
+      return;
+    }
 
     // Validate entry fee BEFORE any conversion or network call
     const feeError = validateEntryFee(entryFee);
@@ -115,6 +308,11 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
 
     try {
       const entryFeeStroops = xlmToStroops(entryFee);
+      const deadlineMs = Date.parse(settlementDeadline);
+      if (!Number.isFinite(deadlineMs)) {
+        setError("Settlement deadline is required");
+        return;
+      }
 
       const payload = {
         name,
@@ -123,6 +321,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         asset,
         refereeAddress,
         organizerAddress,
+        settlementDeadline: Math.floor(deadlineMs / 1000),
         distributionBps: bps,
         coverImageKey,
       };
@@ -130,7 +329,14 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       // Client-side validation
       const parsed = createTournamentSchema.safeParse(payload);
       if (!parsed.success) {
-        setError(parsed.error.issues[0]?.message ?? "Invalid form input");
+        const refereeIssue = parsed.error.issues.find(
+          (issue) => issue.path[0] === "refereeAddress",
+        );
+        const otherIssue = parsed.error.issues.find((issue) => issue.path[0] !== "refereeAddress");
+        if (refereeIssue) {
+          setRefereeError(refereeIssue.message);
+        }
+        setError(otherIssue?.message ?? null);
         return;
       }
 
@@ -141,36 +347,28 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const created = (await createRes.json()) as {
-        ok: boolean;
-        data?: { tournamentId: string; unsignedXdr: string; network: string };
-        error?: string;
-      };
-      if (!created.ok) throw new Error(created.error ?? "Failed to create tournament");
-
-      setPhase("signing");
-
-      const submitUrl = `/api/tournaments/${created.data!.tournamentId}/submit`;
-      const deployRes = await signAndSubmit(
-        created.data!.unsignedXdr,
-        "deploy",
-        submitUrl,
-        expectedPassphrase,
-      );
-
-      // The escrow Wasm has no Soroban constructor, so deploy only creates the
-      // contract — the organiser must sign a second `initialize` transaction to
-      // set its state before anyone can join. Do it under the same action.
-      if (deployRes.initializeXdr) {
-        setPhase("initializing");
-        await signAndSubmit(deployRes.initializeXdr, "initialize", submitUrl, expectedPassphrase);
+      if (createRes.status === 401 || createRes.status === 403) {
+        throw new Error("Your session has ended. Please log in again.");
       }
 
-      setPhase("success");
-      router.push(`/tournaments/${created.data!.tournamentId}`);
+      const raw = await createRes.text();
+      let envelope: ReturnType<typeof createTournamentResponseSchema.safeParse>;
+      try {
+        envelope = createTournamentResponseSchema.safeParse(JSON.parse(raw));
+      } catch {
+        throw new Error("Tournament creation failed. Please try again.");
+      }
+      if (!envelope.success) throw new Error("Tournament creation failed. Please try again.");
+      if (!envelope.data.ok) throw new Error(envelope.data.error.message);
+      const created = envelope.data.data;
+      const pending = {
+        tournamentId: created.tournamentId,
+        unsignedXdr: created.unsignedXdr,
+      };
+      setPendingDeployment(pending);
+      await submitDeployment(pending);
     } catch (e: unknown) {
-      setPhase("error");
-      setError(e instanceof Error ? e.message : "An unexpected error occurred");
+      handleDeploymentError(e);
     }
   }
 
@@ -179,7 +377,13 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   const labelClass = "label-caps block mb-2 text-on-surface-variant";
   const monoFieldClass = `${fieldClass} data-mono text-acid-yellow`;
 
-  const isSubmittable = !!organizerAddress && splitValid && phase === "idle";
+  const isSubmittable =
+    !!organizerAddress &&
+    !!settlementDeadline &&
+    splitValid &&
+    coverUploadStatus !== "uploading" &&
+    coverUploadStatus !== "failed" &&
+    phase === "idle";
 
   return (
     <form
@@ -196,7 +400,6 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       <p className="mt-2 text-sm text-on-surface-variant">
         Deploy a Soroban escrow contract for your tournament.
       </p>
-
       {/* Tournament Name */}
       <div className="mt-8">
         <label className={labelClass} htmlFor="name">
@@ -279,12 +482,42 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         <input
           id="refereeAddress"
           type="text"
-          className={monoFieldClass}
+          className={`${monoFieldClass}${refereeError ? " border-error" : ""}`}
           value={refereeAddress}
-          onChange={(e) => setRefereeAddress(e.target.value)}
+          onChange={(e) => {
+            setRefereeAddress(e.target.value);
+            setRefereeError(null);
+          }}
           placeholder="G…"
           required
+          aria-invalid={refereeError ? true : undefined}
+          aria-describedby={refereeError ? "referee-address-error" : undefined}
         />
+        {refereeError && (
+          <p id="referee-address-error" role="alert" className="mt-1 text-sm text-error">
+            {refereeError}
+          </p>
+        )}
+      </div>
+
+      {/* Settlement Deadline */}
+      <div className="mt-6">
+        <label className={labelClass} htmlFor="settlementDeadline">
+          Settlement Deadline
+        </label>
+        <input
+          id="settlementDeadline"
+          type="datetime-local"
+          className={fieldClass}
+          value={settlementDeadline}
+          onChange={(e) => setSettlementDeadline(e.target.value)}
+          required
+          aria-describedby="settlement-deadline-help"
+        />
+        <p id="settlement-deadline-help" className="mt-1 text-sm text-on-surface-variant">
+          Choose a time at least one hour and no more than 90 days away. It is stored on-chain as
+          UTC.
+        </p>
       </div>
 
       {/* Prize Split */}
@@ -331,14 +564,13 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         <input
           id="coverImage"
           type="file"
+          ref={coverImageInput}
           accept="image/png,image/jpeg,image/webp"
           className={fieldClass}
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) {
-              handleCoverUpload(file).catch((err: unknown) => {
-                setError(err instanceof Error ? err.message : "Upload failed");
-              });
+              void handleCoverUpload(file);
             }
           }}
         />
@@ -347,11 +579,23 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
             Uploaded: {coverImageKey}
           </p>
         )}
+        {coverUploadStatus !== "idle" && (
+          <button
+            type="button"
+            onClick={removeCoverImage}
+            className="label-caps mt-2 text-sm text-on-surface-variant underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+          >
+            Remove cover image
+          </button>
+        )}
       </div>
 
       {/* Wallet + Deploy */}
       <div className="mt-8 flex flex-wrap items-center gap-4">
-        <WalletButton expectedPassphrase={expectedPassphrase} onConnected={setOrganizerAddress} />
+        <WalletButton
+          expectedPassphrase={expectedPassphrase}
+          onConnected={(address) => setOrganizerAddress(address ?? "")}
+        />
         <button
           type="submit"
           disabled={!isSubmittable}
@@ -359,13 +603,41 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         >
           Deploy Soroban Contract
         </button>
+        {hasDraft && (
+          <button
+            type="button"
+            onClick={clearDraft}
+            className="brutalist-border label-caps px-3 py-2 text-sm text-on-surface-variant transition-colors hover:bg-surface-container-high focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+          >
+            Clear Draft
+          </button>
+        )}
       </div>
 
       {/* Inline error */}
       {error && (
-        <p role="alert" className="mt-4 text-sm text-error" aria-live="assertive">
-          {error}
-        </p>
+        <div role="alert" className="mt-4 text-sm text-error" aria-live="assertive">
+          <p>{error}</p>
+          {errorTxHash && (
+            <a
+              href={transactionExplorerUrl(errorTxHash, expectedPassphrase)}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 inline-block underline"
+            >
+              View transaction
+            </a>
+          )}
+          {pendingDeployment && (
+            <button
+              type="button"
+              onClick={() => void retryInitialization()}
+              className="label-caps mt-2 block text-sm underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+            >
+              Retry initialization
+            </button>
+          )}
+        </div>
       )}
 
       {/* Progress modal */}

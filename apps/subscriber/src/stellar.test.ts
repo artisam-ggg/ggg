@@ -15,6 +15,7 @@ describe("decodeEventsResponse", () => {
       latestLedger: 105,
       events: [
         {
+          eventId: "event-1",
           type: "contract",
           ledger: 101,
           txHash: "abc123",
@@ -31,5 +32,14 @@ describe("decodeEventsResponse", () => {
 
   it("rejects a malformed response", () => {
     expect(() => decodeEventsResponse({ events: "nope" })).toThrow();
+  });
+
+  it("rejects an event without a stable RPC event id", () => {
+    expect(() =>
+      decodeEventsResponse({
+        latestLedger: 105,
+        events: [{ type: "contract", ledger: 101, txHash: "abc123", topic: [], value: "AAAB" }],
+      }),
+    ).toThrow();
   });
 });

@@ -5,7 +5,6 @@ import {
   joinSchema,
   finalizeSchema,
   listQuerySchema,
-  uploadSchema,
   assetSchema,
   statusSchema,
   stellarPublicKey,
@@ -26,6 +25,7 @@ const validCreate = {
   asset: "XLM" as const,
   refereeAddress: G,
   organizerAddress: G2,
+  settlementDeadline: Math.floor(Date.now() / 1000) + 24 * 60 * 60,
   distributionBps: [6000, 3000, 1000] as [number, number, number],
 };
 
@@ -92,6 +92,7 @@ describe("createTournamentSchema", () => {
     if (r.success) {
       // entryFee coerced to bigint
       expect(r.data.entryFee).toBe(1000n);
+      expect(r.data.settlementDeadline).toBe(validCreate.settlementDeadline);
     }
   });
 
@@ -110,6 +111,31 @@ describe("createTournamentSchema", () => {
       organizerAddress: G,
     });
     expect(r.success).toBe(false);
+  });
+
+  it("rejects a past settlement deadline", () => {
+    const r = createTournamentSchema.safeParse({
+      ...validCreate,
+      settlementDeadline: Math.floor(Date.now() / 1000) - 1,
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("rejects a settlement deadline beyond the 90-day horizon", () => {
+    const r = createTournamentSchema.safeParse({
+      ...validCreate,
+      settlementDeadline: Math.floor(Date.now() / 1000) + 91 * 24 * 60 * 60,
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("rejects malformed, fractional, and under-one-hour Unix deadlines", () => {
+    const now = Math.floor(Date.now() / 1000);
+    for (const settlementDeadline of ["tomorrow", now + 1.5, now + 59 * 60]) {
+      expect(createTournamentSchema.safeParse({ ...validCreate, settlementDeadline }).success).toBe(
+        false,
+      );
+    }
   });
 
   it("rejects missing name", () => {
@@ -140,9 +166,25 @@ describe("createTournamentSchema", () => {
   it("accepts optional coverImageKey", () => {
     const r = createTournamentSchema.safeParse({
       ...validCreate,
-      coverImageKey: "uploads/abc.png",
+      coverImageKey: "covers/00000000-0000-0000-0000-000000000000.png",
     });
     expect(r.success).toBe(true);
+  });
+
+  it("rejects legacy coverImageKey paths", () => {
+    const r = createTournamentSchema.safeParse({
+      ...validCreate,
+      coverImageKey: "uploads/abc.png",
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("rejects a coverImageKey with an invalid UUID shape", () => {
+    const r = createTournamentSchema.safeParse({
+      ...validCreate,
+      coverImageKey: "covers/------------------------------------.png",
+    });
+    expect(r.success).toBe(false);
   });
 
   it("rejects coverImageKey > 256 chars", () => {
@@ -281,47 +323,5 @@ describe("listQuerySchema", () => {
   it("accepts cursor as string", () => {
     const r = listQuerySchema.parse({ cursor: "abc123" });
     expect(r.cursor).toBe("abc123");
-  });
-});
-
-// --- uploadSchema ---
-
-describe("uploadSchema", () => {
-  it("accepts valid image content types", () => {
-    for (const contentType of ["image/png", "image/jpeg", "image/webp"] as const) {
-      const r = uploadSchema.safeParse({ contentType, contentLength: 1024 });
-      expect(r.success).toBe(true);
-    }
-  });
-
-  it("rejects unsupported content type", () => {
-    expect(uploadSchema.safeParse({ contentType: "image/gif", contentLength: 1024 }).success).toBe(
-      false,
-    );
-  });
-
-  it("rejects contentLength of 0", () => {
-    expect(uploadSchema.safeParse({ contentType: "image/png", contentLength: 0 }).success).toBe(
-      false,
-    );
-  });
-
-  it("rejects contentLength exceeding 5 MB", () => {
-    expect(
-      uploadSchema.safeParse({
-        contentType: "image/png",
-        contentLength: 5 * 1024 * 1024 + 1,
-      }).success,
-    ).toBe(false);
-  });
-
-  it("accepts exactly 5 MB", () => {
-    const r = uploadSchema.safeParse({ contentType: "image/png", contentLength: 5 * 1024 * 1024 });
-    expect(r.success).toBe(true);
-  });
-
-  it("coerces contentLength from string", () => {
-    const r = uploadSchema.parse({ contentType: "image/jpeg", contentLength: "2048" });
-    expect(r.contentLength).toBe(2048);
   });
 });

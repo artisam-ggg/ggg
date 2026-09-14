@@ -7,11 +7,19 @@ import { StellarError } from "@/lib/stellar";
 import { createTournamentSchema, listQuerySchema } from "@/lib/validation/tournament";
 import { createTournament, listTournaments } from "@/server/services/tournaments";
 
+function methodNotAllowed(): Response {
+  return err("METHOD_NOT_ALLOWED", "Method not allowed", 405);
+}
+export const PUT = methodNotAllowed;
+export const PATCH = methodNotAllowed;
+export const DELETE = methodNotAllowed;
+export const OPTIONS = methodNotAllowed;
+
 export async function GET(req: NextRequest): Promise<Response> {
   // Auth: owner-scoped — must be an authenticated ORGANIZER.
   let user: { id: string; username: string; role: string };
   try {
-    user = await requireUser("ORGANIZER");
+    user = await requireUser("ORGANIZER", false);
   } catch (e) {
     if (e instanceof AuthError) {
       const code = e.status === 403 ? "FORBIDDEN" : "UNAUTHORIZED";
@@ -42,7 +50,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   // requireUser redirects (NEXT_REDIRECT) when unauthenticated, throws AuthError(403) when wrong role.
   let user: { id: string; username: string; role: string };
   try {
-    user = await requireUser("ORGANIZER");
+    user = await requireUser("ORGANIZER", false);
   } catch (e) {
     if (e instanceof AuthError) {
       const code = e.status === 403 ? "FORBIDDEN" : "UNAUTHORIZED";

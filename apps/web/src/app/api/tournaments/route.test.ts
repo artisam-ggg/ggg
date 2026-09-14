@@ -53,7 +53,7 @@ import { requireUser, AuthError } from "@/lib/auth-guards";
 import { assertSameOrigin } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
 import { buildDeployInitializeTx, resolveSacAddress } from "@/lib/stellar";
-import { POST } from "./route";
+import { PUT, POST } from "./route";
 
 const tournamentCreate = prisma.tournament.create as ReturnType<typeof vi.fn>;
 const requireUserMock = requireUser as ReturnType<typeof vi.fn>;
@@ -72,6 +72,7 @@ const validBody = {
   asset: "XLM",
   refereeAddress: VALID_REFEREE,
   organizerAddress: VALID_ORGANIZER,
+  settlementDeadline: Math.floor(Date.now() / 1000) + 24 * 60 * 60,
   distributionBps: [6000, 3000, 1000],
 };
 
@@ -123,6 +124,7 @@ describe("POST /api/tournaments", () => {
     expect(createArgs.thirdBps).toBe(1000);
     expect(createArgs.organizerAddr).toBe(VALID_ORGANIZER);
     expect(createArgs.refereeAddr).toBe(VALID_REFEREE);
+    expect(createArgs.settlementDeadline).toEqual(new Date(validBody.settlementDeadline * 1000));
   });
 
   it("calls buildDeployInitializeTx with correct parameters", async () => {
@@ -137,6 +139,7 @@ describe("POST /api/tournaments", () => {
     expect(txParams.tokenAddr).toBe("CSAC...NATIVE");
     expect(txParams.entryFee).toBe(10000000n);
     expect(txParams.distributionBps).toEqual([6000, 3000, 1000]);
+    expect(txParams.settlementDeadline).toBe(BigInt(validBody.settlementDeadline));
   });
 
   it("rejects a distribution that doesn't sum to 10000 with 400", async () => {
@@ -169,15 +172,13 @@ describe("POST /api/tournaments", () => {
     expect(json.ok).toBe(false);
   });
 
-  it("re-throws NEXT_REDIRECT when unauthenticated (requireUser redirects, not returns 401)", async () => {
+  it("returns the standard 401 envelope when the session has ended", async () => {
     // requireUser calls redirect("/login") when unauthenticated — Next.js throws a NEXT_REDIRECT
     // error that the framework handles. The route must re-throw it (not swallow it as 401).
-    const redirectError = Object.assign(new Error("NEXT_REDIRECT"), { digest: "NEXT_REDIRECT" });
-    requireUserMock.mockRejectedValue(redirectError);
-
-    await expect(POST(makeReq(validBody) as Parameters<typeof POST>[0])).rejects.toThrow(
-      "NEXT_REDIRECT",
-    );
+    requireUserMock.mockRejectedValue(new AuthError("Authentication required", 401));
+    const res = await POST(makeReq(validBody) as Parameters<typeof POST>[0]);
+    expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toMatchObject({ ok: false, error: { code: "UNAUTHORIZED" } });
     expect(tournamentCreate).not.toHaveBeenCalled();
   });
 
@@ -242,5 +243,16 @@ describe("POST /api/tournaments", () => {
     expect(res.status).toBe(400);
     expect(json.ok).toBe(false);
     expect(tournamentCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe("unsupported /api/tournaments methods", () => {
+  it("returns the standard method-not-allowed envelope", async () => {
+    const res = PUT();
+    expect(res.status).toBe(405);
+    await expect(res.json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: "METHOD_NOT_ALLOWED" },
+    });
   });
 });
