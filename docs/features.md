@@ -166,3 +166,7 @@ New tournament contracts now re-simulate and assemble their generated `initializ
 ## Issue #263 — Show tournament cover images
 
 Public tournament pages display an uploaded cover when one exists. A read route looks up the cover key by tournament ID, validates its `covers/<UUID>` image path, and serves only that stored object with the matching image content type. Tournaments without covers keep the existing layout, and a missing or unavailable image is hidden without interrupting the page.
+
+## Issue #265 — Show settlement deadlines in local time
+
+Tournament detail pages keep the exact UTC settlement deadline visible without JavaScript and add the viewer's local date and time, including its timezone abbreviation or offset, after hydration. Browser timezone conversion handles date rollover and daylight saving; the stored and on-chain UTC deadline is unchanged. The creation form labels its date-time input as local time, explains the UTC storage behavior, and rejects skipped or repeated local times around daylight-saving changes before submission.
