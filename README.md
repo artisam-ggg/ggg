@@ -31,7 +31,7 @@ For the Stellar ecosystem, GGG is a concrete use case for Soroban: it turns paid
 - **Version:** `0.0.0` (workspace manifests) · contract crate `ggg-escrow` `0.1.0`
 - **Status:** Live on Stellar Testnet at https://ggg.quest
 - **Default network:** Stellar Testnet (`STELLAR_NETWORK=testnet`)
-- **Current live escrow WASM hash:** `56faadf3395536f14b10c263c6369dda77dd2bc3ec9c24c6ce39fada518986ac`. This pre-constructor hash cannot be used by this branch; set `ESCROW_WASM_HASH` only after uploading and verifying this branch's constructor WASM.
+- **Current live escrow WASM hash:** `56faadf3395536f14b10c263c6369dda77dd2bc3ec9c24c6ce39fada518986ac`. This pre-constructor hash cannot initialize a new constructor-based escrow. Before release, upload and verify the constructor WASM, then record its returned hash in `apps/web/.env.example` and the deployed environment.
 - **License:** Released under the MIT License. Copyright © 2026 Artisam Labs.
 
 ---

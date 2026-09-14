@@ -443,6 +443,25 @@ describe("submitTournamentTx constructor deployment", () => {
     expect(updateMock).not.toHaveBeenCalled();
   });
 
+  it("returns the original rejection and clears the hash for a first broadcast", async () => {
+    const rejection = new StellarError("SUBMIT_FAILED", "Stellar rejected deploy (txTooLate)", {
+      retryable: false,
+    });
+    submitMock.mockRejectedValueOnce(rejection);
+
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "deploy" }, "user_1"),
+    ).rejects.toBe(rejection);
+    expect(lookupDeployMock).toHaveBeenCalledWith("CURRENT_HASH");
+    expect(updateMock).toHaveBeenCalledWith({
+      where: { id: "t_1" },
+      data: { pendingDeployTxHash: null },
+    });
+    expect(updateMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "ACTIVE" }) }),
+    );
+  });
+
   it("refuses a second deployment before broadcasting", async () => {
     findUniqueMock.mockResolvedValue({ ...draft, contractId: "CDEPLOYED", status: "ACTIVE" });
     await expect(

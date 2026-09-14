@@ -169,11 +169,7 @@ export async function submitTournamentTx(
       const landed = await lookupDeployment(currentHash);
       if (landed?.status === "SUCCESS") {
         result = landed;
-      } else if (
-        landed?.status === "FAILED" ||
-        (tournament.pendingDeployTxHash !== currentHash &&
-          (error.code === "TX_BAD_AUTH" || error.code === "TX_MALFORMED"))
-      ) {
+      } else if (landed?.status === "FAILED" || tournament.pendingDeployTxHash !== currentHash) {
         await prisma.tournament.update({ where: { id }, data: { pendingDeployTxHash: null } });
         throw error;
       } else {
