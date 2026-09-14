@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth-guards";
 import { getTournamentDetail } from "@/server/services/tournaments";
 import { StatusChip } from "@/components/tournament/StatusChip";
 import { TournamentCover } from "@/components/tournament/TournamentCover";
+import { SettlementDeadline } from "@/components/tournament/SettlementDeadline";
 import { ContractAddress } from "@/components/tournament/ContractAddress";
 import { CopyTournamentLink } from "@/components/tournament/CopyTournamentLink";
 import { PrizePoolCounter } from "@/components/tournament/PrizePoolCounter";
@@ -78,11 +79,13 @@ export default async function TournamentDetailPage({
       {t.coverImageUrl && <TournamentCover src={t.coverImageUrl} name={t.name} />}
 
       <p className="data-mono mt-3 text-sm text-on-surface-variant">
-        {t.settlementDeadline
-          ? `Settlement deadline (UTC): ${new Date(t.settlementDeadline * 1000).toISOString()}`
-          : t.contractVersion === "LEGACY"
-            ? "Legacy contract: no settlement deadline was recorded."
-            : "Settlement deadline pending contract initialization."}
+        {t.settlementDeadline ? (
+          <SettlementDeadline seconds={t.settlementDeadline} />
+        ) : t.contractVersion === "LEGACY" ? (
+          "Legacy contract: no settlement deadline was recorded."
+        ) : (
+          "Settlement deadline pending contract initialization."
+        )}
       </p>
 
       {t.refundsClaimable && (

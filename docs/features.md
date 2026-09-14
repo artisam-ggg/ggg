@@ -170,3 +170,7 @@ Public tournament pages display an uploaded cover when one exists. A read route 
 ## Issue #264 — Keep tournament links available after joining closes
 
 Deployed tournament pages keep a Copy tournament link action in the header while active, refund-claimable, finished, or cancelled. The action copies the canonical public URL and announces success or failure accessibly without printing the full URL on the page. The QR and wallet controls remain in the join card and disappear when joining closes.
+
+## Issue #265 — Show settlement deadlines in local time
+
+Tournament detail pages keep the exact UTC settlement deadline visible without JavaScript and add the viewer's local date and time, including its timezone abbreviation or offset, after hydration. Browser timezone conversion handles date rollover and daylight saving; the stored and on-chain UTC deadline is unchanged. The creation form labels its date-time input as local time, explains the UTC storage behavior, and rejects skipped or repeated local times around daylight-saving changes before submission.
