@@ -48,6 +48,7 @@ const G2 = Keypair.random().publicKey();
 const G3 = Keypair.random().publicKey();
 const C = "CCJZ5DGASBWQXR5MPFCJXMBI333XE5U3FSJTNQU7RIKE3P5GN2K2WYD5";
 const CURRENT_WASM_HASH = "1356f43a70552178836e1028aab105c113f863a51a51dd72a094a6bf643d3e2d";
+const TTL_WASM_HASH = "2dcfb4c3ed77863269a347308156021de08427f5e6aa77ba15a08d9476c03f77";
 const LEGACY_WASM_HASH = "56faadf3395536f14b10c263c6369dda77dd2bc3ec9c24c6ce39fada518986ac";
 const RAW_XDR = new TransactionBuilder(new Account(G, "1"), {
   fee: "100",
@@ -158,6 +159,39 @@ describe("buildFinalizeTx", () => {
       second: G2,
       third: G3,
     });
+    expect(res.xdr).toBe("PREPARED_XDR");
+    expect(finalizeFn).toHaveBeenCalledWith({ winners: [G, G2, G3] });
+    expect(legacyFinalizeFn).not.toHaveBeenCalled();
+  });
+  it("uses the winner vector for a contract on the TTL Wasm", async () => {
+    getLedgerEntriesFn.mockResolvedValueOnce({
+      entries: [
+        {
+          val: {
+            contractData: () => ({
+              val: () => ({
+                instance: () => ({
+                  executable: () => ({
+                    switch: () => ({ name: "contractExecutableWasm" }),
+                    wasmHash: () => Buffer.from(TTL_WASM_HASH, "hex"),
+                  }),
+                }),
+              }),
+            }),
+          },
+        },
+      ],
+    });
+    const { buildFinalizeTx } = await import("./builders");
+
+    const res = await buildFinalizeTx({
+      contractId: C,
+      refereeAddress: G,
+      first: G,
+      second: G2,
+      third: G3,
+    });
+
     expect(res.xdr).toBe("PREPARED_XDR");
     expect(finalizeFn).toHaveBeenCalledWith({ winners: [G, G2, G3] });
     expect(legacyFinalizeFn).not.toHaveBeenCalled();

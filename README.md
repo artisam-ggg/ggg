@@ -31,7 +31,7 @@ For the Stellar ecosystem, GGG is a concrete use case for Soroban: it turns paid
 - **Version:** `0.0.0` (workspace manifests) · contract crate `ggg-escrow` `0.1.0`
 - **Status:** Live on Stellar Testnet at https://ggg.quest
 - **Default network:** Stellar Testnet (`STELLAR_NETWORK=testnet`)
-- **Current uploaded escrow WASM hash (#219):** `1356f43a70552178836e1028aab105c113f863a51a51dd72a094a6bf643d3e2d` (recorded in `apps/web/.env.example`). It supports 1–10 winners and the read helpers; see `docs/verification/issue-219-payout-evidence.md` for Testnet upload verification. Set a Railway environment to this hash only when its deployed code uses the #219 binding.
+- **Current uploaded escrow WASM hash (#220):** `2dcfb4c3ed77863269a347308156021de08427f5e6aa77ba15a08d9476c03f77` (recorded in `apps/web/.env.example`). It includes the atomic constructor, 1–10 winners, read helpers, and bounded TTL lifecycle; see `docs/verification/issue-220-ttl-evidence.md` for Testnet upload verification. Set a Railway environment to this hash only after its deployed code includes the matching binding and #224 subscriber support.
 - **License:** Released under the MIT License. Copyright © 2026 Artisam Labs.
 
 ---
@@ -241,9 +241,9 @@ Contract crates found in the repo:
 
 | Crate | Path | Purpose |
 |---|---|---|
-| `ggg-escrow` | [`contracts/escrow`](./contracts/escrow) | Per-tournament prize escrow: `__constructor`, `join_tournament`, 1–10 winner `finalize_results`, `cancel_tournament`, `claim_refund`, and read-only `get_pool` / `get_reward` / `get_players` / `get_tournament` / `is_finished`. Emits `registered` / `finalized` / `cancelled` / `refund_claimed` events. Built with `soroban-sdk` 26. 63 unit tests. |
+| `ggg-escrow` | [`contracts/escrow`](./contracts/escrow) | Per-tournament prize escrow: `__constructor`, `join_tournament`, 1–10 winner `finalize_results`, `cancel_tournament`, `claim_refund`, and read-only `get_pool` / `get_reward` / `get_players` / `get_tournament` / `is_finished`. Emits `registered` / `finalized` / `cancelled` / `refund_claimed` events. Built with `soroban-sdk` 26. 67 unit tests. |
 
-Function signatures, storage model, events, and security invariants are specified in [`SPEC.md`](./SPEC.md) §4; the source of truth is `contracts/escrow/src/lib.rs` with 63 tests in `contracts/escrow/src/test.rs`.
+Function signatures, storage model, events, and security invariants are specified in [`SPEC.md`](./SPEC.md) §4; the source of truth is `contracts/escrow/src/lib.rs` with 67 tests in `contracts/escrow/src/test.rs`.
 
 ---
 

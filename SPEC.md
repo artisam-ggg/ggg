@@ -116,6 +116,14 @@ Written in Rust with `soroban-sdk` 26, compiled to WASM, deployed once, instanti
 - `RefundClaimed(Address): bool` (one successful refund per registered player)
 - `MAX_PLAYERS = 100` (Testnet-simulated registration ceiling)
 
+The instance entry and contract code share a bounded Testnet lifecycle policy. Every successful
+constructor, join, finalization, cancellation, and refund call checks their remaining TTL. Below
+`1,555,200` ledgers (90 days at Testnet's five-second target close time), both entries are extended
+to `2,073,600` ledgers (120 days); exactly at the threshold the call is a TTL no-op. The bounded
+extension cannot add more than 120 days. Read-only calls do not charge callers to extend storage.
+TTL does not change deadline or authorization rules. If either archived entry must be restored,
+that restoration belongs in transaction simulation before contract invocation.
+
 ### Functions
 
 ```rust
