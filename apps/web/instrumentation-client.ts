@@ -10,5 +10,9 @@ if (projectToken) {
     disable_session_recording: false,
     mask_all_text: true,
     mask_all_element_attributes: true,
+    session_recording: {
+      maskAllElementAttributes: true,
+      maskTextSelector: "*",
+    },
   });
 }
