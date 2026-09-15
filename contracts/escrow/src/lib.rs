@@ -10,11 +10,18 @@ use soroban_sdk::{
 /// uniform so client and contract validation cannot diverge by network.
 pub const MAX_SETTLEMENT_HORIZON_SECS: u64 = 90 * 24 * 60 * 60;
 
+/// Testnet targets one ledger close every five seconds (17,280 ledgers/day).
+pub const TESTNET_LEDGER_TARGET_SECONDS: u64 = 5;
 const LEDGERS_PER_DAY: u32 = 17_280;
+/// A state-changing call is a no-op at or above 90 days of remaining TTL.
 pub const TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS: u32 = 90 * LEDGERS_PER_DAY;
 /// Keeps the contract instance and code available for the maximum 90-day
 /// settlement window plus a conservative 30-day restoration margin.
 pub const TESTNET_INSTANCE_TTL_EXTEND_TO_LEDGERS: u32 = 120 * LEDGERS_PER_DAY;
+// Remaining TTL excludes the current ledger, so +1 keeps the exact 90-day threshold a no-op.
+const TESTNET_INSTANCE_TTL_MIN_EXTENSION_LEDGERS: u32 =
+    TESTNET_INSTANCE_TTL_EXTEND_TO_LEDGERS - TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS + 1;
+const TESTNET_INSTANCE_TTL_MAX_EXTENSION_LEDGERS: u32 = TESTNET_INSTANCE_TTL_EXTEND_TO_LEDGERS;
 /// Testnet-simulated operational ceiling. Refunds are individual O(1) claims,
 /// so this limit is about bounded registration storage, not refund batching.
 pub const MAX_PLAYERS: u32 = 100;
@@ -100,10 +107,12 @@ fn require_before_deadline(env: &Env, deadline: u64) {
     }
 }
 
-fn extend_instance_ttl(env: &Env, threshold: u32) {
-    env.storage()
-        .instance()
-        .extend_ttl(threshold, TESTNET_INSTANCE_TTL_EXTEND_TO_LEDGERS);
+fn extend_instance_ttl(env: &Env) {
+    env.storage().instance().extend_ttl_with_limits(
+        TESTNET_INSTANCE_TTL_EXTEND_TO_LEDGERS,
+        TESTNET_INSTANCE_TTL_MIN_EXTENSION_LEDGERS,
+        TESTNET_INSTANCE_TTL_MAX_EXTENSION_LEDGERS,
+    );
 }
 
 fn payout_amounts(env: &Env, pool: i128, distribution_bps: &Vec<u32>) -> Vec<i128> {
@@ -189,7 +198,7 @@ impl Escrow {
         storage.set(&DataKey::Finished, &false);
         storage.set(&DataKey::Cancelled, &false);
         storage.set(&DataKey::SettlementDeadline, &settlement_deadline);
-        extend_instance_ttl(&env, TESTNET_INSTANCE_TTL_EXTEND_TO_LEDGERS);
+        extend_instance_ttl(&env);
     }
 
     pub fn get_pool(env: Env) -> i128 {
@@ -290,7 +299,7 @@ impl Escrow {
         players.push_back(player.clone());
         storage.set(&DataKey::Registered(player.clone()), &true);
         storage.set(&DataKey::Players, &players);
-        extend_instance_ttl(&env, TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS);
+        extend_instance_ttl(&env);
 
         let pool_after = (players.len() as i128)
             .checked_mul(entry_fee)
@@ -350,7 +359,7 @@ impl Escrow {
         storage.set(&DataKey::Finished, &true);
         storage.set(&DataKey::Winners, &winners);
         storage.set(&DataKey::PayoutAmounts, &amounts);
-        extend_instance_ttl(&env, TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS);
+        extend_instance_ttl(&env);
 
         env.events()
             .publish((symbol_short!("finalized"),), (winners, amounts));
@@ -376,7 +385,7 @@ impl Escrow {
 
         let players: Vec<Address> = storage.get(&DataKey::Players).unwrap();
         storage.set(&DataKey::Cancelled, &true);
-        extend_instance_ttl(&env, TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS);
+        extend_instance_ttl(&env);
 
         env.events()
             .publish((symbol_short!("cancelled"),), players.len() as u32);
@@ -414,7 +423,7 @@ impl Escrow {
             &entry_fee,
         );
         storage.set(&claimed_key, &true);
-        extend_instance_ttl(&env, TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS);
+        extend_instance_ttl(&env);
         RefundClaimed {
             player,
             amount: entry_fee,

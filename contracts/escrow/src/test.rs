@@ -3,7 +3,7 @@ extern crate std;
 
 use soroban_sdk::{
     symbol_short,
-    testutils::{storage::Instance as _, Address as _, Events, Ledger},
+    testutils::{Address as _, Deployer as _, Events, Ledger},
     token::{StellarAssetClient, TokenClient},
     Address, Env, Event, IntoVal, Symbol, Val, Vec,
 };
@@ -11,7 +11,7 @@ use soroban_sdk::{
 use crate::{
     deadline_reached, payout_amounts, DataKey, Escrow, EscrowClient, RefundClaimed, MAX_PLAYERS,
     MAX_SETTLEMENT_HORIZON_SECS, MAX_WINNERS, TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS,
-    TESTNET_INSTANCE_TTL_EXTEND_TO_LEDGERS,
+    TESTNET_INSTANCE_TTL_EXTEND_TO_LEDGERS, TESTNET_LEDGER_TARGET_SECONDS,
 };
 
 // Registers a Stellar Asset Contract (SAC) test token and returns its
@@ -59,6 +59,32 @@ fn bps(env: &Env) -> Vec<u32> {
 
 fn valid_deadline(env: &Env) -> u64 {
     env.ledger().timestamp() + 1
+}
+
+fn contract_ttls(env: &Env, contract: &Address) -> (u32, u32) {
+    (
+        env.deployer().get_contract_instance_ttl(contract),
+        env.deployer().get_contract_code_ttl(contract),
+    )
+}
+
+fn advance_ledgers(env: &Env, ledgers: u32) {
+    env.ledger().with_mut(|ledger| {
+        ledger.sequence_number += ledgers;
+        ledger.timestamp += u64::from(ledgers) * TESTNET_LEDGER_TARGET_SECONDS;
+    });
+}
+
+fn age_contract_to(env: &Env, contract: &Address, remaining_ttl: u32) {
+    let current_ttl = env.deployer().get_contract_instance_ttl(contract);
+    assert!(current_ttl > remaining_ttl);
+    advance_ledgers(env, current_ttl - remaining_ttl);
+}
+
+fn assert_contract_ttls_extended(env: &Env, contract: &Address) {
+    let (instance_ttl, code_ttl) = contract_ttls(env, contract);
+    assert_eq!(instance_ttl, TESTNET_INSTANCE_TTL_EXTEND_TO_LEDGERS);
+    assert!(code_ttl >= TESTNET_INSTANCE_TTL_EXTEND_TO_LEDGERS);
 }
 
 #[test]
@@ -152,7 +178,7 @@ fn constructor_accepts_deadline_at_max_horizon() {
 }
 
 #[test]
-fn constructor_extends_instance_ttl() {
+fn constructor_extends_instance_and_code_ttl() {
     let env = Env::default();
     env.mock_all_auths();
     let admin = Address::generate(&env);
@@ -170,8 +196,7 @@ fn constructor_extends_instance_ttl() {
         &(1_000 + MAX_SETTLEMENT_HORIZON_SECS),
     );
 
-    let extended_ttl = env.as_contract(&escrow.address, || env.storage().instance().get_ttl());
-    assert_eq!(extended_ttl, TESTNET_INSTANCE_TTL_EXTEND_TO_LEDGERS);
+    assert_contract_ttls_extended(&env, &escrow.address);
 }
 
 #[test]
@@ -490,26 +515,146 @@ fn first_join_succeeds_immediately_after_constructor() {
 }
 
 #[test]
-fn join_refreshes_instance_ttl_below_threshold() {
+fn join_ttl_threshold_is_noop_and_one_below_extends() {
     let env = Env::default();
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let (token_addr, sac, _token) = create_token(&env, &admin);
     let organizer = Address::generate(&env);
     let referee = Address::generate(&env);
+    let deadline = env.ledger().timestamp() + MAX_SETTLEMENT_HORIZON_SECS;
+    let escrow = init_with_deadline(&env, &token_addr, &organizer, &referee, deadline);
+
+    age_contract_to(
+        &env,
+        &escrow.address,
+        TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS,
+    );
+    let first = Address::generate(&env);
+    sac.mint(&first, &5_000_000i128);
+    escrow.join_tournament(&first);
+    assert_eq!(
+        contract_ttls(&env, &escrow.address).0,
+        TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS,
+    );
+
+    advance_ledgers(&env, 1);
+    let ttl_before_failure = contract_ttls(&env, &escrow.address);
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        escrow.join_tournament(&first);
+    }))
+    .is_err());
+    assert_eq!(contract_ttls(&env, &escrow.address), ttl_before_failure);
+    assert_eq!(escrow.get_players(), Vec::from_array(&env, [first]));
+
+    let second = Address::generate(&env);
+    sac.mint(&second, &5_000_000i128);
+    escrow.join_tournament(&second);
+    assert_contract_ttls_extended(&env, &escrow.address);
+}
+
+#[test]
+fn finalize_extends_instance_and_code_ttl() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let (token_addr, sac, _token) = create_token(&env, &admin);
+    let organizer = Address::generate(&env);
+    let referee = Address::generate(&env);
+    let deadline = env.ledger().timestamp() + MAX_SETTLEMENT_HORIZON_SECS;
+    let escrow = init_with_deadline(&env, &token_addr, &organizer, &referee, deadline);
+    let winners = Vec::from_array(
+        &env,
+        [
+            join(&env, &escrow, &sac),
+            join(&env, &escrow, &sac),
+            join(&env, &escrow, &sac),
+        ],
+    );
+    age_contract_to(
+        &env,
+        &escrow.address,
+        TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS - 1,
+    );
+
+    escrow.finalize_results(&winners);
+
+    assert_contract_ttls_extended(&env, &escrow.address);
+}
+
+#[test]
+fn cancel_and_refund_extend_instance_and_code_ttl() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let (token_addr, sac, _token) = create_token(&env, &admin);
+    let organizer = Address::generate(&env);
+    let referee = Address::generate(&env);
+    let deadline = env.ledger().timestamp() + MAX_SETTLEMENT_HORIZON_SECS;
+    let escrow = init_with_deadline(&env, &token_addr, &organizer, &referee, deadline);
+    let player = join(&env, &escrow, &sac);
+    age_contract_to(
+        &env,
+        &escrow.address,
+        TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS - 1,
+    );
+
+    escrow.cancel_tournament();
+    assert_contract_ttls_extended(&env, &escrow.address);
+
+    age_contract_to(
+        &env,
+        &escrow.address,
+        TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS - 1,
+    );
+    escrow.claim_refund(&player);
+    assert_contract_ttls_extended(&env, &escrow.address);
+}
+
+#[test]
+fn max_deadline_remains_live_through_ledger_progression() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().with_mut(|ledger| ledger.timestamp = 1_000);
+    let admin = Address::generate(&env);
+    let (token_addr, sac, token) = create_token(&env, &admin);
+    let organizer = Address::generate(&env);
+    let referee = Address::generate(&env);
+    let deadline = env.ledger().timestamp() + MAX_SETTLEMENT_HORIZON_SECS;
+    let escrow = init_with_deadline(&env, &token_addr, &organizer, &referee, deadline);
+    let player = join(&env, &escrow, &sac);
+
+    advance_ledgers(
+        &env,
+        (MAX_SETTLEMENT_HORIZON_SECS / TESTNET_LEDGER_TARGET_SECONDS) as u32,
+    );
+    assert_eq!(env.ledger().timestamp(), deadline);
+    let ttl_before_read = contract_ttls(&env, &escrow.address);
+    assert_eq!(escrow.get_tournament().settlement_deadline, deadline);
+    assert_eq!(contract_ttls(&env, &escrow.address), ttl_before_read);
+
+    escrow.claim_refund(&player);
+
+    assert_eq!(token.balance(&player), 10_000_000);
+    assert_contract_ttls_extended(&env, &escrow.address);
+}
+
+#[test]
+fn reads_remain_available_near_archive_without_extending_ttl() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let (token_addr, _sac, _token) = create_token(&env, &admin);
+    let organizer = Address::generate(&env);
+    let referee = Address::generate(&env);
     let escrow = init_default(&env, &token_addr, &organizer, &referee);
+    age_contract_to(&env, &escrow.address, 1);
+    let ttl_before_reads = contract_ttls(&env, &escrow.address);
 
-    env.ledger().with_mut(|ledger| {
-        ledger.sequence_number += TESTNET_INSTANCE_TTL_EXTEND_TO_LEDGERS
-            - TESTNET_INSTANCE_TTL_BUMP_THRESHOLD_LEDGERS
-            + 1;
-    });
-    let player = Address::generate(&env);
-    sac.mint(&player, &5_000_000i128);
-    escrow.join_tournament(&player);
+    assert!(escrow.get_players().is_empty());
+    assert_eq!(escrow.get_tournament().organizer, organizer);
 
-    let ttl = env.as_contract(&escrow.address, || env.storage().instance().get_ttl());
-    assert_eq!(ttl, TESTNET_INSTANCE_TTL_EXTEND_TO_LEDGERS);
+    assert_eq!(contract_ttls(&env, &escrow.address), ttl_before_reads);
 }
 
 #[test]
