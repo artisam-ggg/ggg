@@ -70,11 +70,6 @@ export interface Client {
   get_reward: ({player}: {player: string}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
 
   /**
-   * Construct and simulate a initialize transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   */
-  initialize: ({organizer, referee, token, entry_fee, distribution_bps, settlement_deadline}: {organizer: string, referee: string, token: string, entry_fee: i128, distribution_bps: Array<u32>, settlement_deadline: u64}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
-
-  /**
    * Construct and simulate a is_finished transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    */
   is_finished: (options?: MethodOptions) => Promise<AssembledTransaction<boolean>>
@@ -110,6 +105,8 @@ export interface Client {
 }
 export class Client extends ContractClient {
   static async deploy<T = Client>(
+        /** Constructor/Initialization Args for the contract's `__constructor` method */
+        {organizer, referee, token, entry_fee, distribution_bps, settlement_deadline}: {organizer: string, referee: string, token: string, entry_fee: i128, distribution_bps: Array<u32>, settlement_deadline: u64},
     /** Options for initializing a Client as well as for calling a method, with extras specific to deploying. */
     options: MethodOptions &
       Omit<ContractClientOptions, "contractId"> & {
@@ -121,7 +118,7 @@ export class Client extends ContractClient {
         format?: "hex" | "base64";
       }
   ): Promise<AssembledTransaction<T>> {
-    return ContractClient.deploy(null, options)
+    return ContractClient.deploy({organizer, referee, token, entry_fee, distribution_bps, settlement_deadline}, options)
   }
   constructor(public readonly options: ContractClientOptions) {
     super(
@@ -130,9 +127,9 @@ export class Client extends ContractClient {
         "AAAABQAAAEtTdGFibGUgZm9yICMyMTY6IHRvcGljcyBhcmUgKCJyZWZ1bmRfY2xhaW1lZCIsIHBsYXllcik7IGRhdGEgaXMgeyBhbW91bnQgfS4AAAAAAAAAAA1SZWZ1bmRDbGFpbWVkAAAAAAAAAQAAAA5yZWZ1bmRfY2xhaW1lZAAAAAAAAgAAAAAAAAAGcGxheWVyAAAAAAATAAAAAQAAAAAAAAAGYW1vdW50AAAAAAALAAAAAAAAAAI=",
         "AAAAAAAAAAAAAAAIZ2V0X3Bvb2wAAAAAAAAAAQAAAAs=",
         "AAAAAAAAAAAAAAAKZ2V0X3Jld2FyZAAAAAAAAQAAAAAAAAAGcGxheWVyAAAAAAATAAAAAQAAAAs=",
-        "AAAAAAAAAAAAAAAKaW5pdGlhbGl6ZQAAAAAABgAAAAAAAAAJb3JnYW5pemVyAAAAAAAAEwAAAAAAAAAHcmVmZXJlZQAAAAATAAAAAAAAAAV0b2tlbgAAAAAAABMAAAAAAAAACWVudHJ5X2ZlZQAAAAAAAAsAAAAAAAAAEGRpc3RyaWJ1dGlvbl9icHMAAAPqAAAABAAAAAAAAAATc2V0dGxlbWVudF9kZWFkbGluZQAAAAAGAAAAAA==",
         "AAAAAAAAAAAAAAALaXNfZmluaXNoZWQAAAAAAAAAAAEAAAAB",
         "AAAAAAAAAJNBbnlvbmUgbWF5IHN1Ym1pdCB0aGlzIGNsYWltLCBidXQgaXQgYWx3YXlzIHBheXMgdGhlIHJlZ2lzdGVyZWQgcGxheWVyLgpDYW5jZWxsYXRpb24gZW5hYmxlcyBpbW1lZGlhdGUgY2xhaW1zOyBvdGhlcndpc2UgdGhlIGRlYWRsaW5lIGlzIGluY2x1c2l2ZS4AAAAADGNsYWltX3JlZnVuZAAAAAEAAAAAAAAABnBsYXllcgAAAAAAEwAAAAA=",
+        "AAAAAAAAAAAAAAANX19jb25zdHJ1Y3RvcgAAAAAAAAYAAAAAAAAACW9yZ2FuaXplcgAAAAAAABMAAAAAAAAAB3JlZmVyZWUAAAAAEwAAAAAAAAAFdG9rZW4AAAAAAAATAAAAAAAAAAllbnRyeV9mZWUAAAAAAAALAAAAAAAAABBkaXN0cmlidXRpb25fYnBzAAAD6gAAAAQAAAAAAAAAE3NldHRsZW1lbnRfZGVhZGxpbmUAAAAABgAAAAA=",
         "AAAAAAAAAAAAAAAPam9pbl90b3VybmFtZW50AAAAAAEAAAAAAAAABnBsYXllcgAAAAAAEwAAAAA=",
         "AAAAAAAAAAAAAAAQZmluYWxpemVfcmVzdWx0cwAAAAMAAAAAAAAABWZpcnN0AAAAAAAAEwAAAAAAAAAGc2Vjb25kAAAAAAATAAAAAAAAAAV0aGlyZAAAAAAAABMAAAAA",
         "AAAAAAAAAAAAAAARY2FuY2VsX3RvdXJuYW1lbnQAAAAAAAAAAAAAAA==",
@@ -143,7 +140,6 @@ export class Client extends ContractClient {
   public readonly fromJSON = {
     get_pool: this.txFromJSON<i128>,
         get_reward: this.txFromJSON<i128>,
-        initialize: this.txFromJSON<null>,
         is_finished: this.txFromJSON<boolean>,
         claim_refund: this.txFromJSON<null>,
         join_tournament: this.txFromJSON<null>,

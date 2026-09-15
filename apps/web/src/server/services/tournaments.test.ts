@@ -1,20 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const {
-  findUniqueMock,
-  updateMock,
-  submitMock,
-  buildInitializeMock,
-  validateInitializeMock,
-  readSettlementDeadlineMock,
-} = vi.hoisted(() => ({
-  findUniqueMock: vi.fn(),
-  updateMock: vi.fn(),
-  submitMock: vi.fn(),
-  buildInitializeMock: vi.fn(),
-  validateInitializeMock: vi.fn(),
-  readSettlementDeadlineMock: vi.fn(),
-}));
+const { findUniqueMock, updateMock, submitMock, validateDeployMock, lookupDeployMock } = vi.hoisted(
+  () => ({
+    findUniqueMock: vi.fn(),
+    updateMock: vi.fn(),
+    submitMock: vi.fn(),
+    validateDeployMock: vi.fn(),
+    lookupDeployMock: vi.fn(),
+  }),
+);
 
 vi.mock("@/lib/db", () => ({
   prisma: {
@@ -30,26 +24,32 @@ vi.mock("@/lib/env", () => ({ env: { STELLAR_NETWORK: "testnet" } }));
 vi.mock("@/lib/stellar", () => ({
   buildCancelTx: vi.fn(),
   buildDeployInitializeTx: vi.fn(),
-  buildInitializeTx: buildInitializeMock,
   buildFinalizeTx: vi.fn(),
   buildJoinTx: vi.fn(),
+  deploymentTxHash: vi.fn(() => "CURRENT_HASH"),
   explorerContractUrl: vi.fn(),
   explorerTxUrl: vi.fn(),
+  lookupDeployment: lookupDeployMock,
   resolveSacAddress: vi.fn(),
   StellarError: class StellarError extends Error {
+    readonly txHash?: string;
+    readonly retryable?: boolean;
     constructor(
       readonly code: string,
       message: string,
+      options?: { txHash?: string; retryable?: boolean },
     ) {
       super(message);
+      if (options?.txHash !== undefined) this.txHash = options.txHash;
+      if (options?.retryable !== undefined) this.retryable = options.retryable;
     }
   },
   submitSignedXdr: submitMock,
-  validateInitializeXdr: validateInitializeMock,
-  readSettlementDeadline: readSettlementDeadlineMock,
+  validateDeployXdr: validateDeployMock,
 }));
 
 import { getTournamentDetail, submitTournamentTx } from "./tournaments";
+import { StellarError } from "@/lib/stellar";
 
 describe("getTournamentDetail", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -235,172 +235,246 @@ describe("getTournamentDetail", () => {
   });
 });
 
-describe("submitTournamentTx", () => {
+describe("submitTournamentTx constructor deployment", () => {
+  const deadline = new Date("2030-09-10T00:00:00.000Z");
+  const draft = {
+    id: "t_1",
+    organizerId: "user_1",
+    organizerAddr: "GORG",
+    refereeAddr: "GREF",
+    tokenAddr: "CTOKEN",
+    entryFee: 10n,
+    firstBps: 6000,
+    secondBps: 3000,
+    thirdBps: 1000,
+    settlementDeadline: deadline,
+    status: "DRAFT",
+    contractId: null,
+    deployTxHash: null,
+    pendingDeployTxHash: null,
+  };
   beforeEach(() => {
     vi.useFakeTimers();
+    vi.setSystemTime(new Date("2030-09-09T00:00:00.000Z"));
     vi.clearAllMocks();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it("does not activate or initialize a deployment whose deadline expires during confirmation", async () => {
-    const deadline = new Date("2026-09-08T00:00:00.000Z");
-    vi.setSystemTime(new Date(deadline.getTime() - 1_000));
-    findUniqueMock.mockResolvedValue({
-      id: "t_1",
-      organizerId: "user_1",
-      organizerAddr: "GORG",
-      refereeAddr: "GREF",
-      tokenAddr: "CTOKEN",
-      entryFee: 10n,
-      firstBps: 6000,
-      secondBps: 3000,
-      thirdBps: 1000,
-      settlementDeadline: deadline,
-      status: "DRAFT",
-      contractId: null,
-      deployTxHash: null,
-    });
-    submitMock.mockImplementation(async () => {
-      vi.setSystemTime(deadline);
-      return { hash: "TX_DEPLOY", contractId: "CDEPLOYED", status: "SUCCESS" };
-    });
+    findUniqueMock.mockResolvedValue(draft);
+    lookupDeployMock.mockResolvedValue(null);
     updateMock.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
-      status: "DRAFT",
-      contractId: data.contractId,
-      deployTxHash: data.deployTxHash,
-      settlementDeadline: deadline,
-      tokenAddr: "CTOKEN",
-      organizerAddr: "GORG",
-      refereeAddr: "GREF",
-      entryFee: 10n,
-      firstBps: 6000,
-      secondBps: 3000,
-      thirdBps: 1000,
+      ...draft,
+      ...data,
     }));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("persists a confirmed constructor deployment as immediately active", async () => {
+    submitMock.mockResolvedValue({ hash: "TX_DEPLOY", contractId: "CDEPLOYED", status: "SUCCESS" });
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "deploy" }, "user_1"),
+    ).resolves.toMatchObject({ txHash: "TX_DEPLOY", contractId: "CDEPLOYED", status: "ACTIVE" });
+    expect(validateDeployMock).toHaveBeenCalledWith("XDR", {
+      tournamentId: "t_1",
+      organizerAddress: "GORG",
+      refereeAddress: "GREF",
+      tokenAddr: "CTOKEN",
+      entryFee: 10n,
+      distributionBps: [6000, 3000, 1000],
+      settlementDeadline: BigInt(Math.floor(deadline.getTime() / 1000)),
+    });
+    expect(updateMock).toHaveBeenCalledWith({
+      where: { id: "t_1" },
+      data: { pendingDeployTxHash: "CURRENT_HASH" },
+    });
+    expect(updateMock).toHaveBeenCalledWith({
+      where: { id: "t_1" },
+      data: {
+        contractId: "CDEPLOYED",
+        deployTxHash: "TX_DEPLOY",
+        pendingDeployTxHash: null,
+        status: "ACTIVE",
+        deadlineConfirmedAt: expect.any(Date),
+      },
+    });
+  });
+
+  it("does not persist success for a failed deployment", async () => {
+    submitMock.mockResolvedValue({ hash: "TX_FAILED", status: "FAILED" });
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "deploy" }, "user_1"),
+    ).rejects.toMatchObject({ code: "TX_FAILED" });
+    expect(updateMock).toHaveBeenCalledWith({
+      where: { id: "t_1" },
+      data: { pendingDeployTxHash: null },
+    });
+    expect(updateMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "ACTIVE" }) }),
+    );
+  });
+
+  it("does not persist success without a contract ID", async () => {
+    submitMock.mockResolvedValue({ hash: "TX_DEPLOY", status: "SUCCESS" });
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "deploy" }, "user_1"),
+    ).rejects.toMatchObject({ status: 502 });
+    expect(updateMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "ACTIVE" }) }),
+    );
+  });
+
+  it("retains the attempted hash after a timeout without marking the draft active", async () => {
+    submitMock.mockRejectedValueOnce(new Error("RPC timed out"));
 
     await expect(
       submitTournamentTx("t_1", { signedXdr: "XDR", intent: "deploy" }, "user_1"),
-    ).rejects.toMatchObject({ message: "Settlement deadline has expired", status: 409 });
-
+    ).rejects.toThrow("RPC timed out");
     expect(updateMock).toHaveBeenCalledWith({
       where: { id: "t_1" },
-      data: { contractId: "CDEPLOYED", deployTxHash: "TX_DEPLOY" },
+      data: { pendingDeployTxHash: "CURRENT_HASH" },
     });
-    expect(buildInitializeMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "ACTIVE" }) }),
+    );
   });
 
-  it("does not broadcast initialize after its deadline has expired", async () => {
-    const deadline = new Date("2026-09-08T00:00:00.000Z");
+  it("reconciles a late successful deployment before another broadcast", async () => {
+    findUniqueMock.mockResolvedValue({ ...draft, pendingDeployTxHash: "OLD_HASH" });
+    lookupDeployMock.mockResolvedValue({
+      hash: "OLD_HASH",
+      status: "SUCCESS",
+      contractId: "CDEPLOYED",
+    });
     vi.setSystemTime(deadline);
-    findUniqueMock.mockResolvedValue({
-      id: "t_1",
-      organizerId: "user_1",
-      settlementDeadline: deadline,
-      status: "DRAFT",
-      contractId: "CDEPLOYED",
-    });
 
     await expect(
-      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "initialize" }, "user_1"),
-    ).rejects.toMatchObject({ message: "Settlement deadline has expired", status: 409 });
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "deploy" }, "user_1"),
+    ).resolves.toMatchObject({ txHash: "OLD_HASH", contractId: "CDEPLOYED", status: "ACTIVE" });
+    expect(lookupDeployMock).toHaveBeenCalledWith("OLD_HASH");
+    expect(submitMock).not.toHaveBeenCalled();
+    expect(updateMock).toHaveBeenCalledWith({
+      where: { id: "t_1" },
+      data: {
+        contractId: "CDEPLOYED",
+        deployTxHash: "OLD_HASH",
+        pendingDeployTxHash: null,
+        status: "ACTIVE",
+        deadlineConfirmedAt: expect.any(Date),
+      },
+    });
+  });
 
-    expect(validateInitializeMock).not.toHaveBeenCalled();
+  it("blocks a different transaction while the previous deployment is unconfirmed", async () => {
+    findUniqueMock.mockResolvedValue({ ...draft, pendingDeployTxHash: "OLD_HASH" });
+
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "deploy" }, "user_1"),
+    ).rejects.toMatchObject({ code: "TX_TIMEOUT", txHash: "OLD_HASH" });
     expect(submitMock).not.toHaveBeenCalled();
     expect(updateMock).not.toHaveBeenCalled();
   });
 
-  it("does not activate a contract whose confirmed deadline differs from the persisted value", async () => {
-    const deadline = new Date("2026-09-10T00:00:00.000Z");
-    vi.setSystemTime(new Date("2026-09-09T00:00:00.000Z"));
-    findUniqueMock.mockResolvedValue({
-      id: "t_1",
-      organizerId: "user_1",
-      organizerAddr: "GORG",
-      refereeAddr: "GREF",
-      tokenAddr: "CTOKEN",
-      entryFee: 10n,
-      firstBps: 6000,
-      secondBps: 3000,
-      thirdBps: 1000,
-      settlementDeadline: deadline,
-      status: "DRAFT",
+  it("allows a new transaction after the previous deployment is confirmed failed", async () => {
+    findUniqueMock.mockResolvedValue({ ...draft, pendingDeployTxHash: "OLD_HASH" });
+    lookupDeployMock.mockResolvedValue({ hash: "OLD_HASH", status: "FAILED" });
+    submitMock.mockResolvedValue({
+      hash: "CURRENT_HASH",
+      status: "SUCCESS",
       contractId: "CDEPLOYED",
     });
-    submitMock.mockResolvedValue({ hash: "TX_INIT", status: "SUCCESS" });
-    readSettlementDeadlineMock.mockResolvedValueOnce(undefined).mockResolvedValue(1_800_000_000n);
 
     await expect(
-      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "initialize" }, "user_1"),
-    ).rejects.toMatchObject({
-      message: "On-chain settlement deadline does not match this tournament",
-      status: 502,
-    });
-    expect(submitMock).toHaveBeenCalledTimes(1);
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "deploy" }, "user_1"),
+    ).resolves.toMatchObject({ status: "ACTIVE" });
     expect(updateMock).toHaveBeenCalledWith({
       where: { id: "t_1" },
-      data: { initializeTxHash: "TX_INIT" },
+      data: { pendingDeployTxHash: "CURRENT_HASH" },
+    });
+    expect(submitMock).toHaveBeenCalledOnce();
+  });
+
+  it("retries the same signed transaction while its result is still unknown", async () => {
+    findUniqueMock.mockResolvedValue({ ...draft, pendingDeployTxHash: "CURRENT_HASH" });
+    submitMock.mockResolvedValue({
+      hash: "CURRENT_HASH",
+      status: "SUCCESS",
+      contractId: "CDEPLOYED",
+    });
+
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "deploy" }, "user_1"),
+    ).resolves.toMatchObject({ status: "ACTIVE" });
+    expect(submitMock).toHaveBeenCalledOnce();
+    expect(updateMock).not.toHaveBeenCalledWith({
+      where: { id: "t_1" },
+      data: { pendingDeployTxHash: "CURRENT_HASH" },
     });
   });
 
-  it("does not activate when on-chain initialization cannot be confirmed", async () => {
-    const deadline = new Date("2026-09-10T00:00:00.000Z");
-    vi.setSystemTime(new Date("2026-09-09T00:00:00.000Z"));
-    findUniqueMock.mockResolvedValue({
-      id: "t_1",
-      organizerId: "user_1",
-      organizerAddr: "GORG",
-      refereeAddr: "GREF",
-      tokenAddr: "CTOKEN",
-      entryFee: 10n,
-      firstBps: 6000,
-      secondBps: 3000,
-      thirdBps: 1000,
-      settlementDeadline: deadline,
-      status: "DRAFT",
+  it("recovers a deployment confirmed between lookup and a rejected retry", async () => {
+    findUniqueMock.mockResolvedValue({ ...draft, pendingDeployTxHash: "CURRENT_HASH" });
+    lookupDeployMock.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      hash: "CURRENT_HASH",
+      status: "SUCCESS",
       contractId: "CDEPLOYED",
-      deployTxHash: "TX_DEPLOY",
     });
-    submitMock.mockResolvedValue({ hash: "TX_INIT", status: "SUCCESS" });
-    readSettlementDeadlineMock.mockRejectedValue(new Error("missing getter"));
+    submitMock.mockRejectedValueOnce(
+      new StellarError("SUBMIT_FAILED", "Sequence number already used", { retryable: false }),
+    );
 
     await expect(
-      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "initialize" }, "user_1"),
-    ).rejects.toMatchObject({ message: "Unable to confirm on-chain initialization", status: 502 });
-    expect(submitMock).toHaveBeenCalledTimes(1);
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "deploy" }, "user_1"),
+    ).resolves.toMatchObject({ status: "ACTIVE", contractId: "CDEPLOYED" });
+    expect(lookupDeployMock).toHaveBeenCalledTimes(2);
+    expect(updateMock).toHaveBeenCalledTimes(1);
     expect(updateMock).toHaveBeenCalledWith({
       where: { id: "t_1" },
-      data: { initializeTxHash: "TX_INIT" },
+      data: expect.objectContaining({ status: "ACTIVE", deployTxHash: "CURRENT_HASH" }),
     });
   });
 
-  it("does not replay initialize while reconciliation is unavailable", async () => {
-    const deadline = new Date("2026-09-10T00:00:00.000Z");
-    vi.setSystemTime(new Date("2026-09-09T00:00:00.000Z"));
-    findUniqueMock.mockResolvedValue({
-      id: "t_1",
-      organizerId: "user_1",
-      organizerAddr: "GORG",
-      refereeAddr: "GREF",
-      tokenAddr: "CTOKEN",
-      entryFee: 10n,
-      firstBps: 6000,
-      secondBps: 3000,
-      thirdBps: 1000,
-      settlementDeadline: deadline,
-      status: "DRAFT",
-      contractId: "CDEPLOYED",
-      initializeTxHash: "TX_INIT",
-    });
-    readSettlementDeadlineMock.mockRejectedValue(new Error("RPC unavailable"));
+  it("keeps an uncertain deployment hash after a rejected retry", async () => {
+    findUniqueMock.mockResolvedValue({ ...draft, pendingDeployTxHash: "CURRENT_HASH" });
+    submitMock.mockRejectedValueOnce(
+      new StellarError("SUBMIT_FAILED", "Sequence number already used", { retryable: false }),
+    );
 
     await expect(
-      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "initialize" }, "user_1"),
-    ).rejects.toMatchObject({ message: "Unable to confirm on-chain initialization", status: 502 });
-
-    expect(submitMock).not.toHaveBeenCalled();
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "deploy" }, "user_1"),
+    ).rejects.toMatchObject({ code: "TX_TIMEOUT", txHash: "CURRENT_HASH" });
+    expect(lookupDeployMock).toHaveBeenCalledTimes(2);
     expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("returns the original rejection and clears the hash for a first broadcast", async () => {
+    const rejection = new StellarError("SUBMIT_FAILED", "Stellar rejected deploy (txTooLate)", {
+      retryable: false,
+    });
+    submitMock.mockRejectedValueOnce(rejection);
+
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "deploy" }, "user_1"),
+    ).rejects.toBe(rejection);
+    expect(lookupDeployMock).toHaveBeenCalledWith("CURRENT_HASH");
+    expect(updateMock).toHaveBeenCalledWith({
+      where: { id: "t_1" },
+      data: { pendingDeployTxHash: null },
+    });
+    expect(updateMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "ACTIVE" }) }),
+    );
+  });
+
+  it("refuses a second deployment before broadcasting", async () => {
+    findUniqueMock.mockResolvedValue({ ...draft, contractId: "CDEPLOYED", status: "ACTIVE" });
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "deploy" }, "user_1"),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(submitMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects an expired deadline before broadcasting", async () => {
+    vi.setSystemTime(deadline);
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "deploy" }, "user_1"),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(submitMock).not.toHaveBeenCalled();
   });
 });

@@ -55,7 +55,7 @@ model Tournament {
   organizerAddr      String
   refereeAddr        String
   settlementDeadline DateTime?
-  // Set only after the deadline-aware initialize transaction is confirmed.
+  // Set only after the deadline-aware constructor deployment is confirmed.
   deadlineConfirmedAt DateTime?
   contractId         String?          @unique
   tokenAddr          String?
@@ -65,6 +65,8 @@ model Tournament {
   payouts            Payout[]
   events             ContractEvent[]
   deployTxHash       String?
+  // Tracks an uncertain deployment so retries reconcile its result first.
+  pendingDeployTxHash String?
   // Persisted after initialize submits so reconciliation retries never replay it.
   initializeTxHash   String?
   createdAt          DateTime         @default(now())
