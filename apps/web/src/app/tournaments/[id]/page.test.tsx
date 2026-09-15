@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ---------------------------------------------------------------------------
@@ -101,6 +101,34 @@ describe("/tournaments/[id] — public detail page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetCurrentUser.mockResolvedValue(null);
+  });
+
+  it.each([
+    ["active", ACTIVE_TOURNAMENT],
+    ["refund-claimable", { ...ACTIVE_TOURNAMENT, refundsClaimable: true }],
+    ["finished", FINISHED_TOURNAMENT],
+    ["cancelled", { ...CANCELLED_TOURNAMENT, contractId: ACTIVE_TOURNAMENT.contractId }],
+  ])("keeps a copyable tournament link in the header when %s", async (_state, tournament) => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    mockGetTournamentDetail.mockResolvedValue(tournament);
+    render(await Page({ params: Promise.resolve({ id: tournament.id }) }));
+
+    const url = `https://ggg.quest/tournaments/${tournament.id}`;
+    expect(screen.queryByText(url)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Copy tournament link" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(url));
+    expect(screen.getByRole("status")).toHaveTextContent("Link copied");
+  });
+
+  it("omits the copy action before a tournament has been deployed", async () => {
+    mockGetTournamentDetail.mockResolvedValue({
+      ...ACTIVE_TOURNAMENT,
+      status: "DRAFT",
+      contractId: null,
+    });
+    render(await Page({ params: Promise.resolve({ id: "t_1" }) }));
+    expect(screen.queryByRole("button", { name: "Copy tournament link" })).not.toBeInTheDocument();
   });
 
   // -------------------------------------------------------------------------
