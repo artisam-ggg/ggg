@@ -14,6 +14,10 @@ import {
 } from "./validation";
 import { StellarError } from "./errors";
 
+const VECTOR_FINALIZE_WASM_HASHES = new Set([
+  "1356f43a70552178836e1028aab105c113f863a51a51dd72a094a6bf643d3e2d",
+]);
+
 function parse(
   schema: { safeParse: (v: unknown) => { success: boolean } },
   v: unknown,
@@ -122,16 +126,15 @@ export async function buildFinalizeTx(params: {
     networkPassphrase: networkPassphrase(),
     rpcUrl: env.SOROBAN_RPC_URL,
   };
-  const assembled =
-    env.ESCROW_WASM_HASH && wasmHash === env.ESCROW_WASM_HASH.toLowerCase()
-      ? await clientFor(params.contractId, params.refereeAddress).finalize_results({
-          winners: [params.first, params.second, params.third],
-        })
-      : await legacyEscrowClient(options).finalize_results({
-          first: params.first,
-          second: params.second,
-          third: params.third,
-        });
+  const assembled = VECTOR_FINALIZE_WASM_HASHES.has(wasmHash)
+    ? await clientFor(params.contractId, params.refereeAddress).finalize_results({
+        winners: [params.first, params.second, params.third],
+      })
+    : await legacyEscrowClient(options).finalize_results({
+        first: params.first,
+        second: params.second,
+        third: params.third,
+      });
   return { xdr: await preparedXdr(assembled), network: networkName() };
 }
 

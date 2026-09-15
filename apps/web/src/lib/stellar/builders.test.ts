@@ -39,7 +39,7 @@ vi.mock("./client", () => ({
 vi.mock("@/lib/env", () => ({
   env: {
     SOROBAN_RPC_URL: "https://soroban-testnet.stellar.org",
-    ESCROW_WASM_HASH: "0101010101010101010101010101010101010101010101010101010101010101",
+    ESCROW_WASM_HASH: "56faadf3395536f14b10c263c6369dda77dd2bc3ec9c24c6ce39fada518986ac",
   },
 }));
 
@@ -47,7 +47,8 @@ const G = Keypair.random().publicKey();
 const G2 = Keypair.random().publicKey();
 const G3 = Keypair.random().publicKey();
 const C = "CCJZ5DGASBWQXR5MPFCJXMBI333XE5U3FSJTNQU7RIKE3P5GN2K2WYD5";
-const CURRENT_WASM_HASH = "01".repeat(32);
+const CURRENT_WASM_HASH = "1356f43a70552178836e1028aab105c113f863a51a51dd72a094a6bf643d3e2d";
+const LEGACY_WASM_HASH = "56faadf3395536f14b10c263c6369dda77dd2bc3ec9c24c6ce39fada518986ac";
 const RAW_XDR = new TransactionBuilder(new Account(G, "1"), {
   fee: "100",
   networkPassphrase: "Test SDF Network ; September 2015",
@@ -161,7 +162,7 @@ describe("buildFinalizeTx", () => {
     expect(finalizeFn).toHaveBeenCalledWith({ winners: [G, G2, G3] });
     expect(legacyFinalizeFn).not.toHaveBeenCalled();
   });
-  it("uses the three-address ABI for a contract on an older Wasm", async () => {
+  it("uses the legacy ABI when the configured hash matches the deployed legacy Wasm", async () => {
     getLedgerEntriesFn.mockResolvedValueOnce({
       entries: [
         {
@@ -171,7 +172,7 @@ describe("buildFinalizeTx", () => {
                 instance: () => ({
                   executable: () => ({
                     switch: () => ({ name: "contractExecutableWasm" }),
-                    wasmHash: () => Buffer.alloc(32, 2),
+                    wasmHash: () => Buffer.from(LEGACY_WASM_HASH, "hex"),
                   }),
                 }),
               }),
