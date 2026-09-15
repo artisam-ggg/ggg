@@ -14,6 +14,9 @@ const finalizeFn = vi.fn();
 const cancelFn = vi.fn();
 const getSettlementDeadlineFn = vi.fn();
 const deployFn = vi.fn();
+const getLedgerEntriesFn = vi.fn();
+const legacyFinalizeFn = vi.fn();
+const legacyEscrowClientFn = vi.fn(() => ({ finalize_results: legacyFinalizeFn }));
 const ClientCtor = vi.fn().mockImplementation(function () {
   return {
     join_tournament: joinFn,
@@ -26,15 +29,17 @@ const ClientCtor = vi.fn().mockImplementation(function () {
 (ClientCtor as unknown as { deploy: typeof deployFn }).deploy = deployFn;
 
 vi.mock("@/contract-client", () => ({ Client: ClientCtor }));
+vi.mock("./legacy-escrow-client", () => ({ legacyEscrowClient: legacyEscrowClientFn }));
 vi.mock("./pipeline", () => pipeline);
 vi.mock("./client", () => ({
+  getRpc: () => ({ getLedgerEntries: getLedgerEntriesFn }),
   networkPassphrase: () => "Test SDF Network ; September 2015",
   networkName: () => "testnet",
 }));
 vi.mock("@/lib/env", () => ({
   env: {
     SOROBAN_RPC_URL: "https://soroban-testnet.stellar.org",
-    ESCROW_WASM_HASH: "0101010101010101010101010101010101010101010101010101010101010101",
+    ESCROW_WASM_HASH: "56faadf3395536f14b10c263c6369dda77dd2bc3ec9c24c6ce39fada518986ac",
   },
 }));
 
@@ -42,6 +47,8 @@ const G = Keypair.random().publicKey();
 const G2 = Keypair.random().publicKey();
 const G3 = Keypair.random().publicKey();
 const C = "CCJZ5DGASBWQXR5MPFCJXMBI333XE5U3FSJTNQU7RIKE3P5GN2K2WYD5";
+const CURRENT_WASM_HASH = "1356f43a70552178836e1028aab105c113f863a51a51dd72a094a6bf643d3e2d";
+const LEGACY_WASM_HASH = "56faadf3395536f14b10c263c6369dda77dd2bc3ec9c24c6ce39fada518986ac";
 const RAW_XDR = new TransactionBuilder(new Account(G, "1"), {
   fee: "100",
   networkPassphrase: "Test SDF Network ; September 2015",
@@ -57,12 +64,34 @@ beforeEach(() => {
   finalizeFn.mockClear();
   cancelFn.mockClear();
   getSettlementDeadlineFn.mockReset();
+  getLedgerEntriesFn.mockReset();
+  legacyFinalizeFn.mockReset();
+  legacyEscrowClientFn.mockClear();
   ClientCtor.mockClear();
   joinFn.mockResolvedValue(built(RAW_XDR));
   claimRefundFn.mockResolvedValue(built(RAW_XDR));
   finalizeFn.mockResolvedValue(built(RAW_XDR));
   cancelFn.mockResolvedValue(built(RAW_XDR));
   getSettlementDeadlineFn.mockResolvedValue({ result: null });
+  getLedgerEntriesFn.mockResolvedValue({
+    entries: [
+      {
+        val: {
+          contractData: () => ({
+            val: () => ({
+              instance: () => ({
+                executable: () => ({
+                  switch: () => ({ name: "contractExecutableWasm" }),
+                  wasmHash: () => Buffer.from(CURRENT_WASM_HASH, "hex"),
+                }),
+              }),
+            }),
+          }),
+        },
+      },
+    ],
+  });
+  legacyFinalizeFn.mockResolvedValue(built(RAW_XDR));
   deployFn.mockResolvedValue(built(RAW_XDR));
   pipeline.simulateAndAssemble.mockReset();
   pipeline.simulateAndAssemble.mockResolvedValue(built("PREPARED_XDR"));
@@ -120,7 +149,7 @@ describe("readSettlementDeadline", () => {
 });
 
 describe("buildFinalizeTx", () => {
-  it("passes referee as source and three winners", async () => {
+  it("uses the winner vector for a contract on the current Wasm", async () => {
     const { buildFinalizeTx } = await import("./builders");
     const res = await buildFinalizeTx({
       contractId: C,
@@ -130,7 +159,44 @@ describe("buildFinalizeTx", () => {
       third: G3,
     });
     expect(res.xdr).toBe("PREPARED_XDR");
-    expect(finalizeFn).toHaveBeenCalledWith({ first: G, second: G2, third: G3 });
+    expect(finalizeFn).toHaveBeenCalledWith({ winners: [G, G2, G3] });
+    expect(legacyFinalizeFn).not.toHaveBeenCalled();
+  });
+  it("uses the legacy ABI when the configured hash matches the deployed legacy Wasm", async () => {
+    getLedgerEntriesFn.mockResolvedValueOnce({
+      entries: [
+        {
+          val: {
+            contractData: () => ({
+              val: () => ({
+                instance: () => ({
+                  executable: () => ({
+                    switch: () => ({ name: "contractExecutableWasm" }),
+                    wasmHash: () => Buffer.from(LEGACY_WASM_HASH, "hex"),
+                  }),
+                }),
+              }),
+            }),
+          },
+        },
+      ],
+    });
+    const { buildFinalizeTx } = await import("./builders");
+
+    const res = await buildFinalizeTx({
+      contractId: C,
+      refereeAddress: G,
+      first: G,
+      second: G2,
+      third: G3,
+    });
+
+    expect(res.xdr).toBe("PREPARED_XDR");
+    expect(legacyEscrowClientFn).toHaveBeenCalledWith(
+      expect.objectContaining({ contractId: C, publicKey: G }),
+    );
+    expect(legacyFinalizeFn).toHaveBeenCalledWith({ first: G, second: G2, third: G3 });
+    expect(finalizeFn).not.toHaveBeenCalled();
   });
   it("rejects non-distinct winners", async () => {
     const { buildFinalizeTx } = await import("./builders");

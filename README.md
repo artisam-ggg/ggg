@@ -31,7 +31,7 @@ For the Stellar ecosystem, GGG is a concrete use case for Soroban: it turns paid
 - **Version:** `0.0.0` (workspace manifests) · contract crate `ggg-escrow` `0.1.0`
 - **Status:** Live on Stellar Testnet at https://ggg.quest
 - **Default network:** Stellar Testnet (`STELLAR_NETWORK=testnet`)
-- **Current live escrow WASM hash:** `6cd5beaee7382d6033b09b19f741d41e2f499651a3804ad81be0a4ede39c5b72` (recorded in `apps/web/.env.example`).
+- **Current uploaded escrow WASM hash (#219):** `1356f43a70552178836e1028aab105c113f863a51a51dd72a094a6bf643d3e2d` (recorded in `apps/web/.env.example`). It supports 1–10 winners and the read helpers; see `docs/verification/issue-219-payout-evidence.md` for Testnet upload verification. Set a Railway environment to this hash only when its deployed code uses the #219 binding.
 - **License:** Released under the MIT License. Copyright © 2026 Artisam Labs.
 
 ---
@@ -241,9 +241,9 @@ Contract crates found in the repo:
 
 | Crate | Path | Purpose |
 |---|---|---|
-| `ggg-escrow` | [`contracts/escrow`](./contracts/escrow) | Per-tournament prize escrow: `__constructor`, `join_tournament`, `finalize_results`, `cancel_tournament`, `claim_refund`, and read-only `get_pool` / `get_reward` / `is_finished`. Emits `registered` / `finalized` / `cancelled` / `refund_claimed` events. Built with `soroban-sdk` 26. 49 unit tests. |
+| `ggg-escrow` | [`contracts/escrow`](./contracts/escrow) | Per-tournament prize escrow: `__constructor`, `join_tournament`, 1–10 winner `finalize_results`, `cancel_tournament`, `claim_refund`, and read-only `get_pool` / `get_reward` / `get_players` / `get_tournament` / `is_finished`. Emits `registered` / `finalized` / `cancelled` / `refund_claimed` events. Built with `soroban-sdk` 26. 63 unit tests. |
 
-Function signatures, storage model, events, and security invariants are specified in [`SPEC.md`](./SPEC.md) §4; the source of truth is `contracts/escrow/src/lib.rs` with 49 tests in `contracts/escrow/src/test.rs`.
+Function signatures, storage model, events, and security invariants are specified in [`SPEC.md`](./SPEC.md) §4; the source of truth is `contracts/escrow/src/lib.rs` with 63 tests in `contracts/escrow/src/test.rs`.
 
 ---
 

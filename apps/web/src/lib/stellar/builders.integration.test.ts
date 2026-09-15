@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Asset, Keypair, TransactionBuilder } from "@stellar/stellar-sdk";
+import { Client } from "@/contract-client";
+import { env } from "@/lib/env";
 
 const PASSPHRASE = "Test SDF Network ; September 2015";
 const enabled = process.env.RUN_STELLAR_IT === "1";
@@ -53,6 +55,20 @@ d("Testnet integration", () => {
         sourceAddress: organizer.publicKey(),
       }),
     ).resolves.toBe(deadline);
+    const escrow = new Client({
+      contractId: deployed.contractId!,
+      publicKey: organizer.publicKey(),
+      networkPassphrase: PASSPHRASE,
+      rpcUrl: env.SOROBAN_RPC_URL,
+    });
+    expect((await escrow.get_players()).result).toEqual([]);
+    expect((await escrow.get_tournament()).result).toMatchObject({
+      organizer: organizer.publicKey(),
+      referee: referee.publicKey(),
+      distribution_bps: [6000, 3000, 1000],
+      player_count: 0,
+      winners: [],
+    });
     const join = await buildJoinTx({
       contractId: deployed.contractId!,
       playerAddress: player.publicKey(),
@@ -64,5 +80,7 @@ d("Testnet integration", () => {
     ).resolves.toMatchObject({
       status: "SUCCESS",
     });
+    expect((await escrow.get_players()).result).toEqual([player.publicKey()]);
+    expect((await escrow.get_tournament()).result.player_count).toBe(1);
   }, 120_000);
 });

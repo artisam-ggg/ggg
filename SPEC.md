@@ -106,10 +106,11 @@ Written in Rust with `soroban-sdk` 26, compiled to WASM, deployed once, instanti
 - `organizer: Address`, `referee: Address`
 - `token: Address` (SAC for XLM or USDC)
 - `entry_fee: i128` (token's smallest unit; XLM = stroops, 1 XLM = 10⁷ stroops)
-- `distribution_bps: Vec<u32>` length 3, summing to 10000
+- `distribution_bps: Vec<u32>` length 1–10, with each entry positive and the total exactly 10000
 - `players: Vec<Address>` (registered, deduplicated)
 - `finished: bool`, `cancelled: bool`
-- `winners: Option<(Address, Address, Address)>`
+- `winners: Vec<Address>` (ranked, empty until finalization)
+- `payout_amounts: Vec<i128>` (exact finalized amounts, including rank-one rounding dust)
 - `settlement_deadline: u64` (UTC seconds; at and after it, claims are enabled and settlement mutations reject)
 - `Registered(Address): bool` (address-keyed membership for O(1) refund eligibility checks)
 - `RefundClaimed(Address): bool` (one successful refund per registered player)
@@ -128,7 +129,7 @@ __constructor(
 )
 ```
 
-Creates the tournament atomically with deployment. **Requires `organizer.require_auth()`.** Validates: `distribution_bps.len() == 3`, sum == 10000, `entry_fee > 0`, `organizer != referee`, and a future deadline within the Testnet-safe horizon. A failed constructor rolls back deployment.
+Creates the tournament atomically with deployment. **Requires `organizer.require_auth()`.** Validates: 1–10 positive basis-point entries summing to 10000, `entry_fee > 0`, `organizer != referee`, and a future deadline within the Testnet-safe horizon. A failed constructor rolls back deployment.
 
 ```rust
 join_tournament(player: Address)
@@ -137,22 +138,29 @@ join_tournament(player: Address)
 `player.require_auth()`. Calls `token.transfer(player, current_contract_address, entry_fee)` to pull the entry fee into escrow, then records the player. Rejects at or after the settlement deadline, if `finished`/`cancelled`, if the player already joined, or if the fee transfer fails. Emits a `registered` event.
 
 ```rust
-finalize_results(first: Address, second: Address, third: Address)
+finalize_results(winners: Vec<Address>)
 ```
 
-**`referee.require_auth()` only.** Before the settlement deadline, validates all three addresses are **distinct** and **registered**, and that the tournament is not already finished/cancelled. Computes each prize as `pool * bps[i] / 10000`, transfers from the contract to each winner, handles the rounding remainder deterministically (assign to 1st place), sets `finished = true` and `winners`. Emits a `finalized` event with the three transfers.
+**`referee.require_auth()` only.** Before the settlement deadline, validates that the ranked winner vector matches the 1–10 configured basis-point entries, contains only **distinct registered** addresses, and that the tournament is not already finished/cancelled. Uses checked arithmetic to divide the actual escrow balance across winners, assigning all rounding dust to rank one. Transfers each nonzero prize, stores the exact amounts, and sets `finished = true`. A failed validation or transfer rolls back the entire call. Emits `finalized` with both vectors.
 
 ```rust
 get_pool() -> i128
 ```
 
-Returns the escrow contract's current raw token balance. Tokens sent directly to the contract can make this exceed the registration-derived settlement pool and can remain after all refunds or final payouts.
+Returns the escrow contract's current raw token balance. Direct token transfers increase the final payout pool; after cancellation or expiry, only registered entry fees are refundable, so unsolicited tokens may remain.
+
+```rust
+get_players() -> Vec<Address>
+get_tournament() -> TournamentInfo
+```
+
+`get_players` returns all registered players in registration order, including at the enforced 100-player ceiling. `get_tournament` returns stable named fields for organizer, referee, token, entry fee, configured basis points, UTC settlement deadline, player count, finished/cancelled flags, and ranked winners (empty before finalization). It does not include the player vector or token balance.
 
 ```rust
 get_reward(player: Address) -> i128
 ```
 
-Returns the player's winnings based on placement once finalised; `0` if not a winner or not finished.
+Returns the player's exact stored payout once finalised, including rank-one dust; `0` if not a winner or not finished.
 
 ```rust
 is_finished() -> bool
@@ -175,7 +183,7 @@ Permissionless. After the inclusive settlement deadline, or immediately after ca
 ### Events
 
 - `registered` → `(player: Address, pool_after: i128)`
-- `finalized` → `(first, second, third, amounts: Vec<i128>)`
+- `finalized` → `(winners: Vec<Address>, amounts: Vec<i128>)`
 - `cancelled` → `(claimable_count: u32)`
 - `refund_claimed` → `(player: Address, amount: i128)`
 
@@ -186,7 +194,7 @@ Permissionless. After the inclusive settlement deadline, or immediately after ca
 - Funds leave the contract **only** via payout or refund logic — there is no withdraw function.
 - Idempotency: `finalize`/`cancel` cannot run twice; `join` cannot double-register; each player can claim one refund.
 - Every state-changing call emits an event for the off-chain subscriber.
-- Reject finalisation if winners are not all registered or not all distinct.
+- Reject finalisation if the winner count differs from the configured distribution, or winners are not all registered and distinct.
 
 ### Build & deploy
 

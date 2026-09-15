@@ -1,8 +1,9 @@
 import { Client } from "@/contract-client";
 import { createHash } from "node:crypto";
-import { TransactionBuilder, type Transaction } from "@stellar/stellar-sdk";
+import { Contract, TransactionBuilder, type Transaction } from "@stellar/stellar-sdk";
 import { env } from "@/lib/env";
-import { networkName, networkPassphrase } from "./client";
+import { getRpc, networkName, networkPassphrase } from "./client";
+import { legacyEscrowClient } from "./legacy-escrow-client";
 import { simulateAndAssemble } from "./pipeline";
 import {
   stellarContractId,
@@ -12,6 +13,10 @@ import {
   distributionBps as bpsSchema,
 } from "./validation";
 import { StellarError } from "./errors";
+
+const VECTOR_FINALIZE_WASM_HASHES = new Set([
+  "1356f43a70552178836e1028aab105c113f863a51a51dd72a094a6bf643d3e2d",
+]);
 
 function parse(
   schema: { safeParse: (v: unknown) => { success: boolean } },
@@ -28,6 +33,23 @@ function clientFor(contractId: string, source: string): InstanceType<typeof Clie
     networkPassphrase: networkPassphrase(),
     rpcUrl: env.SOROBAN_RPC_URL,
   });
+}
+
+async function deployedWasmHash(contractId: string): Promise<string> {
+  try {
+    const { entries } = await getRpc().getLedgerEntries(new Contract(contractId).getFootprint());
+    if (entries.length !== 1) throw new Error("contract instance not found");
+    const executable = entries[0]!.val.contractData().val().instance().executable();
+    if (executable.switch().name !== "contractExecutableWasm") {
+      throw new Error("contract instance is not Wasm-backed");
+    }
+    return Buffer.from(executable.wasmHash()).toString("hex");
+  } catch (error) {
+    console.error("Escrow Wasm lookup failed", { contractId, error });
+    throw new StellarError("SIMULATION_FAILED", "Escrow version could not be determined", {
+      retryable: true,
+    });
+  }
 }
 
 async function preparedXdr(assembled: { toXDR: () => string }): Promise<string> {
@@ -97,12 +119,22 @@ export async function buildFinalizeTx(params: {
   }
   const winners = new Set([params.first, params.second, params.third]);
   if (winners.size !== 3) throw new StellarError("INVALID_INPUT", "Winners must be distinct");
-  const c = clientFor(params.contractId, params.refereeAddress);
-  const assembled = await c.finalize_results({
-    first: params.first,
-    second: params.second,
-    third: params.third,
-  });
+  const wasmHash = await deployedWasmHash(params.contractId);
+  const options = {
+    contractId: params.contractId,
+    publicKey: params.refereeAddress,
+    networkPassphrase: networkPassphrase(),
+    rpcUrl: env.SOROBAN_RPC_URL,
+  };
+  const assembled = VECTOR_FINALIZE_WASM_HASHES.has(wasmHash)
+    ? await clientFor(params.contractId, params.refereeAddress).finalize_results({
+        winners: [params.first, params.second, params.third],
+      })
+    : await legacyEscrowClient(options).finalize_results({
+        first: params.first,
+        second: params.second,
+        third: params.third,
+      });
   return { xdr: await preparedXdr(assembled), network: networkName() };
 }
 
