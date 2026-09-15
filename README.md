@@ -243,7 +243,7 @@ Contract crates found in the repo:
 |---|---|---|
 | `ggg-escrow` | [`contracts/escrow`](./contracts/escrow) | Per-tournament prize escrow: `__constructor`, `join_tournament`, 1–10 winner `finalize_results`, `cancel_tournament`, `claim_refund`, and read-only `get_pool` / `get_reward` / `get_players` / `get_tournament` / `is_finished`. Emits `registered` / `finalized` / `cancelled` / `refund_claimed` events. Built with `soroban-sdk` 26. 63 unit tests. |
 
-Function signatures, storage model, events, and security invariants are specified in [`SPEC.md`](./SPEC.md) §4; the source of truth is `contracts/escrow/src/lib.rs` with 49 tests in `contracts/escrow/src/test.rs`.
+Function signatures, storage model, events, and security invariants are specified in [`SPEC.md`](./SPEC.md) §4; the source of truth is `contracts/escrow/src/lib.rs` with 63 tests in `contracts/escrow/src/test.rs`.
 
 ---
 
