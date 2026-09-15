@@ -8,7 +8,7 @@ transaction.
 
 | Area | Evidence in `contracts/escrow/src/test.rs` |
 | --- | --- |
-| Atomic constructor | `constructor_stores_state`, `constructor_requires_organizer_authorization`, `constructor_requires_organizer_auth`, `failed_constructor_rolls_back_deployment`, `legacy_initialize_entrypoint_is_absent` |
+| Atomic constructor | `constructor_stores_state`, `constructor_records_exact_organizer_auth_tree`, `constructor_requires_organizer_auth`, `failed_constructor_rolls_back_deployment`, `legacy_initialize_entrypoint_is_absent` |
 | Deadline and refund boundaries | `constructor_accepts_deadline_at_max_horizon`, constructor rejection cases, `deadline_boundary_is_inclusive`, join/finalize/cancel rejection at the deadline, refund rejection before and success at/after the deadline |
 | Authorization and refund recipient | Exact authorization-tree tests for constructor, join including its nested token transfer, finalization, and cancellation; `arbitrary_caller_claims_cancelled_player_refund` proves a refund requires no caller authorization and always pays the registered player |
 | Cancellation and terminal races | Cancellation transition, join-after-finish/cancel, cancel-after-finalize/double-cancel, finalize-after-cancel/double-finalize, and refund-after-finalize cases |

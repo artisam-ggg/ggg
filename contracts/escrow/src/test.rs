@@ -540,7 +540,7 @@ fn first_join_succeeds_immediately_after_constructor() {
 }
 
 #[test]
-fn constructor_requires_organizer_authorization() {
+fn constructor_records_exact_organizer_auth_tree() {
     let env = Env::default();
     env.mock_all_auths();
     let admin = Address::generate(&env);
@@ -576,7 +576,7 @@ fn constructor_requires_organizer_authorization() {
 }
 
 #[test]
-fn join_requires_exact_player_authorization() {
+fn join_records_exact_player_auth_tree() {
     let env = Env::default();
     env.mock_all_auths();
     let admin = Address::generate(&env);
@@ -617,17 +617,17 @@ fn failed_join_transfer_rolls_back_registration() {
     let env = Env::default();
     env.mock_all_auths();
     let admin = Address::generate(&env);
-    let (token_addr, _sac, token) = create_token(&env, &admin);
+    let (token_addr, sac, token) = create_token(&env, &admin);
     let organizer = Address::generate(&env);
     let referee = Address::generate(&env);
     let escrow = init_default(&env, &token_addr, &organizer, &referee);
     let player = Address::generate(&env);
+    sac.mint(&player, &999_999i128);
 
-    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        escrow.join_tournament(&player);
-    }))
-    .is_err());
+    let result = escrow.try_join_tournament(&player);
+    assert_eq!(result, Err(Ok(soroban_sdk::Error::from_contract_error(10))));
 
+    assert_eq!(token.balance(&player), 999_999i128);
     assert!(escrow.get_players().is_empty());
     assert_eq!(escrow.get_tournament().player_count, 0);
     assert_eq!(token.balance(&escrow.address), 0);
@@ -910,7 +910,7 @@ fn finalize_pays_60_30_10() {
 }
 
 #[test]
-fn finalize_requires_exact_referee_authorization() {
+fn finalize_records_exact_referee_auth_tree() {
     let env = Env::default();
     env.mock_all_auths();
     let admin = Address::generate(&env);
@@ -1107,7 +1107,7 @@ fn cancellation_transitions_without_batch_refunds() {
 }
 
 #[test]
-fn cancel_requires_exact_organizer_authorization() {
+fn cancel_records_exact_organizer_auth_tree() {
     let env = Env::default();
     env.mock_all_auths();
     let admin = Address::generate(&env);
