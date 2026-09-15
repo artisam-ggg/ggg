@@ -3,12 +3,14 @@
 import { signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react"; // 1. Import the standalone icon
+import posthog from "posthog-js";
 
 export function LogoutButton() {
   const router = useRouter();
 
   const handleLogout = async () => {
     await signOut({ redirect: false });
+    posthog.reset();
     router.replace("/login");
     router.refresh();
   };

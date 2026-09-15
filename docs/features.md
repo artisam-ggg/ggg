@@ -192,3 +192,7 @@ The pinned #220 artifact was uploaded to Testnet and its `ContractCode` bytes ve
 ## Issue #221 — Deliverable 2 regression matrix
 
 Completed the final Deliverable 2 regression matrix without changing contract behavior. The contract suite now asserts exact authorization trees for constructor, registration (including its nested token transfer), finalization, and cancellation; proves refunds require no caller authorization and pay only the registered player; and verifies failed entry-fee and refund transfers roll back without partial state. Existing coverage supplies atomic construction, deadline/refund boundaries, terminal races, TTL lifecycle, 1–10 winner validation, payout conservation with first-rank dust, exact events, and both read helpers. Local and live Testnet evidence are distinguished in `docs/verification/issue-221-regression-evidence.md`.
+
+## PostHog product analytics
+
+The web app supports optional, consent-gated PostHog product analytics and masked session replay. PostHog starts opted out, the consent banner appears only when a public project token is configured, and declining does not limit the app. Successful registration and sign-in events attach the authenticated account identity only after consent; signing out resets that analytics identity. The app and homepage privacy policies disclose the processing, and the content security policy permits the PostHog ingestion, script, and replay-worker endpoints.
