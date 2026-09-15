@@ -16,6 +16,7 @@ import { StellarError } from "./errors";
 
 const VECTOR_FINALIZE_WASM_HASHES = new Set([
   "1356f43a70552178836e1028aab105c113f863a51a51dd72a094a6bf643d3e2d",
+  "2dcfb4c3ed77863269a347308156021de08427f5e6aa77ba15a08d9476c03f77",
 ]);
 
 function parse(
