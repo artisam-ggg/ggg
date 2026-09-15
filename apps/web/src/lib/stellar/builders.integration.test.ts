@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Asset, Keypair, TransactionBuilder } from "@stellar/stellar-sdk";
+import { Asset, Keypair, scValToNative, TransactionBuilder, xdr } from "@stellar/stellar-sdk";
 import { Client } from "@/contract-client";
 import { env } from "@/lib/env";
 
@@ -38,10 +38,19 @@ d("Testnet integration", () => {
     const deploy = TransactionBuilder.fromXDR(out.xdr, PASSPHRASE);
     expect(deploy.operations).toHaveLength(1);
     const operation = deploy.operations[0] as {
-      func?: { switch(): { name: string }; value(): { constructorArgs(): unknown[] } };
+      func?: { switch(): { name: string }; value(): { constructorArgs(): xdr.ScVal[] } };
     };
     expect(operation.func?.switch().name).toBe("hostFunctionTypeCreateContractV2");
-    expect(operation.func?.value().constructorArgs()).toHaveLength(6);
+    const constructorArgs = operation.func?.value().constructorArgs() ?? [];
+    expect(constructorArgs).toHaveLength(6);
+    expect(constructorArgs.map(scValToNative)).toEqual([
+      organizer.publicKey(),
+      referee.publicKey(),
+      Asset.native().contractId(PASSPHRASE),
+      10_000_000n,
+      [6000, 3000, 1000],
+      deadline,
+    ]);
     const sorobanData = deploy.toEnvelope().v1().tx().ext().value();
     expect(BigInt(sorobanData!.resourceFee().toString())).toBeGreaterThan(0n);
     deploy.sign(organizer);

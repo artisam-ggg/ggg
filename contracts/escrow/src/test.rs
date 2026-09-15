@@ -3,7 +3,9 @@ extern crate std;
 
 use soroban_sdk::{
     symbol_short,
-    testutils::{Address as _, Deployer as _, Events, Ledger},
+    testutils::{
+        Address as _, AuthorizedFunction, AuthorizedInvocation, Deployer as _, Events, Ledger,
+    },
     token::{StellarAssetClient, TokenClient},
     Address, Env, Event, IntoVal, Symbol, Val, Vec,
 };
@@ -85,6 +87,29 @@ fn assert_contract_ttls_extended(env: &Env, contract: &Address) {
     let (instance_ttl, code_ttl) = contract_ttls(env, contract);
     assert_eq!(instance_ttl, TESTNET_INSTANCE_TTL_EXTEND_TO_LEDGERS);
     assert!(code_ttl >= TESTNET_INSTANCE_TTL_EXTEND_TO_LEDGERS);
+}
+
+fn assert_single_contract_auth(
+    env: &Env,
+    signer: &Address,
+    contract: &Address,
+    function: &str,
+    args: Vec<Val>,
+) {
+    assert_eq!(
+        env.auths(),
+        [(
+            signer.clone(),
+            AuthorizedInvocation {
+                function: AuthorizedFunction::Contract((
+                    contract.clone(),
+                    Symbol::new(env, function),
+                    args,
+                )),
+                sub_invocations: std::vec![],
+            },
+        )],
+    );
 }
 
 #[test]
@@ -515,6 +540,106 @@ fn first_join_succeeds_immediately_after_constructor() {
 }
 
 #[test]
+fn constructor_requires_organizer_authorization() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let (token_addr, _sac, _token) = create_token(&env, &admin);
+    let organizer = Address::generate(&env);
+    let referee = Address::generate(&env);
+
+    let escrow = create_escrow(
+        &env,
+        &organizer,
+        &referee,
+        &token_addr,
+        &1i128,
+        &bps(&env),
+        &valid_deadline(&env),
+    );
+
+    assert_single_contract_auth(
+        &env,
+        &organizer,
+        &escrow.address,
+        "__constructor",
+        (
+            &organizer,
+            &referee,
+            &token_addr,
+            1i128,
+            bps(&env),
+            valid_deadline(&env),
+        )
+            .into_val(&env),
+    );
+}
+
+#[test]
+fn join_requires_exact_player_authorization() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let (token_addr, sac, _token) = create_token(&env, &admin);
+    let organizer = Address::generate(&env);
+    let referee = Address::generate(&env);
+    let escrow = init_default(&env, &token_addr, &organizer, &referee);
+    let player = Address::generate(&env);
+    sac.mint(&player, &1_000_000i128);
+
+    escrow.join_tournament(&player);
+
+    assert_eq!(
+        env.auths(),
+        [(
+            player.clone(),
+            AuthorizedInvocation {
+                function: AuthorizedFunction::Contract((
+                    escrow.address.clone(),
+                    Symbol::new(&env, "join_tournament"),
+                    (&player,).into_val(&env),
+                )),
+                sub_invocations: std::vec![AuthorizedInvocation {
+                    function: AuthorizedFunction::Contract((
+                        token_addr,
+                        Symbol::new(&env, "transfer"),
+                        (&player, &escrow.address, 1_000_000i128).into_val(&env),
+                    )),
+                    sub_invocations: std::vec![],
+                }],
+            },
+        )],
+    );
+}
+
+#[test]
+fn failed_join_transfer_rolls_back_registration() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let (token_addr, _sac, token) = create_token(&env, &admin);
+    let organizer = Address::generate(&env);
+    let referee = Address::generate(&env);
+    let escrow = init_default(&env, &token_addr, &organizer, &referee);
+    let player = Address::generate(&env);
+
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        escrow.join_tournament(&player);
+    }))
+    .is_err());
+
+    assert!(escrow.get_players().is_empty());
+    assert_eq!(escrow.get_tournament().player_count, 0);
+    assert_eq!(token.balance(&escrow.address), 0);
+    let registered: bool = env.as_contract(&escrow.address, || {
+        env.storage()
+            .instance()
+            .has(&DataKey::Registered(player.clone()))
+    });
+    assert!(!registered);
+}
+
+#[test]
 fn join_ttl_threshold_is_noop_and_one_below_extends() {
     let env = Env::default();
     env.mock_all_auths();
@@ -785,6 +910,35 @@ fn finalize_pays_60_30_10() {
 }
 
 #[test]
+fn finalize_requires_exact_referee_authorization() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let (token_addr, sac, _token) = create_token(&env, &admin);
+    let organizer = Address::generate(&env);
+    let referee = Address::generate(&env);
+    let escrow = init_default(&env, &token_addr, &organizer, &referee);
+    let winners = Vec::from_array(
+        &env,
+        [
+            join(&env, &escrow, &sac),
+            join(&env, &escrow, &sac),
+            join(&env, &escrow, &sac),
+        ],
+    );
+
+    escrow.finalize_results(&winners);
+
+    assert_single_contract_auth(
+        &env,
+        &referee,
+        &escrow.address,
+        "finalize_results",
+        (&winners,).into_val(&env),
+    );
+}
+
+#[test]
 #[should_panic(expected = "Error(Contract, #10)")] // WinnersNotDistinct
 fn finalize_rejects_duplicate_winner() {
     let env = Env::default();
@@ -953,6 +1107,27 @@ fn cancellation_transitions_without_batch_refunds() {
 }
 
 #[test]
+fn cancel_requires_exact_organizer_authorization() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let (token_addr, _sac, _token) = create_token(&env, &admin);
+    let organizer = Address::generate(&env);
+    let referee = Address::generate(&env);
+    let escrow = init_default(&env, &token_addr, &organizer, &referee);
+
+    escrow.cancel_tournament();
+
+    assert_single_contract_auth(
+        &env,
+        &organizer,
+        &escrow.address,
+        "cancel_tournament",
+        ().into_val(&env),
+    );
+}
+
+#[test]
 fn reads_the_initialized_settlement_deadline() {
     let env = Env::default();
     env.mock_all_auths();
@@ -1019,6 +1194,7 @@ fn arbitrary_caller_claims_cancelled_player_refund() {
     env.set_auths(&[]);
     escrow.claim_refund(&player);
 
+    assert!(env.auths().is_empty());
     assert_eq!(token.balance(&player), 10_000_000i128);
 }
 
