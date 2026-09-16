@@ -1,6 +1,11 @@
 import { render, screen, act } from "@testing-library/react";
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { PrizePoolCounter } from "./PrizePoolCounter";
+import { TournamentEventsProvider } from "./TournamentEventsProvider";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
 
 class FakeES {
   static instances: FakeES[] = [];
@@ -39,14 +44,15 @@ function renderCounter(
   initialRefundPlayers?: string[],
 ) {
   return render(
-    <PrizePoolCounter
-      tournamentId="t_1"
-      initialPool={initialPool}
-      asset="XLM"
-      participantCount={participantCount}
-      entryFee="10000000"
-      {...(initialRefundPlayers ? { initialRefundPlayers } : {})}
-    />,
+    <TournamentEventsProvider tournamentId="t_1">
+      <PrizePoolCounter
+        initialPool={initialPool}
+        asset="XLM"
+        participantCount={participantCount}
+        entryFee="10000000"
+        {...(initialRefundPlayers ? { initialRefundPlayers } : {})}
+      />
+    </TournamentEventsProvider>,
   );
 }
 

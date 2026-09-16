@@ -1,40 +1,25 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
-import { useTournamentEvents } from "@/hooks/use-tournament-events";
+import { useMemo } from "react";
+import { useTournamentEventContext } from "./TournamentEventsProvider";
 import { ParticipantList, type Participant } from "./ParticipantList";
 
-export function LiveParticipantList({
-  tournamentId,
-  participants,
-}: {
-  tournamentId: string;
-  participants: Participant[];
-}) {
-  const router = useRouter();
-  const refreshSnapshot = useCallback(() => router.refresh(), [router]);
-  const { events } = useTournamentEvents(tournamentId, refreshSnapshot);
+export function LiveParticipantList({ participants }: { participants: Participant[] }) {
+  const { events } = useTournamentEventContext();
 
   const roster = useMemo(() => {
     const next = [...participants];
     const seen = new Set(next.map((participant) => participant.playerAddr));
 
     for (const event of events) {
+      if (event.type !== "REGISTERED") continue;
       const playerAddr = event.data.player;
-      const poolAfter = event.data.poolAfter;
-      if (
-        event.type !== "REGISTERED" ||
-        typeof playerAddr !== "string" ||
-        typeof poolAfter !== "string" ||
-        !/^\d+$/.test(poolAfter) ||
-        seen.has(playerAddr)
-      ) {
+      if (seen.has(playerAddr)) {
         continue;
       }
 
       seen.add(playerAddr);
-      next.push({ playerAddr, joinedAt: "" });
+      next.push({ playerAddr, joinedAt: null });
     }
 
     return next;

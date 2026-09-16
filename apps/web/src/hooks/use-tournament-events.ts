@@ -1,11 +1,38 @@
 "use client";
 import { useEffect, useState } from "react";
+import { z } from "zod";
 
-export interface LiveEvent {
-  type: "REGISTERED" | "FINALIZED" | "CANCELLED" | "REFUND_CLAIMED";
-  txHash: string | null;
-  data: Record<string, unknown>;
-}
+const amountSchema = z.string().regex(/^\d+$/);
+const playerSchema = z.string().min(1);
+const liveEventSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("REGISTERED"),
+    txHash: z.string().nullable(),
+    data: z.object({ player: playerSchema, poolAfter: amountSchema.optional() }),
+  }),
+  z.object({
+    type: z.literal("FINALIZED"),
+    txHash: z.string().nullable(),
+    data: z.object({
+      first: playerSchema,
+      second: playerSchema,
+      third: playerSchema,
+      amounts: z.array(amountSchema).length(3),
+    }),
+  }),
+  z.object({
+    type: z.literal("CANCELLED"),
+    txHash: z.string().nullable(),
+    data: z.object({ claimableCount: z.number().int().nonnegative() }),
+  }),
+  z.object({
+    type: z.literal("REFUND_CLAIMED"),
+    txHash: z.string().nullable(),
+    data: z.object({ player: playerSchema, amount: amountSchema }),
+  }),
+]);
+
+export type LiveEvent = z.infer<typeof liveEventSchema>;
 
 /**
  * Subscribe to the tournament SSE stream (GET /api/tournaments/[id]/events).
@@ -26,12 +53,15 @@ export function useTournamentEvents(
     let connected = false;
 
     function connect(): void {
-      if (connected) onReconnect?.();
-      connected = true;
       es = new EventSource(`/api/tournaments/${tournamentId}/events`);
+      es.onopen = () => {
+        if (connected) onReconnect?.();
+        connected = true;
+      };
       es.onmessage = (e: MessageEvent) => {
         try {
-          setEvents((prev) => [...prev, JSON.parse(e.data) as LiveEvent]);
+          const event = liveEventSchema.safeParse(JSON.parse(e.data));
+          if (event.success) setEvents((prev) => [...prev, event.data]);
         } catch {
           /* ignore malformed frame */
         }

@@ -2,20 +2,20 @@ import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { LiveEvent } from "@/hooks/use-tournament-events";
 
-const { useTournamentEvents } = vi.hoisted(() => ({
-  useTournamentEvents: vi.fn<(id: string) => { events: LiveEvent[] }>(),
+const { useTournamentEventContext } = vi.hoisted(() => ({
+  useTournamentEventContext: vi.fn<() => { events: LiveEvent[] }>(),
 }));
-vi.mock("@/hooks/use-tournament-events", () => ({ useTournamentEvents }));
+vi.mock("./TournamentEventsProvider", () => ({ useTournamentEventContext }));
 
 import { LiveFeed } from "./LiveFeed";
 
 beforeEach(() => {
-  useTournamentEvents.mockReturnValue({ events: [] });
+  useTournamentEventContext.mockReturnValue({ events: [] });
 });
 
 describe("LiveFeed", () => {
   it("renders a live region with the LIVE badge and empty placeholder", () => {
-    render(<LiveFeed tournamentId="t_1" />);
+    render(<LiveFeed />);
     expect(screen.getByRole("log")).toHaveAttribute("aria-live", "polite");
     expect(screen.getByText("LIVE")).toBeInTheDocument();
     expect(screen.getByText(/live activity/i)).toBeInTheDocument();
@@ -23,7 +23,7 @@ describe("LiveFeed", () => {
   });
 
   it("renders registration and finalisation rows with human-readable gloss", () => {
-    useTournamentEvents.mockReturnValue({
+    useTournamentEventContext.mockReturnValue({
       events: [
         {
           type: "REGISTERED",
@@ -37,13 +37,13 @@ describe("LiveFeed", () => {
         },
       ],
     });
-    render(<LiveFeed tournamentId="t_1" />);
+    render(<LiveFeed />);
     expect(screen.getByText(/joined/i)).toBeInTheDocument();
     expect(screen.getByText(/payouts sent/i)).toBeInTheDocument();
   });
 
   it("glosses cancellation claims and a completed refund claim", () => {
-    useTournamentEvents.mockReturnValue({
+    useTournamentEventContext.mockReturnValue({
       events: [
         { type: "CANCELLED", txHash: "tx3", data: { claimableCount: 4 } },
         {
@@ -53,7 +53,7 @@ describe("LiveFeed", () => {
         },
       ],
     });
-    render(<LiveFeed tournamentId="t_1" />);
+    render(<LiveFeed />);
     expect(screen.getByText(/refunds available to claim/i)).toBeInTheDocument();
     expect(screen.getByText(/claimed 1\.0000000/i)).toBeInTheDocument();
   });

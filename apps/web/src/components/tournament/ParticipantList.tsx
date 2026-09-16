@@ -1,7 +1,6 @@
-// SERVER COMPONENT — no "use client" directive.
-// Pure server render from props; no polling, no client hooks.
+// Presentational render from props; no data fetching or client hooks.
 
-export type Participant = { playerAddr: string; joinedAt: string };
+export type Participant = { playerAddr: string; joinedAt: string | null };
 
 function trunc(addr: string) {
   return `${addr.slice(0, 6)}…${addr.slice(-6)}`;
@@ -17,8 +16,8 @@ export function ParticipantList({ participants }: { participants: Participant[] 
       <h2 className="label-caps text-on-surface-variant">Participants</h2>
       <ul className="mt-4 divide-y divide-outline-variant">
         {participants.map((p) => {
-          const joinedAt = new Date(p.joinedAt);
-          const validTimestamp = !Number.isNaN(joinedAt.getTime());
+          const joinedAt = p.joinedAt ? new Date(p.joinedAt) : null;
+          const validTimestamp = joinedAt !== null && !Number.isNaN(joinedAt.getTime());
           return (
             <li
               key={p.playerAddr}
