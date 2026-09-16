@@ -1,16 +1,19 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Hoist mock factories so vi.mock() hoisting can reference them
 // ---------------------------------------------------------------------------
-const { mockGetTournamentDetail, mockGetCurrentUser, mockNotFound } = vi.hoisted(() => ({
-  mockGetTournamentDetail: vi.fn(),
-  mockGetCurrentUser: vi.fn(),
-  mockNotFound: vi.fn(() => {
-    throw new Error("NEXT_NOT_FOUND");
+const { mockGetTournamentDetail, mockGetCurrentUser, mockNotFound, mockRefresh } = vi.hoisted(
+  () => ({
+    mockGetTournamentDetail: vi.fn(),
+    mockGetCurrentUser: vi.fn(),
+    mockRefresh: vi.fn(),
+    mockNotFound: vi.fn(() => {
+      throw new Error("NEXT_NOT_FOUND");
+    }),
   }),
-}));
+);
 
 vi.mock("@/server/services/tournaments", () => ({
   getTournamentDetail: mockGetTournamentDetail,
@@ -22,7 +25,7 @@ vi.mock("@/lib/auth-guards", () => ({
 
 vi.mock("next/navigation", () => ({
   notFound: mockNotFound,
-  useRouter: vi.fn(() => ({ refresh: vi.fn() })),
+  useRouter: vi.fn(() => ({ refresh: mockRefresh })),
 }));
 
 vi.mock("@/lib/env", () => ({
@@ -44,6 +47,7 @@ const ACTIVE_TOURNAMENT = {
   id: "t_1",
   name: "Summer Cup",
   gameTitle: "Street Fighter 6",
+  coverImageUrl: null,
   status: "ACTIVE" as const,
   asset: "XLM" as const,
   entryFee: "10000000",
@@ -102,10 +106,75 @@ describe("/tournaments/[id] — public detail page", () => {
     mockGetCurrentUser.mockResolvedValue(null);
   });
 
+  it.each([
+    ["active", ACTIVE_TOURNAMENT],
+    ["refund-claimable", { ...ACTIVE_TOURNAMENT, refundsClaimable: true }],
+    ["finished", FINISHED_TOURNAMENT],
+    ["cancelled", { ...CANCELLED_TOURNAMENT, contractId: ACTIVE_TOURNAMENT.contractId }],
+  ])("keeps a copyable tournament link in the header when %s", async (_state, tournament) => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    mockGetTournamentDetail.mockResolvedValue(tournament);
+    render(await Page({ params: Promise.resolve({ id: tournament.id }) }));
+
+    const url = `https://ggg.quest/tournaments/${tournament.id}`;
+    expect(screen.queryByText(url)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Copy tournament link" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(url));
+    expect(screen.getByRole("status")).toHaveTextContent("Link copied");
+  });
+
+  it("omits the copy action before a tournament has been deployed", async () => {
+    mockGetTournamentDetail.mockResolvedValue({
+      ...ACTIVE_TOURNAMENT,
+      status: "DRAFT",
+      contractId: null,
+    });
+    render(await Page({ params: Promise.resolve({ id: "t_1" }) }));
+    expect(screen.queryByRole("button", { name: "Copy tournament link" })).not.toBeInTheDocument();
+  });
+
+  it("links Back to the tournament list after settlement", async () => {
+    mockGetTournamentDetail.mockResolvedValue(FINISHED_TOURNAMENT);
+    render(await Page({ params: Promise.resolve({ id: "t_2" }) }));
+
+    expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute("href", "/tournaments");
+  });
+
   // -------------------------------------------------------------------------
   // (a) ACTIVE tournament — header, status, pool, join card, participants
   // -------------------------------------------------------------------------
   describe("ACTIVE tournament", () => {
+    it("shows an uploaded cover on the public page", async () => {
+      mockGetTournamentDetail.mockResolvedValue({
+        ...ACTIVE_TOURNAMENT,
+        coverImageUrl: "/api/tournaments/t_1/cover",
+      });
+      render(await Page({ params: Promise.resolve({ id: "t_1" }) }));
+
+      expect(
+        screen.getByRole("img", { name: "Summer Cup tournament cover" }).getAttribute("src"),
+      ).toMatch(/\/api\/tournaments\/t_1\/cover$/);
+    });
+
+    it("keeps the default layout when there is no cover", async () => {
+      mockGetTournamentDetail.mockResolvedValue(ACTIVE_TOURNAMENT);
+      render(await Page({ params: Promise.resolve({ id: "t_1" }) }));
+      expect(screen.queryByRole("img", { name: /tournament cover/i })).not.toBeInTheDocument();
+    });
+
+    it("hides a cover that fails to load without hiding tournament details", async () => {
+      mockGetTournamentDetail.mockResolvedValue({
+        ...ACTIVE_TOURNAMENT,
+        coverImageUrl: "/api/tournaments/t_1/cover",
+      });
+      render(await Page({ params: Promise.resolve({ id: "t_1" }) }));
+
+      fireEvent.error(screen.getByRole("img", { name: "Summer Cup tournament cover" }));
+      expect(screen.queryByRole("img", { name: /tournament cover/i })).not.toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Summer Cup" })).toBeInTheDocument();
+    });
+
     it("renders the tournament name as h1", async () => {
       mockGetTournamentDetail.mockResolvedValue(ACTIVE_TOURNAMENT);
       render(await Page({ params: Promise.resolve({ id: "t_1" }) }));
@@ -169,15 +238,18 @@ describe("/tournaments/[id] — public detail page", () => {
       expect(screen.getByText(/settlement complete/i)).toBeInTheDocument();
     });
 
-    it("renders zero-winners placeholder when FINISHED with no winners", async () => {
+    it("renders a retryable processing state when FINISHED payouts have not synced", async () => {
       mockGetTournamentDetail.mockResolvedValue({
         ...FINISHED_TOURNAMENT,
         winners: [],
       });
       render(await Page({ params: Promise.resolve({ id: "t_2" }) }));
 
-      expect(screen.getByText(/settlement complete/i)).toBeInTheDocument();
-      expect(screen.getByText(/no winners recorded for this tournament/i)).toBeInTheDocument();
+      expect(screen.getByText(/settlement processing/i)).toBeInTheDocument();
+      expect(screen.getByText(/winner and payout data is still syncing/i)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /retry winner sync/i }));
+      expect(mockRefresh).toHaveBeenCalledOnce();
+      expect(screen.queryByText(/no winners recorded/i)).not.toBeInTheDocument();
     });
 
     it("does NOT render JoinCard when FINISHED", async () => {

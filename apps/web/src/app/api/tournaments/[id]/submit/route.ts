@@ -68,8 +68,9 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
 
   // 7. Submit with idempotency guarantee.
   try {
-    const data = await withIdempotency(`${id}:${idemKey}`, () =>
-      submitTournamentTx(id, parsed.data, user.id),
+    const data = await withIdempotency(
+      parsed.data.intent === "deploy" ? `${id}:${user.id}:deploy` : `${id}:${idemKey}`,
+      () => submitTournamentTx(id, parsed.data, user.id),
     );
     return ok(data);
   } catch (e) {

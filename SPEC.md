@@ -17,7 +17,7 @@ The signature demo: open the dashboard → create a tournament with an XLM entry
 | Actor     | Auth                                                              | On-chain identity                                   |
 | --------- | ----------------------------------------------------------------- | --------------------------------------------------- |
 | Admin     | Username + password (seeded)                                      | Optional Freighter                                  |
-| Organiser | Username + password (self-register)                               | Freighter wallet (source of `initialize`, `cancel`) |
+| Organiser | Username + password (self-register)                               | Freighter wallet (source of constructor deployment, `cancel`) |
 | Referee   | Username + password; identified by wallet address on a tournament | Freighter wallet (source of `finalize_results`)     |
 | Player    | No app account required                                           | Freighter-compatible wallet (source of `join`)      |
 
@@ -99,26 +99,35 @@ Polls Soroban RPC `getEvents` for each active tournament's contract, persists re
 
 ## 4. Smart contract — Tournament Escrow (Soroban)
 
-Written in Rust with `soroban-sdk` 26, compiled to WASM, deployed once, instantiated per tournament. Entry fees and payouts move a **token** — for native XLM this is the Stellar Asset Contract (SAC) address of native; USDC is the issuer's SAC. The token contract address is supplied at initialization so the escrow is asset-agnostic.
+Written in Rust with `soroban-sdk` 26, compiled to WASM, deployed once, instantiated per tournament. Entry fees and payouts move a **token** — for native XLM this is the Stellar Asset Contract (SAC) address of native; USDC is the issuer's SAC. The token contract address is supplied to the constructor so the escrow is asset-agnostic.
 
 ### Storage / state
 
 - `organizer: Address`, `referee: Address`
 - `token: Address` (SAC for XLM or USDC)
 - `entry_fee: i128` (token's smallest unit; XLM = stroops, 1 XLM = 10⁷ stroops)
-- `distribution_bps: Vec<u32>` length 3, summing to 10000
+- `distribution_bps: Vec<u32>` length 1–10, with each entry positive and the total exactly 10000
 - `players: Vec<Address>` (registered, deduplicated)
 - `finished: bool`, `cancelled: bool`
-- `winners: Option<(Address, Address, Address)>`
+- `winners: Vec<Address>` (ranked, empty until finalization)
+- `payout_amounts: Vec<i128>` (exact finalized amounts, including rank-one rounding dust)
 - `settlement_deadline: u64` (UTC seconds; at and after it, claims are enabled and settlement mutations reject)
 - `Registered(Address): bool` (address-keyed membership for O(1) refund eligibility checks)
 - `RefundClaimed(Address): bool` (one successful refund per registered player)
 - `MAX_PLAYERS = 100` (Testnet-simulated registration ceiling)
 
+The instance entry and contract code share a bounded Testnet lifecycle policy. Every successful
+constructor, join, finalization, cancellation, and refund call checks their remaining TTL. Below
+`1,555,200` ledgers (90 days at Testnet's five-second target close time), both entries are extended
+to `2,073,600` ledgers (120 days); exactly at the threshold the call is a TTL no-op. The bounded
+extension cannot add more than 120 days. Read-only calls do not charge callers to extend storage.
+TTL does not change deadline or authorization rules. If either archived entry must be restored,
+that restoration belongs in transaction simulation before contract invocation.
+
 ### Functions
 
 ```rust
-initialize(
+__constructor(
     organizer: Address,
     referee: Address,
     token: Address,
@@ -128,7 +137,7 @@ initialize(
 )
 ```
 
-Creates the tournament. **Requires `organizer.require_auth()`.** Validates: `distribution_bps.len() == 3`, sum == 10000, `entry_fee > 0`, `organizer != referee`, and a future deadline within the Testnet-safe horizon. Callable once; panics if already initialized.
+Creates the tournament atomically with deployment. **Requires `organizer.require_auth()`.** Validates: 1–10 positive basis-point entries summing to 10000, `entry_fee > 0`, `organizer != referee`, and a future deadline within the Testnet-safe horizon. A failed constructor rolls back deployment.
 
 ```rust
 join_tournament(player: Address)
@@ -137,22 +146,29 @@ join_tournament(player: Address)
 `player.require_auth()`. Calls `token.transfer(player, current_contract_address, entry_fee)` to pull the entry fee into escrow, then records the player. Rejects at or after the settlement deadline, if `finished`/`cancelled`, if the player already joined, or if the fee transfer fails. Emits a `registered` event.
 
 ```rust
-finalize_results(first: Address, second: Address, third: Address)
+finalize_results(winners: Vec<Address>)
 ```
 
-**`referee.require_auth()` only.** Before the settlement deadline, validates all three addresses are **distinct** and **registered**, and that the tournament is not already finished/cancelled. Computes each prize as `pool * bps[i] / 10000`, transfers from the contract to each winner, handles the rounding remainder deterministically (assign to 1st place), sets `finished = true` and `winners`. Emits a `finalized` event with the three transfers.
+**`referee.require_auth()` only.** Before the settlement deadline, validates that the ranked winner vector matches the 1–10 configured basis-point entries, contains only **distinct registered** addresses, and that the tournament is not already finished/cancelled. Uses checked arithmetic to divide the actual escrow balance across winners, assigning all rounding dust to rank one. Transfers each nonzero prize, stores the exact amounts, and sets `finished = true`. A failed validation or transfer rolls back the entire call. Emits `finalized` with both vectors.
 
 ```rust
 get_pool() -> i128
 ```
 
-Returns the escrow contract's current raw token balance. Tokens sent directly to the contract can make this exceed the registration-derived settlement pool and can remain after all refunds or final payouts.
+Returns the escrow contract's current raw token balance. Direct token transfers increase the final payout pool; after cancellation or expiry, only registered entry fees are refundable, so unsolicited tokens may remain.
+
+```rust
+get_players() -> Vec<Address>
+get_tournament() -> TournamentInfo
+```
+
+`get_players` returns all registered players in registration order, including at the enforced 100-player ceiling. `get_tournament` returns stable named fields for organizer, referee, token, entry fee, configured basis points, UTC settlement deadline, player count, finished/cancelled flags, and ranked winners (empty before finalization). It does not include the player vector or token balance.
 
 ```rust
 get_reward(player: Address) -> i128
 ```
 
-Returns the player's winnings based on placement once finalised; `0` if not a winner or not finished.
+Returns the player's exact stored payout once finalised, including rank-one dust; `0` if not a winner or not finished.
 
 ```rust
 is_finished() -> bool
@@ -175,24 +191,24 @@ Permissionless. After the inclusive settlement deadline, or immediately after ca
 ### Events
 
 - `registered` → `(player: Address, pool_after: i128)`
-- `finalized` → `(first, second, third, amounts: Vec<i128>)`
+- `finalized` → `(winners: Vec<Address>, amounts: Vec<i128>)`
 - `cancelled` → `(claimable_count: u32)`
 - `refund_claimed` → `(player: Address, amount: i128)`
 
 ### Security invariants
 
-- Only `organizer` may `initialize` and `cancel`.
+- The deployment constructor requires `organizer` authorization; only `organizer` may `cancel`.
 - Only `referee` may `finalize_results`.
 - Funds leave the contract **only** via payout or refund logic — there is no withdraw function.
 - Idempotency: `finalize`/`cancel` cannot run twice; `join` cannot double-register; each player can claim one refund.
 - Every state-changing call emits an event for the off-chain subscriber.
-- Reject finalisation if winners are not all registered or not all distinct.
+- Reject finalisation if the winner count differs from the configured distribution, or winners are not all registered and distinct.
 
 ### Build & deploy
 
 - `stellar contract build` → `target/wasm32v1-none/release/ggg_escrow.wasm`
 - Upload WASM once (`stellar contract upload`) → record the **WASM hash**.
-- Per tournament: `stellar contract deploy --wasm-hash <hash>` then invoke `initialize`. The server orchestrates this via Soroban RPC and the organiser's Freighter signature.
+- Per tournament: deploy the uploaded WASM with all six `__constructor` arguments in one transaction. The server builds and submits via Soroban RPC; the organiser signs with Freighter.
 - Generate TypeScript bindings for the frontend/server: `npx @stellar/stellar-sdk generate --wasm <wasm> --output-dir src/contract-client --contract-name ggg-escrow`.
 - Ship a full unit/integration test suite using the SDK's test utils (`Env::default()`), covering each invariant above.
 
@@ -240,7 +256,7 @@ Base path `/api`. JSON in/out. All inputs validated with Zod; all responses use 
 
 ### Tournaments
 
-**`POST /api/tournaments`** — _Organiser._ Create a tournament record and build the deploy + `initialize` transaction.
+**`POST /api/tournaments`** — _Organiser._ Create a draft tournament record and build the atomic deploy + constructor transaction.
 
 - Body: `{ name, gameTitle, entryFee, asset: "XLM"|"USDC", refereeAddress, distributionBps: [number,number,number], organizerAddress, settlementDeadline, coverImageKey? }`
 - Validation: split sums to 10000; `refereeAddress`/`organizerAddress` valid `G...`; `entryFee > 0`; `organizer != referee`; deadline is future and within the supported horizon.
@@ -248,7 +264,7 @@ Base path `/api`. JSON in/out. All inputs validated with Zod; all responses use 
 
 **`POST /api/tournaments/[id]/submit`** — _Authenticated user._ Accept a signed XDR, submit via Soroban RPC, and poll for result. On success, persist lifecycle state for deploy, finalize, and cancel; a refund claim leaves the cancelled tournament state unchanged.
 
-- Body: `{ signedXdr, intent: "deploy"|"initialize"|"join"|"claim_refund"|"finalize"|"cancel" }`
+- Body: `{ signedXdr, intent: "deploy"|"join"|"claim_refund"|"finalize"|"cancel" }`
 
 **`GET /api/tournaments`** — _Organiser._ List tournaments for the authenticated user. Supports `?status=` filter and pagination.
 
@@ -443,7 +459,7 @@ A `prisma/seed.ts` that creates the seeded **admin** user from `ADMIN_USERNAME`/
 
 ## 13. Operational flows
 
-**Flow 01 — Tournament creation.** Organiser logs in → fills `/tournaments/new` → connects Freighter → `POST /api/tournaments` builds the deploy + `initialize` XDR (organiser as source) → Freighter signs → `POST /api/tournaments/[id]/submit` submits & polls → on confirmation, `contractId` stored, status `ACTIVE`, QR + URI generated.
+**Flow 01 — Tournament creation.** Organiser logs in → fills `/tournaments/new` → connects Freighter → `POST /api/tournaments` builds the atomic deploy + constructor XDR (organiser as source) → Freighter signs once → `POST /api/tournaments/[id]/submit` submits & polls → on confirmation, `contractId` stored, status `ACTIVE`, QR + URI generated.
 
 **Flow 02 — Player joins.** Player scans QR / opens detail page → "Join" → `POST /api/tournaments/[id]/join` builds the `join_tournament` XDR (entry-fee transfer) → Freighter signs → submitted → contract records registration → subscriber updates pool → UI updates live over SSE.
 

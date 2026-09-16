@@ -7,7 +7,6 @@ export type SubmitResult = {
   txHash: string;
   contractId?: string | undefined;
   status?: string | undefined;
-  initializeXdr?: string | undefined;
 };
 
 const submitResponseSchema = apiResponseSchema(
@@ -15,7 +14,6 @@ const submitResponseSchema = apiResponseSchema(
     txHash: z.string().min(1),
     contractId: z.string().optional(),
     status: z.string().optional(),
-    initializeXdr: z.string().optional(),
   }),
 );
 
@@ -63,7 +61,7 @@ export async function ensureWallet(expectedPassphrase: string): Promise<string> 
 
 export async function signAndSubmit(
   unsignedXdr: string,
-  intent: "deploy" | "initialize" | "join" | "claim_refund" | "finalize" | "cancel",
+  intent: "deploy" | "join" | "claim_refund" | "finalize" | "cancel",
   submitUrl: string,
   expectedPassphrase: string,
 ): Promise<SubmitResult> {

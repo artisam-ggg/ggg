@@ -3,16 +3,22 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import userEvent from "@testing-library/user-event";
 
 // Hoist mocks so they're available before module imports
-const { mockSignIn, mockPush, mockFetch } = vi.hoisted(() => {
+const { mockSignIn, mockPush, mockFetch, mockIdentify, mockCapture } = vi.hoisted(() => {
   return {
     mockSignIn: vi.fn(),
     mockPush: vi.fn(),
     mockFetch: vi.fn(),
+    mockIdentify: vi.fn(),
+    mockCapture: vi.fn(),
   };
 });
 
 vi.mock("next-auth/react", () => ({
   signIn: mockSignIn,
+}));
+
+vi.mock("posthog-js", () => ({
+  default: { identify: mockIdentify, capture: mockCapture },
 }));
 
 vi.mock("next/navigation", () => ({
@@ -34,6 +40,8 @@ import RegisterPage from "./page";
 describe("/register page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
+    vi.stubEnv("NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN", "phc_test");
   });
 
   it("renders heading, username + password inputs, and submit button", () => {
@@ -176,6 +184,28 @@ describe("/register page", () => {
 
     await waitFor(() => {
       expect(mockPush).toHaveBeenCalledWith("/tournaments");
+    });
+  });
+
+  it("identifies and captures a successful consented registration", async () => {
+    localStorage.setItem("ggg_cookie_consent", "accepted");
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ ok: true, data: { id: "user-1", username: "alice" } }),
+    });
+    mockSignIn.mockResolvedValueOnce({ ok: true, error: null });
+
+    render(<RegisterPage />);
+    await userEvent.type(screen.getByLabelText(/username/i), "alice");
+    await userEvent.type(screen.getByLabelText(/password/i), "securepassword");
+    fireEvent.click(screen.getByRole("button", { name: /create account/i }));
+
+    await waitFor(() => {
+      expect(mockIdentify).toHaveBeenCalledWith("user-1", {
+        username: "alice",
+        role: "ORGANIZER",
+      });
+      expect(mockCapture).toHaveBeenCalledWith("user_registered", { role: "ORGANIZER" });
     });
   });
 

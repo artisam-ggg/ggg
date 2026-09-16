@@ -4,6 +4,7 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import posthog from "posthog-js";
 import { credentialsSchema } from "@/lib/auth-schemas";
 
 export default function RegisterPage() {
@@ -49,7 +50,11 @@ export default function RegisterPage() {
       }
 
       const json = res.ok
-        ? ((await res.json().catch(() => ({ ok: false }))) as { ok?: boolean; error?: string })
+        ? ((await res.json().catch(() => ({ ok: false }))) as {
+            ok?: boolean;
+            error?: string;
+            data?: { id: string; username: string };
+          })
         : { ok: false as const };
 
       if (!json.ok) {
@@ -68,6 +73,15 @@ export default function RegisterPage() {
         // Registration succeeded but auto-login failed — send to login page
         router.push("/login");
         return;
+      }
+
+      if (
+        process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN &&
+        json.data &&
+        localStorage.getItem("ggg_cookie_consent") === "accepted"
+      ) {
+        posthog.identify(json.data.id, { username: json.data.username, role: "ORGANIZER" });
+        posthog.capture("user_registered", { role: "ORGANIZER" });
       }
 
       router.push("/tournaments");

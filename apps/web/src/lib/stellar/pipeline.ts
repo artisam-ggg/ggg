@@ -6,6 +6,8 @@ import {
   scValToNative,
 } from "@stellar/stellar-sdk";
 import { getRpc, networkPassphrase } from "./client";
+import { env } from "@/lib/env";
+import { createHash } from "node:crypto";
 import { signedXdr as signedXdrSchema } from "./validation";
 import { StellarError } from "./errors";
 import { z } from "zod";
@@ -43,9 +45,39 @@ export interface SubmitResult {
   status: "SUCCESS" | "FAILED";
 }
 
-/** The persisted escrow terms a signed `initialize` invocation must exactly match. */
-export interface InitializeTerms {
-  contractId: string;
+/** Hash the signed transaction independently of its signatures for retry reconciliation. */
+export function deploymentTxHash(signedXdrStr: string): string {
+  const parsed = signedXdrSchema.safeParse(signedXdrStr);
+  if (!parsed.success) throw new StellarError("INVALID_INPUT", "Malformed signed XDR");
+  try {
+    return TransactionBuilder.fromXDR(parsed.data, networkPassphrase()).hash().toString("hex");
+  } catch {
+    throw new StellarError("INVALID_INPUT", "Malformed signed XDR");
+  }
+}
+
+/** Return a confirmed deployment result, or null while RPC has no final result. */
+export async function lookupDeployment(hash: string): Promise<SubmitResult | null> {
+  let got: Awaited<ReturnType<ReturnType<typeof getRpc>["getTransaction"]>>;
+  try {
+    got = await getRpc().getTransaction(hash);
+  } catch {
+    throw new StellarError("SUBMIT_FAILED", "Transaction confirmation could not be completed", {
+      txHash: hash,
+      retryable: true,
+    });
+  }
+  if (got.status === "FAILED") return { hash, status: "FAILED" };
+  if (got.status === "SUCCESS") {
+    const contractId = extractContractId("deploy", got);
+    return contractId ? { hash, status: "SUCCESS", contractId } : { hash, status: "SUCCESS" };
+  }
+  return null;
+}
+
+/** The persisted escrow terms a signed constructor deployment must match. */
+export interface DeployTerms {
+  tournamentId: string;
   organizerAddress: string;
   refereeAddress: string;
   tokenAddr: string;
@@ -54,43 +86,60 @@ export interface InitializeTerms {
   settlementDeadline: bigint;
 }
 
-/** Reject a signed initialize transaction unless it targets the escrow with the persisted terms. */
-export function validateInitializeXdr(signedXdrStr: string, expected: InitializeTerms): void {
+/** Reject a substituted deploy or constructor whose terms differ from the draft. */
+export function validateDeployXdr(signedXdrStr: string, expected: DeployTerms): void {
   const parsed = signedXdrSchema.safeParse(signedXdrStr);
   if (!parsed.success) throw new StellarError("INVALID_INPUT", "Malformed signed XDR");
 
   try {
     const tx = TransactionBuilder.fromXDR(parsed.data, networkPassphrase());
-    if (tx.operations.length !== 1) throw new Error("expected one operation");
+    if (
+      tx.operations.length !== 1 ||
+      !("source" in tx) ||
+      tx.source !== expected.organizerAddress
+    ) {
+      throw new Error("unexpected source or operation count");
+    }
 
     const operation = tx.operations[0] as unknown as {
       type?: string;
       func?: {
         switch(): { name?: string };
         value(): {
-          contractAddress(): never;
-          functionName(): { toString(encoding: string): string };
-          args(): Parameters<typeof scValToNative>[0][];
+          contractIdPreimage(): {
+            switch(): { name?: string };
+            value(): { address(): never; salt(): Buffer };
+          };
+          executable(): { switch(): { name?: string }; value(): Buffer };
+          constructorArgs(): Parameters<typeof scValToNative>[0][];
         };
       };
     };
     if (
       operation.type !== "invokeHostFunction" ||
-      operation.func?.switch().name !== "hostFunctionTypeInvokeContract"
+      operation.func?.switch().name !== "hostFunctionTypeCreateContractV2"
     ) {
-      throw new Error("not an invokeContract operation");
+      throw new Error("not a constructor deployment");
     }
 
     const args = operation.func.value();
-    const contractId = Address.fromScAddress(args.contractAddress()).toString();
     if (
-      contractId !== expected.contractId ||
-      args.functionName().toString("utf-8") !== "initialize"
+      args.contractIdPreimage().switch().name !== "contractIdPreimageFromAddress" ||
+      Address.fromScAddress(args.contractIdPreimage().value().address()).toString() !==
+        expected.organizerAddress ||
+      !args
+        .contractIdPreimage()
+        .value()
+        .salt()
+        .equals(createHash("sha256").update(expected.tournamentId).digest()) ||
+      args.executable().switch().name !== "contractExecutableWasm" ||
+      !env.ESCROW_WASM_HASH ||
+      args.executable().value().toString("hex") !== env.ESCROW_WASM_HASH.toLowerCase()
     ) {
-      throw new Error("unexpected contract or method");
+      throw new Error("unexpected deployer or Wasm");
     }
 
-    const values = args.args().map(scValToNative);
+    const values = args.constructorArgs().map(scValToNative);
     if (
       values.length !== 6 ||
       values[0] !== expected.organizerAddress ||
@@ -106,19 +155,19 @@ export function validateInitializeXdr(signedXdrStr: string, expected: Initialize
       ) ||
       values[5] !== expected.settlementDeadline
     ) {
-      throw new Error("unexpected initialize arguments");
+      throw new Error("unexpected constructor arguments");
     }
   } catch {
     throw new StellarError(
       "INVALID_INPUT",
-      "Initialize transaction must target this tournament's escrow contract",
+      "Deployment must use this tournament's constructor terms and escrow Wasm",
     );
   }
 }
 
 export async function submitSignedXdr(
   signedXdrStr: string,
-  intent: "deploy" | "initialize" | "join" | "claim_refund" | "finalize" | "cancel",
+  intent: "deploy" | "join" | "claim_refund" | "finalize" | "cancel",
   opts: { attempts?: number; intervalMs?: number } = {},
 ): Promise<SubmitResult> {
   const parsed = signedXdrSchema.safeParse(signedXdrStr);
@@ -219,7 +268,7 @@ function transactionResultCode(errorResult: unknown): string | undefined {
 }
 
 function extractContractId(
-  intent: "deploy" | "initialize" | "join" | "claim_refund" | "finalize" | "cancel",
+  intent: "deploy" | "join" | "claim_refund" | "finalize" | "cancel",
   got: { returnValue?: unknown },
 ): string | undefined {
   if (intent !== "deploy" || !got.returnValue) return undefined;
