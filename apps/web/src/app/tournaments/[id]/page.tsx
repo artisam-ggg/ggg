@@ -9,8 +9,9 @@ import { ContractAddress } from "@/components/tournament/ContractAddress";
 import { CopyTournamentLink } from "@/components/tournament/CopyTournamentLink";
 import { PrizePoolCounter } from "@/components/tournament/PrizePoolCounter";
 import { JoinCard } from "@/components/tournament/JoinCard";
-import { ParticipantList } from "@/components/tournament/ParticipantList";
+import { LiveParticipantList } from "@/components/tournament/LiveParticipantList";
 import { LiveFeed } from "@/components/tournament/LiveFeed";
+import { TournamentEventsProvider } from "@/components/tournament/TournamentEventsProvider";
 import { RefereePanel } from "@/components/tournament/RefereePanel";
 import { WinnersPanel } from "@/components/tournament/WinnersPanel";
 import { RefundList } from "@/components/tournament/RefundList";
@@ -117,61 +118,69 @@ export default async function TournamentDetailPage({
         </section>
       )}
 
-      <div className="mt-10 grid gap-8 lg:grid-cols-12">
-        <div className="flex flex-col gap-8 lg:col-span-8">
-          <PrizePoolCounter
-            tournamentId={t.id}
-            initialPool={t.pool}
-            asset={t.asset}
-            participantCount={t.participants.length}
-            entryFee={t.entryFee}
-            initialParticipants={participantAddresses}
-            initialRefundPlayers={t.refundClaimedPlayers}
-          />
-
-          {t.status === "ACTIVE" && !t.refundsClaimable && t.contractId && (
-            <JoinCard
-              tournamentId={t.id}
-              contractId={t.contractId}
+      <TournamentEventsProvider tournamentId={t.id}>
+        <div className="mt-10 grid gap-8 lg:grid-cols-12">
+          <div className="flex flex-col gap-8 lg:col-span-8">
+            <PrizePoolCounter
+              initialPool={t.pool}
+              asset={t.asset}
+              participantCount={t.participants.length}
               entryFee={t.entryFee}
-              joinUrl={joinUrl}
-              passphrase={passphrase}
+              initialParticipants={participantAddresses}
+              initialRefundPlayers={t.refundClaimedPlayers}
             />
-          )}
 
-          {t.status === "FINISHED" && t.winners.length > 0 && (
-            <WinnersPanel winners={t.winners} asset={t.asset} />
-          )}
-          {t.status === "FINISHED" && t.winners.length === 0 && (
-            <section
-              aria-label="Winners"
-              className="brutalist-border brutalist-border-active rounded-none p-6"
-            >
-              <p className="label-caps italic text-acid-yellow">Settlement Complete</p>
-              <p className="mt-4 text-sm text-on-surface-variant">
-                No winners recorded for this tournament.
-              </p>
+            {t.status === "ACTIVE" && !t.refundsClaimable && t.contractId && (
+              <JoinCard
+                tournamentId={t.id}
+                contractId={t.contractId}
+                entryFee={t.entryFee}
+                joinUrl={joinUrl}
+                passphrase={passphrase}
+              />
+            )}
+
+            {t.status === "FINISHED" && t.winners.length > 0 && (
+              <WinnersPanel winners={t.winners} asset={t.asset} />
+            )}
+            {t.status === "FINISHED" && t.winners.length === 0 && (
+              <section
+                aria-label="Winners"
+                className="brutalist-border brutalist-border-active rounded-none p-6"
+              >
+                <p className="label-caps italic text-acid-yellow">Settlement Complete</p>
+                <p className="mt-4 text-sm text-on-surface-variant">
+                  No winners recorded for this tournament.
+                </p>
+              </section>
+            )}
+
+            <section aria-label="Participants" className="kinetic-glass rounded-2xl p-6">
+              <LiveParticipantList participants={t.participants} />
             </section>
-          )}
+          </div>
 
-          <section aria-label="Participants" className="kinetic-glass rounded-2xl p-6">
-            <ParticipantList participants={t.participants} />
-          </section>
+          <aside aria-label="Tournament tools" className="flex flex-col gap-8 lg:col-span-4">
+            <LiveFeed />
+            {t.status === "ACTIVE" && !t.refundsClaimable && (
+              <RefereePanel
+                tournamentId={t.id}
+                refereeAddr={t.refereeAddr}
+                passphrase={passphrase}
+              />
+            )}
+            {canCancel && (
+              <section
+                aria-label="Organiser actions"
+                className="rounded-xl bg-surface-container p-4"
+              >
+                <p className="label-caps mb-3 text-error">Danger zone</p>
+                <CancelButton tournamentId={t.id} passphrase={passphrase} />
+              </section>
+            )}
+          </aside>
         </div>
-
-        <aside aria-label="Tournament tools" className="flex flex-col gap-8 lg:col-span-4">
-          <LiveFeed tournamentId={t.id} />
-          {t.status === "ACTIVE" && !t.refundsClaimable && (
-            <RefereePanel tournamentId={t.id} refereeAddr={t.refereeAddr} passphrase={passphrase} />
-          )}
-          {canCancel && (
-            <section aria-label="Organiser actions" className="rounded-xl bg-surface-container p-4">
-              <p className="label-caps mb-3 text-error">Danger zone</p>
-              <CancelButton tournamentId={t.id} passphrase={passphrase} />
-            </section>
-          )}
-        </aside>
-      </div>
+      </TournamentEventsProvider>
     </main>
   );
 }
