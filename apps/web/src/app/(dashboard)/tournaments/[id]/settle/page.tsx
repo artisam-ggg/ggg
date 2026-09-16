@@ -22,7 +22,7 @@ export default async function SettlePage({ params }: SettlePageProps) {
   return (
     <main className="mx-auto max-w-(--spacing-container-max) px-4 py-12 md:px-(--spacing-margin-desktop)">
       <div className="mb-6">
-        <BackButton />
+        <BackButton href={`/tournaments/${t.id}`} />
       </div>
       <SettlementConsole
         tournamentId={t.id}

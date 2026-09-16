@@ -11,12 +11,14 @@ export interface BackButtonProps {
   children?: React.ReactNode;
   "aria-label"?: string;
   className?: string;
+  href?: string;
 }
 
 export function BackButton({
   children = "Back",
   "aria-label": ariaLabel,
   className,
+  href,
 }: BackButtonProps) {
   const router = useRouter();
 
@@ -25,7 +27,7 @@ export function BackButton({
       type="button"
       variant="ghost"
       size="sm"
-      onClick={() => router.back()}
+      onClick={() => (href ? router.push(href) : router.back())}
       aria-label={ariaLabel}
       className={cn("text-on-surface-variant hover:text-on-surface", className)}
     >
