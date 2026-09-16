@@ -1,5 +1,6 @@
 "use client";
-import { useTournamentEvents, type LiveEvent } from "@/hooks/use-tournament-events";
+import type { LiveEvent } from "@/hooks/use-tournament-events";
+import { useTournamentEventContext } from "./TournamentEventsProvider";
 import { formatStroops } from "@/lib/format-stroops";
 
 const trunc = (a: string): string => (a.length > 10 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a);
@@ -26,8 +27,8 @@ function gloss(ev: LiveEvent): string {
  * ticker scroll is motion-safe only (BRAND §6) so it stops under
  * prefers-reduced-motion.
  */
-export function LiveFeed({ tournamentId }: { tournamentId: string }) {
-  const { events } = useTournamentEvents(tournamentId);
+export function LiveFeed() {
+  const { events } = useTournamentEventContext();
 
   return (
     <section className="kinetic-glass rounded-2xl p-6">

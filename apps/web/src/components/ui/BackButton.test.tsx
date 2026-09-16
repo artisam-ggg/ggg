@@ -37,6 +37,15 @@ describe("BackButton", () => {
     expect(mockBack).toHaveBeenCalledTimes(1);
   });
 
+  it("renders href as a link instead of using browser history", () => {
+    render(<BackButton href="/tournaments">Back to tournaments</BackButton>);
+    expect(screen.getByRole("link", { name: "Back to tournaments" })).toHaveAttribute(
+      "href",
+      "/tournaments",
+    );
+    expect(mockBack).not.toHaveBeenCalled();
+  });
+
   it("accepts a custom aria-label", () => {
     render(<BackButton aria-label="Go back">Return</BackButton>);
     expect(screen.getByRole("button", { name: "Go back" })).toBeInTheDocument();
