@@ -143,7 +143,9 @@ export default async function TournamentDetailPage({
           {t.status === "FINISHED" && t.winners.length > 0 && (
             <WinnersPanel winners={t.winners} asset={t.asset} />
           )}
-          {t.status === "FINISHED" && t.winners.length === 0 && <SettlementSyncStatus />}
+          {t.status === "FINISHED" && t.winners.length === 0 && (
+            <SettlementSyncStatus contractUrl={t.contractUrl} />
+          )}
 
           <section aria-label="Participants" className="kinetic-glass rounded-2xl p-6">
             <ParticipantList participants={t.participants} />
