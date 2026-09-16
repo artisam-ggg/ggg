@@ -116,6 +116,46 @@ describe("pollTournament", () => {
     );
   });
 
+  it("drops malformed finalized event values before reconciliation", async () => {
+    getEvents.mockResolvedValue({
+      latestLedger: 300,
+      events: [
+        {
+          eventId: "event-finalized-malformed",
+          type: "contract",
+          ledger: 105,
+          txHash: "tx-finalized-malformed",
+          topic: ["FIN"],
+          value: "RESULTS",
+        },
+      ],
+    });
+    decodeScVal.mockImplementation((b64: string) => {
+      if (b64 === "FIN") return "finalized";
+      return [
+        [PLAYER, PLAYER_2],
+        [6_000_000n, 3_000_000n, 1_000_000n],
+      ];
+    });
+    const applyCallsBefore = applyEvent.mock.calls.length;
+    const publishCallsBefore = publishChange.mock.calls.length;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    await pollTournament(tournament);
+
+    expect(applyEvent).toHaveBeenCalledTimes(applyCallsBefore);
+    expect(publishChange).toHaveBeenCalledTimes(publishCallsBefore);
+    expect(warn).toHaveBeenCalledWith(
+      "[subscriber] dropped undecodable event",
+      expect.objectContaining({
+        txHash: "tx-finalized-malformed",
+        eventId: "event-finalized-malformed",
+        ledger: 105,
+      }),
+    );
+    warn.mockRestore();
+  });
+
   it("drops malformed external event payloads", async () => {
     decodeScVal.mockImplementation((b64: string) => {
       if (b64 === "REG") return "registered";
