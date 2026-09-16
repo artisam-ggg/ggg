@@ -13,6 +13,7 @@ import { ParticipantList } from "@/components/tournament/ParticipantList";
 import { LiveFeed } from "@/components/tournament/LiveFeed";
 import { RefereePanel } from "@/components/tournament/RefereePanel";
 import { WinnersPanel } from "@/components/tournament/WinnersPanel";
+import { SettlementSyncStatus } from "@/components/tournament/SettlementSyncStatus";
 import { RefundList } from "@/components/tournament/RefundList";
 import { CancelButton } from "@/components/tournament/CancelButton";
 import { ClaimRefundButton } from "@/components/tournament/ClaimRefundButton";
@@ -142,17 +143,7 @@ export default async function TournamentDetailPage({
           {t.status === "FINISHED" && t.winners.length > 0 && (
             <WinnersPanel winners={t.winners} asset={t.asset} />
           )}
-          {t.status === "FINISHED" && t.winners.length === 0 && (
-            <section
-              aria-label="Winners"
-              className="brutalist-border brutalist-border-active rounded-none p-6"
-            >
-              <p className="label-caps italic text-acid-yellow">Settlement Complete</p>
-              <p className="mt-4 text-sm text-on-surface-variant">
-                No winners recorded for this tournament.
-              </p>
-            </section>
-          )}
+          {t.status === "FINISHED" && t.winners.length === 0 && <SettlementSyncStatus />}
 
           <section aria-label="Participants" className="kinetic-glass rounded-2xl p-6">
             <ParticipantList participants={t.participants} />

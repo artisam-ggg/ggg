@@ -4,13 +4,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // ---------------------------------------------------------------------------
 // Hoist mock factories so vi.mock() hoisting can reference them
 // ---------------------------------------------------------------------------
-const { mockGetTournamentDetail, mockGetCurrentUser, mockNotFound } = vi.hoisted(() => ({
-  mockGetTournamentDetail: vi.fn(),
-  mockGetCurrentUser: vi.fn(),
-  mockNotFound: vi.fn(() => {
-    throw new Error("NEXT_NOT_FOUND");
+const { mockGetTournamentDetail, mockGetCurrentUser, mockNotFound, mockRefresh } = vi.hoisted(
+  () => ({
+    mockGetTournamentDetail: vi.fn(),
+    mockGetCurrentUser: vi.fn(),
+    mockRefresh: vi.fn(),
+    mockNotFound: vi.fn(() => {
+      throw new Error("NEXT_NOT_FOUND");
+    }),
   }),
-}));
+);
 
 vi.mock("@/server/services/tournaments", () => ({
   getTournamentDetail: mockGetTournamentDetail,
@@ -22,7 +25,7 @@ vi.mock("@/lib/auth-guards", () => ({
 
 vi.mock("next/navigation", () => ({
   notFound: mockNotFound,
-  useRouter: vi.fn(() => ({ refresh: vi.fn() })),
+  useRouter: vi.fn(() => ({ refresh: mockRefresh })),
 }));
 
 vi.mock("@/lib/env", () => ({
@@ -228,15 +231,18 @@ describe("/tournaments/[id] — public detail page", () => {
       expect(screen.getByText(/settlement complete/i)).toBeInTheDocument();
     });
 
-    it("renders zero-winners placeholder when FINISHED with no winners", async () => {
+    it("renders a retryable processing state when FINISHED payouts have not synced", async () => {
       mockGetTournamentDetail.mockResolvedValue({
         ...FINISHED_TOURNAMENT,
         winners: [],
       });
       render(await Page({ params: Promise.resolve({ id: "t_2" }) }));
 
-      expect(screen.getByText(/settlement complete/i)).toBeInTheDocument();
-      expect(screen.getByText(/no winners recorded for this tournament/i)).toBeInTheDocument();
+      expect(screen.getByText(/settlement processing/i)).toBeInTheDocument();
+      expect(screen.getByText(/winner and payout data is still syncing/i)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /retry winner sync/i }));
+      expect(mockRefresh).toHaveBeenCalledOnce();
+      expect(screen.queryByText(/no winners recorded/i)).not.toBeInTheDocument();
     });
 
     it("does NOT render JoinCard when FINISHED", async () => {
