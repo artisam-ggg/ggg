@@ -131,6 +131,13 @@ describe("/tournaments/[id] — public detail page", () => {
     expect(screen.queryByRole("button", { name: "Copy tournament link" })).not.toBeInTheDocument();
   });
 
+  it("links Back to the tournament list after settlement", async () => {
+    mockGetTournamentDetail.mockResolvedValue(FINISHED_TOURNAMENT);
+    render(await Page({ params: Promise.resolve({ id: "t_2" }) }));
+
+    expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute("href", "/tournaments");
+  });
+
   // -------------------------------------------------------------------------
   // (a) ACTIVE tournament — header, status, pool, join card, participants
   // -------------------------------------------------------------------------

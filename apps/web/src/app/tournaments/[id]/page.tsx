@@ -46,7 +46,7 @@ export default async function TournamentDetailPage({
       className="mx-auto max-w-(--spacing-container-max) px-4 py-12 md:px-(--spacing-margin-desktop)"
     >
       <div className="mb-6">
-        <BackButton />
+        <BackButton href="/tournaments" />
       </div>
 
       <header className="flex flex-wrap items-start justify-between gap-4">
