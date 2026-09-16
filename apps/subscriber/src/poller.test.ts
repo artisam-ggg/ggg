@@ -20,6 +20,8 @@ import { pollTournament } from "./poller";
 
 const tournament = { id: "t1", contractId: "CABC" };
 const PLAYER = "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI";
+const PLAYER_2 = "GCFXHS4GXL6BVUCXBWXGTITROWLVYXQKQLF4YH5O5JT3YZXCYPAFBJZB";
+const PLAYER_3 = "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN";
 
 beforeEach(() => {
   getCursor.mockResolvedValue({ ledger: 100, hzCursor: null });
@@ -73,6 +75,45 @@ describe("pollTournament", () => {
     await pollTournament(tournament);
     expect(publishChange).not.toHaveBeenCalled();
     expect(setCursor).toHaveBeenCalledWith("CABC", 201);
+  });
+
+  it("decodes finalized winners and amounts from the event value", async () => {
+    getEvents.mockResolvedValue({
+      latestLedger: 300,
+      events: [
+        {
+          eventId: "event-finalized",
+          type: "contract",
+          ledger: 105,
+          txHash: "tx-finalized",
+          topic: ["FIN"],
+          value: "RESULTS",
+        },
+      ],
+    });
+    decodeScVal.mockImplementation((b64: string) => {
+      if (b64 === "FIN") return "finalized";
+      return [
+        [PLAYER, PLAYER_2, PLAYER_3],
+        [6_000_000n, 3_000_000n, 1_000_000n],
+      ];
+    });
+    applyEvent.mockResolvedValue({ type: "FINALIZED", txHash: "tx-finalized", data: {} });
+
+    await pollTournament(tournament);
+
+    expect(applyEvent).toHaveBeenCalledWith(
+      tournament,
+      expect.objectContaining({
+        type: "FINALIZED",
+        data: {
+          first: PLAYER,
+          second: PLAYER_2,
+          third: PLAYER_3,
+          amounts: ["6000000", "3000000", "1000000"],
+        },
+      }),
+    );
   });
 
   it("drops malformed external event payloads", async () => {
