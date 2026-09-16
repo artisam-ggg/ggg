@@ -13,15 +13,21 @@ export interface LiveEvent {
  * transparently reconnects with a fixed backoff on error. The stream emits only
  * confirmed, ContractEvent-backed payloads — never optimistic UI state.
  */
-export function useTournamentEvents(tournamentId: string): { events: LiveEvent[] } {
+export function useTournamentEvents(
+  tournamentId: string,
+  onReconnect?: () => void,
+): { events: LiveEvent[] } {
   const [events, setEvents] = useState<LiveEvent[]>([]);
 
   useEffect(() => {
     let es: EventSource | null = null;
     let retry: ReturnType<typeof setTimeout> | null = null;
     let closed = false;
+    let connected = false;
 
     function connect(): void {
+      if (connected) onReconnect?.();
+      connected = true;
       es = new EventSource(`/api/tournaments/${tournamentId}/events`);
       es.onmessage = (e: MessageEvent) => {
         try {
@@ -42,7 +48,7 @@ export function useTournamentEvents(tournamentId: string): { events: LiveEvent[]
       es?.close();
       if (retry) clearTimeout(retry);
     };
-  }, [tournamentId]);
+  }, [tournamentId, onReconnect]);
 
   return { events };
 }

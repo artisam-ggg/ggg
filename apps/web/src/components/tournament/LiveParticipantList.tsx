@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { useTournamentEvents } from "@/hooks/use-tournament-events";
 import { ParticipantList, type Participant } from "./ParticipantList";
 
@@ -11,7 +12,9 @@ export function LiveParticipantList({
   tournamentId: string;
   participants: Participant[];
 }) {
-  const { events } = useTournamentEvents(tournamentId);
+  const router = useRouter();
+  const refreshSnapshot = useCallback(() => router.refresh(), [router]);
+  const { events } = useTournamentEvents(tournamentId, refreshSnapshot);
 
   const roster = useMemo(() => {
     const next = [...participants];

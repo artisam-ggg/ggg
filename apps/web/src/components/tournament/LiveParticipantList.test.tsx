@@ -1,5 +1,12 @@
 import { act, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const refresh = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh }),
+}));
+
 import { LiveParticipantList } from "./LiveParticipantList";
 
 class FakeEventSource {
@@ -19,9 +26,12 @@ class FakeEventSource {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks();
   FakeEventSource.instances = [];
   globalThis.EventSource = FakeEventSource as unknown as typeof EventSource;
 });
+
+afterEach(() => vi.useRealTimers());
 
 describe("LiveParticipantList", () => {
   it("adds confirmed registrations and deduplicates the server roster", () => {
@@ -50,5 +60,18 @@ describe("LiveParticipantList", () => {
 
     expect(screen.getAllByTestId("participant-row")).toHaveLength(2);
     expect(screen.getByText("GBBBBB…BBBBBB")).toBeInTheDocument();
+  });
+
+  it("refreshes the server snapshot after reconnecting", () => {
+    vi.useFakeTimers();
+    render(<LiveParticipantList tournamentId="t_1" participants={[]} />);
+
+    act(() => {
+      FakeEventSource.instances[0]!.onerror?.(new Event("error"));
+      vi.advanceTimersByTime(3_000);
+    });
+
+    expect(FakeEventSource.instances).toHaveLength(2);
+    expect(refresh).toHaveBeenCalledOnce();
   });
 });
