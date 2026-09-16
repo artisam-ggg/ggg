@@ -2,12 +2,10 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockBack = vi.fn();
-const mockPush = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
     back: mockBack,
-    push: mockPush,
   }),
 }));
 
@@ -39,10 +37,12 @@ describe("BackButton", () => {
     expect(mockBack).toHaveBeenCalledTimes(1);
   });
 
-  it("navigates to href instead of browser history when configured", () => {
+  it("renders href as a link instead of using browser history", () => {
     render(<BackButton href="/tournaments">Back to tournaments</BackButton>);
-    fireEvent.click(screen.getByRole("button", { name: "Back to tournaments" }));
-    expect(mockPush).toHaveBeenCalledWith("/tournaments");
+    expect(screen.getByRole("link", { name: "Back to tournaments" })).toHaveAttribute(
+      "href",
+      "/tournaments",
+    );
     expect(mockBack).not.toHaveBeenCalled();
   });
 

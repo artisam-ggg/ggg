@@ -41,6 +41,19 @@ describe("SettlementConsole", () => {
     push.mockReset();
   });
 
+  it("links Back to the tournament detail page", () => {
+    render(
+      <SettlementConsole
+        tournamentId="t_1"
+        refereeAddr={REF}
+        participants={players}
+        passphrase="P"
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute("href", "/tournaments/t_1");
+  });
+
   it("assigns three distinct winners then finalizes", async () => {
     vi.stubGlobal(
       "fetch",
