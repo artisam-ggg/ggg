@@ -1,7 +1,7 @@
 // SERVER COMPONENT — no "use client" directive.
 // Pure server render from props; no polling, no client hooks.
 
-type Participant = { playerAddr: string; joinedAt: string };
+export type Participant = { playerAddr: string; joinedAt: string };
 
 function trunc(addr: string) {
   return `${addr.slice(0, 6)}…${addr.slice(-6)}`;

@@ -9,7 +9,7 @@ import { ContractAddress } from "@/components/tournament/ContractAddress";
 import { CopyTournamentLink } from "@/components/tournament/CopyTournamentLink";
 import { PrizePoolCounter } from "@/components/tournament/PrizePoolCounter";
 import { JoinCard } from "@/components/tournament/JoinCard";
-import { ParticipantList } from "@/components/tournament/ParticipantList";
+import { LiveParticipantList } from "@/components/tournament/LiveParticipantList";
 import { LiveFeed } from "@/components/tournament/LiveFeed";
 import { RefereePanel } from "@/components/tournament/RefereePanel";
 import { WinnersPanel } from "@/components/tournament/WinnersPanel";
@@ -155,7 +155,7 @@ export default async function TournamentDetailPage({
           )}
 
           <section aria-label="Participants" className="kinetic-glass rounded-2xl p-6">
-            <ParticipantList participants={t.participants} />
+            <LiveParticipantList tournamentId={t.id} participants={t.participants} />
           </section>
         </div>
 
