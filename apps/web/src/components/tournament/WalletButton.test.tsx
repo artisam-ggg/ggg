@@ -5,8 +5,13 @@ vi.mock("@/lib/wallet", () => ({
   ensureWallet: vi.fn(async () => "GABCDEFGHIJABCDEFGHIJ"),
 }));
 
+vi.mock("@/lib/analytics", () => ({
+  captureWalletConnected: vi.fn(),
+}));
+
 import { WalletButton } from "./WalletButton";
 import { ensureWallet } from "@/lib/wallet";
+import { captureWalletConnected } from "@/lib/analytics";
 
 const mockedEnsureWallet = ensureWallet as ReturnType<typeof vi.fn>;
 
@@ -36,6 +41,7 @@ describe("WalletButton", () => {
     render(<WalletButton onConnected={onConnected} expectedPassphrase="P" />);
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     await waitFor(() => expect(onConnected).toHaveBeenCalledWith("GABCDEFGHIJABCDEFGHIJ"));
+    expect(captureWalletConnected).toHaveBeenCalledWith("GABCDEFGHIJABCDEFGHIJ");
   });
 
   it("shows a truncated acid wallet chip after successful connection", async () => {
@@ -95,6 +101,7 @@ describe("WalletButton", () => {
 
     expect(await screen.findByRole("status")).toHaveTextContent("Wallet re-checked");
     expect(onConnected).toHaveBeenCalledTimes(1);
+    expect(captureWalletConnected).toHaveBeenCalledTimes(1);
   });
 
   it("clears the connected address when disconnecting", async () => {
@@ -176,6 +183,7 @@ describe("WalletButton", () => {
       expect(screen.getByRole("alert")).toHaveTextContent("Freighter not installed"),
     );
     expect(onConnected).not.toHaveBeenCalled();
+    expect(captureWalletConnected).not.toHaveBeenCalled();
   });
 
   it("replaces connect with wallet controls after address is set", async () => {

@@ -39,6 +39,7 @@ describe("AnalyticsConsent", () => {
       "max-w-[576px]",
     );
     expect(screen.getByText(/product analytics and session replay/i)).toBeInTheDocument();
+    expect(screen.getByText(/public address may be sent to PostHog/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Accept analytics" }));
 
     expect(posthog.opt_in_capturing).toHaveBeenCalledOnce();

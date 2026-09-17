@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import posthog from "posthog-js";
-
-const CONSENT_KEY = "ggg_cookie_consent";
+import { ANALYTICS_CONSENT_KEY } from "@/lib/analytics";
 
 export function AnalyticsConsent() {
   const [show, setShow] = useState(false);
@@ -12,7 +11,7 @@ export function AnalyticsConsent() {
   useEffect(() => {
     if (!process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN) return;
 
-    const consent = localStorage.getItem(CONSENT_KEY);
+    const consent = localStorage.getItem(ANALYTICS_CONSENT_KEY);
     if (consent === "accepted") {
       if (posthog.has_opted_out_capturing()) posthog.opt_in_capturing();
       return;
@@ -28,7 +27,7 @@ export function AnalyticsConsent() {
   }, []);
 
   function choose(consented: boolean) {
-    localStorage.setItem(CONSENT_KEY, consented ? "accepted" : "declined");
+    localStorage.setItem(ANALYTICS_CONSENT_KEY, consented ? "accepted" : "declined");
     if (consented) posthog.opt_in_capturing();
     else posthog.opt_out_capturing();
     setShow(false);
@@ -43,8 +42,9 @@ export function AnalyticsConsent() {
     >
       <p className="font-semibold text-on-surface">Help us improve GGG</p>
       <p className="mt-1 text-sm text-on-surface-variant">
-        We use optional product analytics and session replay to understand how GGG is used.
-        Sensitive form text is masked, and nothing is collected unless you accept. Read our{" "}
+        We use optional product analytics and session replay to understand how GGG is used. If you
+        connect a wallet, its public address may be sent to PostHog. Sensitive form text is masked,
+        and nothing is collected unless you accept. Read our{" "}
         <Link href="/privacy" className="text-primary underline underline-offset-2">
           Privacy Policy
         </Link>

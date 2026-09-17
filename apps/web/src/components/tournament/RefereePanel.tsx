@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ensureWallet } from "@/lib/wallet";
+import { captureWalletConnected } from "@/lib/analytics";
 
 type State = "idle" | "match" | "mismatch" | "error";
 
@@ -15,11 +16,16 @@ export function RefereePanel({
   passphrase: string;
 }) {
   const [state, setState] = useState<State>("idle");
+  const connectedAddress = useRef<string | null>(null);
 
   async function handleVerify() {
     setState("idle");
     try {
       const address = await ensureWallet(passphrase);
+      if (address !== connectedAddress.current) {
+        connectedAddress.current = address;
+        captureWalletConnected(address);
+      }
       // Stellar G-addresses are case-sensitive — exact match required
       setState(address === refereeAddr ? "match" : "mismatch");
     } catch {
