@@ -1,16 +1,28 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const posthog = vi.hoisted(() => ({ capture: vi.fn() }));
+
+vi.mock("posthog-js", () => ({ default: posthog }));
 
 vi.mock("@stellar/freighter-api", () => ({
   default: {
     isConnected: vi.fn(async () => ({ isConnected: true })),
-    requestAccess: vi.fn(async () => ({ address: "G_ME" })),
-    getAddress: vi.fn(async () => ({ address: "G_ME" })),
+    requestAccess: vi.fn(async () => ({
+      address: "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI",
+    })),
+    getAddress: vi.fn(async () => ({
+      address: "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI",
+    })),
     getNetwork: vi.fn(async () => ({ networkPassphrase: "Test SDF Network ; September 2015" })),
-    signTransaction: vi.fn(async () => ({ signedTxXdr: "SIGNED", signerAddress: "G_ME" })),
+    signTransaction: vi.fn(async () => ({
+      signedTxXdr: "SIGNED",
+      signerAddress: "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI",
+    })),
   },
 }));
 
 import freighterApi from "@stellar/freighter-api";
+import { ANALYTICS_CONSENT_KEY } from "./analytics";
 import { ensureWallet, signAndSubmit } from "./wallet";
 
 const PASS = "Test SDF Network ; September 2015";
@@ -28,7 +40,9 @@ describe("ensureWallet", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("returns address when network matches", async () => {
-    expect(await ensureWallet(PASS)).toBe("G_ME");
+    expect(await ensureWallet(PASS)).toBe(
+      "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI",
+    );
   });
 
   it("throws on wrong network passphrase", async () => {
@@ -69,12 +83,25 @@ describe("ensureWallet", () => {
     });
     await expect(ensureWallet(PASS)).rejects.toThrow(/Could not get address/);
   });
+
+  it("rejects an invalid address returned by Freighter", async () => {
+    mocked.getAddress.mockResolvedValueOnce({ address: "G_INVALID" });
+
+    await expect(ensureWallet(PASS)).rejects.toThrow(/invalid Stellar address/);
+  });
 });
 
 describe("signAndSubmit", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    localStorage.clear();
+    vi.clearAllMocks();
+    vi.stubEnv("NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN", "phc_test");
+  });
+
+  afterEach(() => vi.unstubAllEnvs());
 
   it("signs then POSTs signed XDR with an Idempotency-Key header and correct body", async () => {
+    localStorage.setItem(ANALYTICS_CONSENT_KEY, "accepted");
     const fetchMock = vi.fn(
       async () =>
         new Response(JSON.stringify({ ok: true, data: { txHash: "TX" } }), {
@@ -95,9 +122,33 @@ describe("signAndSubmit", () => {
       signedXdr: "SIGNED",
       intent: "deploy",
     });
+    expect(posthog.capture).toHaveBeenCalledOnce();
+    expect(posthog.capture).toHaveBeenCalledWith("wallet_transaction_succeeded", {
+      wallet_address: "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI",
+      tx_hash: "TX",
+      transaction_type: "deploy",
+    });
+  });
+
+  it("returns the successful result when analytics capture fails", async () => {
+    localStorage.setItem(ANALYTICS_CONSENT_KEY, "accepted");
+    posthog.capture.mockImplementationOnce(() => {
+      throw new Error("blocked");
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ ok: true, data: { txHash: "TX" } }), { status: 200 }),
+      ),
+    );
+
+    await expect(signAndSubmit("UNSIGNED", "join", "/x", PASS)).resolves.toEqual({ txHash: "TX" });
+    expect(posthog.capture).toHaveBeenCalledOnce();
   });
 
   it("preserves structured submission failure details", async () => {
+    localStorage.setItem(ANALYTICS_CONSENT_KEY, "accepted");
     vi.stubGlobal(
       "fetch",
       vi.fn(
@@ -125,9 +176,11 @@ describe("signAndSubmit", () => {
       message: "Transaction failed on-chain",
       details: { code: "TX_FAILED", txHash: "TX_FAIL", retryable: false },
     });
+    expect(posthog.capture).not.toHaveBeenCalled();
   });
 
   it("throws a generic message when envelope ok:false has no error field", async () => {
+    localStorage.setItem(ANALYTICS_CONSENT_KEY, "accepted");
     vi.stubGlobal(
       "fetch",
       vi.fn(
@@ -140,9 +193,31 @@ describe("signAndSubmit", () => {
       ),
     );
     await expect(signAndSubmit("U", "join", "/x", PASS)).rejects.toThrow("Submission failed");
+    expect(posthog.capture).not.toHaveBeenCalled();
   });
 
+  it.each([{}, { txHash: "" }])(
+    "does not capture a malformed success response: %j",
+    async (data) => {
+      localStorage.setItem(ANALYTICS_CONSENT_KEY, "accepted");
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(
+          async () =>
+            new Response(JSON.stringify({ ok: true, data }), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            }),
+        ),
+      );
+
+      await expect(signAndSubmit("U", "join", "/x", PASS)).rejects.toThrow("Submission failed");
+      expect(posthog.capture).not.toHaveBeenCalled();
+    },
+  );
+
   it("throws a clean Error (not SyntaxError) when server returns non-JSON 5xx", async () => {
+    localStorage.setItem(ANALYTICS_CONSENT_KEY, "accepted");
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({
@@ -157,9 +232,11 @@ describe("signAndSubmit", () => {
     await expect(signAndSubmit("U", "deploy", "/x", PASS)).rejects.not.toThrow(
       expect.any(SyntaxError),
     );
+    expect(posthog.capture).not.toHaveBeenCalled();
   });
 
   it.each([401, 403, 405])("handles a non-JSON %i submit response safely", async (status) => {
+    localStorage.setItem(ANALYTICS_CONSENT_KEY, "accepted");
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => new Response("METHOD NOT ALLOWED", { status })),
@@ -169,9 +246,11 @@ describe("signAndSubmit", () => {
         ? "Your session has ended. Please log in again."
         : "Transaction submission failed. Please try again.",
     );
+    expect(posthog.capture).not.toHaveBeenCalled();
   });
 
   it("throws when signTransaction returns an error field", async () => {
+    localStorage.setItem(ANALYTICS_CONSENT_KEY, "accepted");
     mocked.signTransaction.mockResolvedValueOnce({
       signedTxXdr: "",
       signerAddress: "",
@@ -179,6 +258,7 @@ describe("signAndSubmit", () => {
     });
     vi.stubGlobal("fetch", vi.fn());
     await expect(signAndSubmit("U", "finalize", "/x", PASS)).rejects.toThrow("Signing rejected");
+    expect(posthog.capture).not.toHaveBeenCalled();
   });
 
   it("generates a unique Idempotency-Key for each call", async () => {

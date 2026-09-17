@@ -165,6 +165,150 @@ describe("GET /api/tournaments", () => {
     expect(typeof json.data.items[0].entryFee).toBe("string");
   });
 
+  it("derives refund lifecycle status from confirmed events, not the pool", async () => {
+    findMany.mockResolvedValue([
+      {
+        id: "t_1",
+        name: "Cup",
+        gameTitle: "G",
+        status: "ACTIVE",
+        settlementDeadline: new Date("2026-09-17T00:00:00.000Z"),
+        deadlineConfirmedAt: new Date("2026-09-16T00:00:00.000Z"),
+        entryFee: 10n,
+        asset: "XLM",
+        events: [{ payload: { player: "GPLAYER", amount: "10" } }],
+        participants: [{ playerAddr: "GPLAYER" }, { playerAddr: "GOTHER" }],
+        _count: { participants: 2 },
+      },
+    ]);
+
+    const res = await GET(makeGetReq("http://localhost/api/tournaments?take=20"));
+    const json = await res.json();
+
+    expect(json.data.items[0]).toMatchObject({
+      status: "ACTIVE",
+      displayStatus: "REFUNDS_OPEN",
+      pool: "10",
+      totalCollected: "20",
+      totalPaidOut: "0",
+      totalRefunded: "10",
+      refundClaimedCount: 1,
+    });
+  });
+
+  it("does not mark a roster refunded when claim addresses only match its size", async () => {
+    findMany.mockResolvedValue([
+      {
+        id: "t_1",
+        name: "Cup",
+        gameTitle: "G",
+        status: "ACTIVE",
+        settlementDeadline: new Date("2026-09-17T00:00:00.000Z"),
+        deadlineConfirmedAt: new Date("2026-09-16T00:00:00.000Z"),
+        entryFee: 10n,
+        asset: "XLM",
+        events: [
+          { payload: { player: "GPLAYER", amount: "10" } },
+          { payload: { player: "GDIFFERENT", amount: "10" } },
+        ],
+        participants: [{ playerAddr: "GPLAYER" }, { playerAddr: "GOTHER" }],
+        _count: { participants: 2 },
+      },
+    ]);
+
+    const res = await GET(makeGetReq("http://localhost/api/tournaments?take=20"));
+    const json = await res.json();
+
+    expect(json.data.items[0]).toMatchObject({
+      displayStatus: "REFUNDS_OPEN",
+      pool: "0",
+      totalCollected: "20",
+      totalPaidOut: "0",
+      totalRefunded: "20",
+      refundClaimedCount: 1,
+    });
+  });
+
+  it("shows zero remaining after confirmed winner payouts", async () => {
+    findMany.mockResolvedValue([
+      {
+        id: "t_1",
+        name: "Finished Cup",
+        gameTitle: "G",
+        status: "FINISHED",
+        entryFee: 10n,
+        asset: "XLM",
+        payouts: [{ amount: 18n }, { amount: 9n }, { amount: 3n }],
+        events: [],
+        _count: { participants: 3 },
+      },
+    ]);
+
+    const res = await GET(makeGetReq("http://localhost/api/tournaments?take=20"));
+    const json = await res.json();
+
+    expect(json.data.items[0]).toMatchObject({
+      pool: "0",
+      totalCollected: "30",
+      totalPaidOut: "30",
+      totalRefunded: "0",
+    });
+  });
+
+  it("shows zero remaining after every confirmed refund", async () => {
+    findMany.mockResolvedValue([
+      {
+        id: "t_1",
+        name: "Refunded Cup",
+        gameTitle: "G",
+        status: "CANCELLED",
+        entryFee: 10n,
+        asset: "XLM",
+        payouts: [],
+        events: [
+          { payload: { player: "GA", amount: "10" } },
+          { payload: { player: "GB", amount: "10" } },
+        ],
+        _count: { participants: 2 },
+      },
+    ]);
+
+    const res = await GET(makeGetReq("http://localhost/api/tournaments?take=20"));
+    const json = await res.json();
+
+    expect(json.data.items[0]).toMatchObject({
+      pool: "0",
+      totalCollected: "20",
+      totalPaidOut: "0",
+      totalRefunded: "20",
+    });
+  });
+
+  it("deduplicates valid refund claims by player", async () => {
+    findMany.mockResolvedValue([
+      {
+        id: "t_1",
+        name: "Refunded Cup",
+        gameTitle: "G",
+        status: "CANCELLED",
+        entryFee: 10n,
+        asset: "XLM",
+        payouts: [],
+        events: [
+          { payload: { player: "GA", amount: "10" } },
+          { payload: { player: "GA", amount: "10" } },
+          { payload: { player: "GB", amount: "0" } },
+        ],
+        _count: { participants: 2 },
+      },
+    ]);
+
+    const res = await GET(makeGetReq("http://localhost/api/tournaments?take=20"));
+    const json = await res.json();
+
+    expect(json.data.items[0]).toMatchObject({ pool: "10", totalRefunded: "10" });
+  });
+
   it("passes cursor to prisma for pagination", async () => {
     findMany.mockResolvedValue([]);
     const res = await GET(makeGetReq("http://localhost/api/tournaments?take=10&cursor=t_5"));

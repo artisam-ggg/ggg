@@ -20,7 +20,7 @@ export default function PrivacyPage() {
         <h1 className="mt-3 text-4xl font-extrabold tracking-tight text-on-surface">
           Privacy Policy
         </h1>
-        <p className="mt-3 text-sm">Last updated: September 15, 2026 · Operator: Artisam Labs</p>
+        <p className="mt-3 text-sm">Last updated: September 17, 2026 · Operator: Artisam Labs</p>
 
         <h2 className={heading}>1. Introduction</h2>
         <p className="mt-3">
@@ -40,7 +40,8 @@ export default function PrivacyPage() {
           <li>Public wallet addresses and transaction data submitted to the Stellar network.</li>
           <li>
             With your consent, pages visited, interactions, browser information, referral source,
-            and masked session replays. Sensitive form text and element attributes are masked.
+            connected public wallet addresses, successful transaction hashes and types, and masked
+            session replays. Sensitive form text and element attributes are masked.
           </li>
           <li>Security and reliability data collected through application and server logs.</li>
         </ul>
@@ -87,8 +88,10 @@ export default function PrivacyPage() {
         <p className="mt-3">
           Essential session and security storage is required for the application to function. If you
           accept optional analytics, PostHog records product events and masked session replays to
-          help us understand how GGG is used. Analytics remains disabled if you decline. We do not
-          use third-party advertising cookies.
+          help us understand how GGG is used. When you connect a wallet, its public address may be
+          included as an event property. After a successful transaction, its hash and type may also
+          be included with that address. The address is not used as your analytics identity.
+          Analytics remains disabled if you decline. We do not use third-party advertising cookies.
         </p>
 
         <h2 className={heading}>9. Your choices and rights</h2>

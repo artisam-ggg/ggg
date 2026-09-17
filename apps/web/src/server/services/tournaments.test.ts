@@ -1,20 +1,37 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { findUniqueMock, updateMock, submitMock, validateDeployMock, lookupDeployMock } = vi.hoisted(
-  () => ({
-    findUniqueMock: vi.fn(),
-    updateMock: vi.fn(),
-    submitMock: vi.fn(),
-    validateDeployMock: vi.fn(),
-    lookupDeployMock: vi.fn(),
-  }),
-);
+const {
+  findUniqueMock,
+  updateMock,
+  participantUpsertMock,
+  joinSubmissionUpsertMock,
+  joinSubmissionDeleteManyMock,
+  submitMock,
+  validateDeployMock,
+  validateJoinMock,
+  lookupDeployMock,
+} = vi.hoisted(() => ({
+  findUniqueMock: vi.fn(),
+  updateMock: vi.fn(),
+  participantUpsertMock: vi.fn(),
+  joinSubmissionUpsertMock: vi.fn(),
+  joinSubmissionDeleteManyMock: vi.fn(),
+  submitMock: vi.fn(),
+  validateDeployMock: vi.fn(),
+  validateJoinMock: vi.fn(),
+  lookupDeployMock: vi.fn(),
+}));
 
 vi.mock("@/lib/db", () => ({
   prisma: {
     tournament: {
       findUnique: findUniqueMock,
       update: updateMock,
+    },
+    participant: { upsert: participantUpsertMock },
+    joinSubmission: {
+      upsert: joinSubmissionUpsertMock,
+      deleteMany: joinSubmissionDeleteManyMock,
     },
   },
 }));
@@ -26,7 +43,7 @@ vi.mock("@/lib/stellar", () => ({
   buildDeployInitializeTx: vi.fn(),
   buildFinalizeTx: vi.fn(),
   buildJoinTx: vi.fn(),
-  deploymentTxHash: vi.fn(() => "CURRENT_HASH"),
+  signedTransactionHash: vi.fn(() => "CURRENT_HASH"),
   explorerContractUrl: vi.fn(),
   explorerTxUrl: vi.fn(),
   lookupDeployment: lookupDeployMock,
@@ -46,10 +63,103 @@ vi.mock("@/lib/stellar", () => ({
   },
   submitSignedXdr: submitMock,
   validateDeployXdr: validateDeployMock,
+  validateJoinXdr: validateJoinMock,
 }));
 
-import { getTournamentDetail, submitTournamentTx } from "./tournaments";
+import { getTournamentDetail, getTournamentDisplayStatus, submitTournamentTx } from "./tournaments";
 import { StellarError } from "@/lib/stellar";
+
+describe("getTournamentDisplayStatus", () => {
+  const deadline = new Date("2026-09-17T12:00:00.000Z");
+  const confirmedAt = new Date("2026-09-16T12:00:00.000Z");
+
+  it("keeps the tournament active immediately before the deadline", () => {
+    expect(
+      getTournamentDisplayStatus(
+        {
+          status: "ACTIVE",
+          settlementDeadline: deadline,
+          deadlineConfirmedAt: confirmedAt,
+          participantAddresses: ["GA", "GB"],
+          refundClaimedPlayers: [],
+        },
+        deadline.getTime() - 1,
+      ),
+    ).toBe("ACTIVE");
+  });
+
+  it("opens refunds at the exact deadline and during partial claims", () => {
+    expect(
+      getTournamentDisplayStatus(
+        {
+          status: "ACTIVE",
+          settlementDeadline: deadline,
+          deadlineConfirmedAt: confirmedAt,
+          participantAddresses: ["GA", "GB"],
+          refundClaimedPlayers: ["GA"],
+        },
+        deadline.getTime(),
+      ),
+    ).toBe("REFUNDS_OPEN");
+  });
+
+  it("marks all confirmed participant claims as refunded", () => {
+    expect(
+      getTournamentDisplayStatus(
+        {
+          status: "ACTIVE",
+          settlementDeadline: deadline,
+          deadlineConfirmedAt: confirmedAt,
+          participantAddresses: ["GA", "GB"],
+          refundClaimedPlayers: ["GA", "GB"],
+        },
+        deadline.getTime(),
+      ),
+    ).toBe("REFUNDED");
+  });
+
+  it("does not infer a full refund from an empty pool", () => {
+    expect(
+      getTournamentDisplayStatus(
+        {
+          status: "ACTIVE",
+          settlementDeadline: deadline,
+          deadlineConfirmedAt: confirmedAt,
+          participantAddresses: [],
+          refundClaimedPlayers: [],
+        },
+        deadline.getTime(),
+      ),
+    ).toBe("REFUNDS_OPEN");
+  });
+
+  it.each(["CANCELLED", "FINISHED"] as const)("preserves confirmed %s state", (status) => {
+    expect(
+      getTournamentDisplayStatus({
+        status,
+        settlementDeadline: deadline,
+        deadlineConfirmedAt: confirmedAt,
+        participantAddresses: ["GA", "GB"],
+        refundClaimedPlayers: ["GA", "GB"],
+      }),
+    ).toBe(status);
+  });
+
+  it("does not infer a full refund from equal counts with different addresses", () => {
+    expect(
+      getTournamentDisplayStatus(
+        {
+          status: "ACTIVE",
+          settlementDeadline: deadline,
+          deadlineConfirmedAt: confirmedAt,
+          participantAddresses: ["GA", "GB"],
+          refundClaimedPlayers: ["GA", "GC"],
+        },
+        deadline.getTime(),
+      ),
+    ).toBe("REFUNDS_OPEN");
+  });
+});
 
 describe("getTournamentDetail", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -119,6 +229,43 @@ describe("getTournamentDetail", () => {
     await expect(getTournamentDetail("t_1")).resolves.toMatchObject({
       pool: "0",
       coverImageUrl: null,
+    });
+  });
+
+  it("subtracts confirmed payouts and deduplicated refunds from the detail pool", async () => {
+    findUniqueMock.mockResolvedValue({
+      id: "t_1",
+      name: "Tournament",
+      gameTitle: "Game",
+      coverImageKey: null,
+      status: "FINISHED",
+      asset: "XLM",
+      entryFee: 10n,
+      firstBps: 6000,
+      secondBps: 3000,
+      thirdBps: 1000,
+      contractId: "CESCROW",
+      tokenAddr: "CTOKEN",
+      organizerId: "user_1",
+      organizerAddr: "GORG",
+      refereeAddr: "GREF",
+      settlementDeadline: null,
+      deadlineConfirmedAt: null,
+      participants: [
+        { playerAddr: "GA", joinedAt: new Date(), joinTxHash: null },
+        { playerAddr: "GB", joinedAt: new Date(), joinTxHash: null },
+        { playerAddr: "GC", joinedAt: new Date(), joinTxHash: null },
+      ],
+      payouts: [{ rank: 1, playerAddr: "GA", amount: 18n, txHash: "TX1" }],
+      events: [
+        { payload: { player: "GB", amount: "10" } },
+        { payload: { player: "GB", amount: "10" } },
+      ],
+    });
+
+    await expect(getTournamentDetail("t_1")).resolves.toMatchObject({
+      pool: "2",
+      refundClaimedPlayers: ["GB"],
     });
   });
 
@@ -232,6 +379,40 @@ describe("getTournamentDetail", () => {
     });
 
     await expect(getTournamentDetail("t_1")).resolves.toMatchObject({ refundsClaimable: true });
+  });
+
+  it("uses one timestamp for deadline status and refund eligibility", async () => {
+    const deadline = new Date("2026-09-17T12:00:00.000Z");
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(deadline.getTime());
+    findUniqueMock.mockResolvedValue({
+      id: "t_1",
+      name: "Tournament",
+      gameTitle: "Game",
+      coverImageKey: null,
+      status: "ACTIVE",
+      asset: "XLM",
+      entryFee: 10_000_000n,
+      firstBps: 6000,
+      secondBps: 3000,
+      thirdBps: 1000,
+      contractId: "CESCROW",
+      tokenAddr: "CTOKEN",
+      organizerId: "user_1",
+      organizerAddr: "GORG",
+      refereeAddr: "GREF",
+      settlementDeadline: deadline,
+      deadlineConfirmedAt: new Date("2026-09-16T12:00:00.000Z"),
+      participants: [{ playerAddr: "GA", joinedAt: new Date(), joinTxHash: null }],
+      payouts: [],
+      events: [],
+    });
+
+    await expect(getTournamentDetail("t_1")).resolves.toMatchObject({
+      displayStatus: "REFUNDS_OPEN",
+      refundsClaimable: true,
+    });
+    expect(nowSpy).toHaveBeenCalledOnce();
+    nowSpy.mockRestore();
   });
 });
 
@@ -475,6 +656,109 @@ describe("submitTournamentTx constructor deployment", () => {
     await expect(
       submitTournamentTx("t_1", { signedXdr: "XDR", intent: "deploy" }, "user_1"),
     ).rejects.toMatchObject({ status: 409 });
+    expect(submitMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("submitTournamentTx join timestamp", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-17T14:00:00.000Z"));
+    vi.clearAllMocks();
+    findUniqueMock.mockResolvedValue({
+      id: "t_1",
+      organizerId: "organizer_1",
+      status: "ACTIVE",
+      contractId: "CESCROW",
+    });
+    validateJoinMock.mockReturnValue("GPLAYER");
+    joinSubmissionUpsertMock.mockResolvedValue({
+      txHash: "CURRENT_HASH",
+      tournamentId: "t_1",
+      playerAddr: "GPLAYER",
+      submittedAt: new Date("2026-09-17T14:00:00.000Z"),
+    });
+  });
+
+  afterEach(() => vi.useRealTimers());
+
+  it("persists app submission time even when Stellar confirmation is delayed", async () => {
+    submitMock.mockImplementation(async () => {
+      vi.setSystemTime(new Date("2026-09-17T14:05:00.000Z"));
+      return { hash: "TX_JOIN", status: "SUCCESS" };
+    });
+
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "join" }, "user_1"),
+    ).resolves.toMatchObject({ txHash: "TX_JOIN", status: "ACTIVE" });
+
+    expect(participantUpsertMock).toHaveBeenCalledWith({
+      where: {
+        tournamentId_playerAddr: { tournamentId: "t_1", playerAddr: "GPLAYER" },
+      },
+      create: {
+        tournamentId: "t_1",
+        playerAddr: "GPLAYER",
+        joinTxHash: "TX_JOIN",
+        joinedAt: new Date("2026-09-17T14:00:00.000Z"),
+      },
+      update: {
+        joinTxHash: "TX_JOIN",
+        joinedAt: new Date("2026-09-17T14:00:00.000Z"),
+      },
+    });
+    expect(validateJoinMock).toHaveBeenCalledWith("XDR", { contractId: "CESCROW" });
+    expect(joinSubmissionUpsertMock).toHaveBeenCalledWith({
+      where: { txHash: "CURRENT_HASH" },
+      create: {
+        txHash: "CURRENT_HASH",
+        tournamentId: "t_1",
+        playerAddr: "GPLAYER",
+        submittedAt: new Date("2026-09-17T14:00:00.000Z"),
+      },
+      update: {},
+    });
+    expect(joinSubmissionDeleteManyMock).toHaveBeenCalledWith({
+      where: { txHash: "CURRENT_HASH" },
+    });
+  });
+
+  it("returns the confirmed join when participant persistence is temporarily unavailable", async () => {
+    submitMock.mockResolvedValue({ hash: "TX_JOIN", status: "SUCCESS" });
+    participantUpsertMock.mockRejectedValueOnce(new Error("database unavailable"));
+
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "join" }, "user_1"),
+    ).resolves.toMatchObject({ txHash: "TX_JOIN", status: "ACTIVE" });
+
+    expect(joinSubmissionUpsertMock).toHaveBeenCalledOnce();
+    expect(joinSubmissionDeleteManyMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a mismatched join before broadcasting", async () => {
+    validateJoinMock.mockImplementation(() => {
+      throw new StellarError("INVALID_INPUT", "Wrong join contract");
+    });
+
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "join" }, "user_1"),
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    expect(submitMock).not.toHaveBeenCalled();
+    expect(participantUpsertMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects joins for inactive tournaments before broadcasting", async () => {
+    findUniqueMock.mockResolvedValue({
+      id: "t_1",
+      organizerId: "organizer_1",
+      status: "FINISHED",
+      contractId: "CESCROW",
+    });
+
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "join" }, "user_1"),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(validateJoinMock).not.toHaveBeenCalled();
     expect(submitMock).not.toHaveBeenCalled();
   });
 });

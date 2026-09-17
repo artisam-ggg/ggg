@@ -5,6 +5,10 @@ vi.mock("@/lib/wallet", () => ({
   ensureWallet: vi.fn(async () => "GREFREFREFREFREFREFREFREFREFREFREFREFREFREFREFREFREFREFRE"),
 }));
 
+vi.mock("@/lib/analytics", () => ({
+  captureWalletConnected: vi.fn(),
+}));
+
 vi.mock("next/link", () => ({
   default: ({
     href,
@@ -23,6 +27,7 @@ vi.mock("next/link", () => ({
 
 import { RefereePanel } from "./RefereePanel";
 import { ensureWallet } from "@/lib/wallet";
+import { captureWalletConnected } from "@/lib/analytics";
 
 const REF = "GREFREFREFREFREFREFREFREFREFREFREFREFREFREFREFREFREFREFRE";
 
@@ -48,6 +53,7 @@ describe("RefereePanel", () => {
         "/tournaments/t_1/settle",
       ),
     );
+    expect(captureWalletConnected).toHaveBeenCalledWith(REF);
   });
 
   it("shows a mismatch message for a non-referee wallet", async () => {
@@ -58,6 +64,7 @@ describe("RefereePanel", () => {
     fireEvent.click(screen.getByRole("button", { name: /verify referee/i }));
     await waitFor(() => expect(screen.getByText(/not the referee/i)).toBeInTheDocument());
     expect(screen.queryByRole("link", { name: /settlement console/i })).toBeNull();
+    expect(captureWalletConnected).toHaveBeenCalledOnce();
   });
 
   it("mismatch message has role=alert for screen readers", async () => {
@@ -76,6 +83,20 @@ describe("RefereePanel", () => {
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(/failed to connect wallet/i),
     );
+    expect(captureWalletConnected).not.toHaveBeenCalled();
+  });
+
+  it("does not capture the same wallet again when verification is repeated", async () => {
+    (ensureWallet as ReturnType<typeof vi.fn>).mockResolvedValue("GWRONG");
+    render(<RefereePanel tournamentId="t_1" refereeAddr={REF} passphrase="P" />);
+    const button = screen.getByRole("button", { name: /verify referee/i });
+
+    fireEvent.click(button);
+    await screen.findByRole("alert");
+    fireEvent.click(button);
+
+    await waitFor(() => expect(ensureWallet).toHaveBeenCalledTimes(2));
+    expect(captureWalletConnected).toHaveBeenCalledTimes(1);
   });
 
   it("does not reveal settle link for a near-miss address (case-sensitive)", async () => {

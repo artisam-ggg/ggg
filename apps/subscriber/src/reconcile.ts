@@ -65,11 +65,26 @@ export async function applyEvent(
 
     if (evt.type === "REGISTERED") {
       const player = String(evt.data.player);
+      const submission = await tx.joinSubmission.findUnique({ where: { txHash: evt.txHash } });
+      const submittedAt =
+        submission?.tournamentId === tournament.id && submission.playerAddr === player
+          ? submission.submittedAt
+          : undefined;
       await tx.participant.upsert({
         where: { tournamentId_playerAddr: { tournamentId: tournament.id, playerAddr: player } },
-        create: { tournamentId: tournament.id, playerAddr: player, joinTxHash: evt.txHash },
-        update: { joinTxHash: evt.txHash },
+        create: {
+          tournamentId: tournament.id,
+          playerAddr: player,
+          joinTxHash: evt.txHash,
+          ...(submittedAt && { joinedAt: submittedAt }),
+        },
+        update: { joinTxHash: evt.txHash, ...(submittedAt && { joinedAt: submittedAt }) },
       });
+      if (submittedAt) {
+        await tx.joinSubmission.deleteMany({
+          where: { txHash: evt.txHash, tournamentId: tournament.id, playerAddr: player },
+        });
+      }
     } else if (evt.type === "FINALIZED") {
       const winners = [evt.data.first, evt.data.second, evt.data.third].map(String);
       const amounts = (evt.data.amounts as string[]).map((a) => BigInt(a));
