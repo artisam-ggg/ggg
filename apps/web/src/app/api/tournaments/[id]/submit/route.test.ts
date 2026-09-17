@@ -19,7 +19,7 @@ vi.mock("@/lib/stellar", async (orig) => {
   return {
     ...actual,
     submitSignedXdr: submitMock,
-    deploymentTxHash: vi.fn(() => "CURRENT_HASH"),
+    signedTransactionHash: vi.fn(() => "CURRENT_HASH"),
     lookupDeployment: vi.fn(),
     validateDeployXdr: validateDeployMock,
     explorerTxUrl: (_hash: string) => `https://stellar.expert/tx/${_hash}`,

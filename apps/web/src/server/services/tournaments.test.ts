@@ -1,20 +1,37 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { findUniqueMock, updateMock, submitMock, validateDeployMock, lookupDeployMock } = vi.hoisted(
-  () => ({
-    findUniqueMock: vi.fn(),
-    updateMock: vi.fn(),
-    submitMock: vi.fn(),
-    validateDeployMock: vi.fn(),
-    lookupDeployMock: vi.fn(),
-  }),
-);
+const {
+  findUniqueMock,
+  updateMock,
+  participantUpsertMock,
+  joinSubmissionUpsertMock,
+  joinSubmissionDeleteManyMock,
+  submitMock,
+  validateDeployMock,
+  validateJoinMock,
+  lookupDeployMock,
+} = vi.hoisted(() => ({
+  findUniqueMock: vi.fn(),
+  updateMock: vi.fn(),
+  participantUpsertMock: vi.fn(),
+  joinSubmissionUpsertMock: vi.fn(),
+  joinSubmissionDeleteManyMock: vi.fn(),
+  submitMock: vi.fn(),
+  validateDeployMock: vi.fn(),
+  validateJoinMock: vi.fn(),
+  lookupDeployMock: vi.fn(),
+}));
 
 vi.mock("@/lib/db", () => ({
   prisma: {
     tournament: {
       findUnique: findUniqueMock,
       update: updateMock,
+    },
+    participant: { upsert: participantUpsertMock },
+    joinSubmission: {
+      upsert: joinSubmissionUpsertMock,
+      deleteMany: joinSubmissionDeleteManyMock,
     },
   },
 }));
@@ -26,7 +43,7 @@ vi.mock("@/lib/stellar", () => ({
   buildDeployInitializeTx: vi.fn(),
   buildFinalizeTx: vi.fn(),
   buildJoinTx: vi.fn(),
-  deploymentTxHash: vi.fn(() => "CURRENT_HASH"),
+  signedTransactionHash: vi.fn(() => "CURRENT_HASH"),
   explorerContractUrl: vi.fn(),
   explorerTxUrl: vi.fn(),
   lookupDeployment: lookupDeployMock,
@@ -46,6 +63,7 @@ vi.mock("@/lib/stellar", () => ({
   },
   submitSignedXdr: submitMock,
   validateDeployXdr: validateDeployMock,
+  validateJoinXdr: validateJoinMock,
 }));
 
 import { getTournamentDetail, getTournamentDisplayStatus, submitTournamentTx } from "./tournaments";
@@ -638,6 +656,109 @@ describe("submitTournamentTx constructor deployment", () => {
     await expect(
       submitTournamentTx("t_1", { signedXdr: "XDR", intent: "deploy" }, "user_1"),
     ).rejects.toMatchObject({ status: 409 });
+    expect(submitMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("submitTournamentTx join timestamp", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-17T14:00:00.000Z"));
+    vi.clearAllMocks();
+    findUniqueMock.mockResolvedValue({
+      id: "t_1",
+      organizerId: "organizer_1",
+      status: "ACTIVE",
+      contractId: "CESCROW",
+    });
+    validateJoinMock.mockReturnValue("GPLAYER");
+    joinSubmissionUpsertMock.mockResolvedValue({
+      txHash: "CURRENT_HASH",
+      tournamentId: "t_1",
+      playerAddr: "GPLAYER",
+      submittedAt: new Date("2026-09-17T14:00:00.000Z"),
+    });
+  });
+
+  afterEach(() => vi.useRealTimers());
+
+  it("persists app submission time even when Stellar confirmation is delayed", async () => {
+    submitMock.mockImplementation(async () => {
+      vi.setSystemTime(new Date("2026-09-17T14:05:00.000Z"));
+      return { hash: "TX_JOIN", status: "SUCCESS" };
+    });
+
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "join" }, "user_1"),
+    ).resolves.toMatchObject({ txHash: "TX_JOIN", status: "ACTIVE" });
+
+    expect(participantUpsertMock).toHaveBeenCalledWith({
+      where: {
+        tournamentId_playerAddr: { tournamentId: "t_1", playerAddr: "GPLAYER" },
+      },
+      create: {
+        tournamentId: "t_1",
+        playerAddr: "GPLAYER",
+        joinTxHash: "TX_JOIN",
+        joinedAt: new Date("2026-09-17T14:00:00.000Z"),
+      },
+      update: {
+        joinTxHash: "TX_JOIN",
+        joinedAt: new Date("2026-09-17T14:00:00.000Z"),
+      },
+    });
+    expect(validateJoinMock).toHaveBeenCalledWith("XDR", { contractId: "CESCROW" });
+    expect(joinSubmissionUpsertMock).toHaveBeenCalledWith({
+      where: { txHash: "CURRENT_HASH" },
+      create: {
+        txHash: "CURRENT_HASH",
+        tournamentId: "t_1",
+        playerAddr: "GPLAYER",
+        submittedAt: new Date("2026-09-17T14:00:00.000Z"),
+      },
+      update: {},
+    });
+    expect(joinSubmissionDeleteManyMock).toHaveBeenCalledWith({
+      where: { txHash: "CURRENT_HASH" },
+    });
+  });
+
+  it("returns the confirmed join when participant persistence is temporarily unavailable", async () => {
+    submitMock.mockResolvedValue({ hash: "TX_JOIN", status: "SUCCESS" });
+    participantUpsertMock.mockRejectedValueOnce(new Error("database unavailable"));
+
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "join" }, "user_1"),
+    ).resolves.toMatchObject({ txHash: "TX_JOIN", status: "ACTIVE" });
+
+    expect(joinSubmissionUpsertMock).toHaveBeenCalledOnce();
+    expect(joinSubmissionDeleteManyMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a mismatched join before broadcasting", async () => {
+    validateJoinMock.mockImplementation(() => {
+      throw new StellarError("INVALID_INPUT", "Wrong join contract");
+    });
+
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "join" }, "user_1"),
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    expect(submitMock).not.toHaveBeenCalled();
+    expect(participantUpsertMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects joins for inactive tournaments before broadcasting", async () => {
+    findUniqueMock.mockResolvedValue({
+      id: "t_1",
+      organizerId: "organizer_1",
+      status: "FINISHED",
+      contractId: "CESCROW",
+    });
+
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "join" }, "user_1"),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(validateJoinMock).not.toHaveBeenCalled();
     expect(submitMock).not.toHaveBeenCalled();
   });
 });

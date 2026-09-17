@@ -6,7 +6,7 @@ import {
   buildFinalizeTx,
   buildClaimRefundTx,
   buildJoinTx,
-  deploymentTxHash,
+  signedTransactionHash,
   explorerContractUrl,
   explorerTxUrl,
   lookupDeployment,
@@ -14,6 +14,7 @@ import {
   StellarError,
   submitSignedXdr,
   validateDeployXdr,
+  validateJoinXdr,
 } from "@/lib/stellar";
 
 import type {
@@ -138,14 +139,14 @@ function requireFutureSettlementDeadline(deadline: Date | null): Date {
  * optimistic or failed result.
  *
  * Ownership: deploy/cancel are organiser-only; finalize is organiser/referee;
- * join is public (participant records are created by the event subscriber in
- * Phase 5).
+ * join is public and its confirmed participant is reconciled with the event subscriber.
  */
 export async function submitTournamentTx(
   id: string,
   input: SubmitInput,
   userId: string,
 ): Promise<SubmitTxResult> {
+  const submittedAt = new Date();
   const tournament = await prisma.tournament.findUnique({ where: { id } });
   if (!tournament) {
     throw Object.assign(new Error("Tournament not found"), { status: 404 });
@@ -183,7 +184,7 @@ export async function submitTournamentTx(
       settlementDeadline: BigInt(Math.floor(settlementDeadline.getTime() / 1000)),
     });
 
-    const currentHash = deploymentTxHash(input.signedXdr);
+    const currentHash = signedTransactionHash(input.signedXdr);
     const pendingHash = tournament.pendingDeployTxHash;
     if (pendingHash) {
       const prior = await lookupDeployment(pendingHash);
@@ -213,12 +214,34 @@ export async function submitTournamentTx(
     }
   }
 
+  let joinPlayer: string | null = null;
+  let joinTxHash: string | null = null;
+  let joinSubmittedAt: Date | null = null;
+  if (input.intent === "join") {
+    if (tournament.status !== "ACTIVE" || !tournament.contractId) {
+      throw Object.assign(new Error("Tournament is not open for joining"), { status: 409 });
+    }
+    joinPlayer = validateJoinXdr(input.signedXdr, { contractId: tournament.contractId });
+    joinTxHash = signedTransactionHash(input.signedXdr);
+    const submission = await prisma.joinSubmission.upsert({
+      where: { txHash: joinTxHash },
+      create: {
+        txHash: joinTxHash,
+        tournamentId: id,
+        playerAddr: joinPlayer,
+        submittedAt,
+      },
+      update: {},
+    });
+    joinSubmittedAt = submission.submittedAt;
+  }
+
   let result: Awaited<ReturnType<typeof submitSignedXdr>>;
   try {
     result = recoveredDeployment ?? (await submitSignedXdr(input.signedXdr, input.intent));
   } catch (error) {
     if (input.intent === "deploy" && error instanceof StellarError && error.retryable === false) {
-      const currentHash = deploymentTxHash(input.signedXdr);
+      const currentHash = signedTransactionHash(input.signedXdr);
       const landed = await lookupDeployment(currentHash);
       if (landed?.status === "SUCCESS") {
         result = landed;
@@ -237,6 +260,9 @@ export async function submitTournamentTx(
   }
 
   if (result.status === "FAILED") {
+    if (joinTxHash) {
+      await prisma.joinSubmission.deleteMany({ where: { txHash: joinTxHash } });
+    }
     if (input.intent === "deploy") {
       await prisma.tournament.update({ where: { id }, data: { pendingDeployTxHash: null } });
     }
@@ -294,7 +320,30 @@ export async function submitTournamentTx(
     };
   }
 
-  // join: participant records created by event subscriber (Phase 5); no DB mutation here.
+  if (input.intent === "join" && joinPlayer && joinTxHash && joinSubmittedAt) {
+    try {
+      await prisma.participant.upsert({
+        where: { tournamentId_playerAddr: { tournamentId: id, playerAddr: joinPlayer } },
+        create: {
+          tournamentId: id,
+          playerAddr: joinPlayer,
+          joinTxHash: result.hash,
+          joinedAt: joinSubmittedAt,
+        },
+        update: { joinTxHash: result.hash, joinedAt: joinSubmittedAt },
+      });
+      await prisma.joinSubmission.deleteMany({ where: { txHash: joinTxHash } });
+    } catch (error) {
+      console.error("Confirmed join participant reconciliation deferred", {
+        tournamentId: id,
+        playerAddr: joinPlayer,
+        txHash: result.hash,
+        submittedAt: joinSubmittedAt,
+        error,
+      });
+    }
+  }
+
   return {
     txHash: result.hash,
     status: tournament.status,

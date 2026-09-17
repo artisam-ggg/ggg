@@ -8,7 +8,7 @@ import {
 import { getRpc, networkPassphrase } from "./client";
 import { env } from "@/lib/env";
 import { createHash } from "node:crypto";
-import { signedXdr as signedXdrSchema } from "./validation";
+import { signedXdr as signedXdrSchema, stellarPublicKey } from "./validation";
 import { StellarError } from "./errors";
 import { z } from "zod";
 
@@ -45,8 +45,8 @@ export interface SubmitResult {
   status: "SUCCESS" | "FAILED";
 }
 
-/** Hash the signed transaction independently of its signatures for retry reconciliation. */
-export function deploymentTxHash(signedXdrStr: string): string {
+/** Hash a signed transaction independently of its signatures for retry reconciliation. */
+export function signedTransactionHash(signedXdrStr: string): string {
   const parsed = signedXdrSchema.safeParse(signedXdrStr);
   if (!parsed.success) throw new StellarError("INVALID_INPUT", "Malformed signed XDR");
   try {
@@ -165,6 +165,53 @@ export function validateDeployXdr(signedXdrStr: string, expected: DeployTerms): 
   }
 }
 
+/** Validate a join invocation and return the player authorized by the contract call. */
+export function validateJoinXdr(signedXdrStr: string, expected: { contractId: string }): string {
+  const parsed = signedXdrSchema.safeParse(signedXdrStr);
+  if (!parsed.success) throw new StellarError("INVALID_INPUT", "Malformed signed XDR");
+
+  try {
+    const tx = TransactionBuilder.fromXDR(parsed.data, networkPassphrase());
+    if (tx.operations.length !== 1) throw new Error("unexpected operation count");
+
+    const operation = tx.operations[0] as unknown as {
+      type?: string;
+      func?: {
+        switch(): { name?: string };
+        value(): {
+          contractAddress(): never;
+          functionName(): { toString(): string };
+          args(): Parameters<typeof scValToNative>[0][];
+        };
+      };
+    };
+    if (
+      operation.type !== "invokeHostFunction" ||
+      operation.func?.switch().name !== "hostFunctionTypeInvokeContract"
+    ) {
+      throw new Error("not a contract invocation");
+    }
+
+    const invocation = operation.func.value();
+    const args = invocation.args().map(scValToNative);
+    const player = args[0];
+    if (
+      Address.fromScAddress(invocation.contractAddress()).toString() !== expected.contractId ||
+      invocation.functionName().toString() !== "join_tournament" ||
+      args.length !== 1 ||
+      !stellarPublicKey.safeParse(player).success
+    ) {
+      throw new Error("unexpected join invocation");
+    }
+    return player as string;
+  } catch {
+    throw new StellarError(
+      "INVALID_INPUT",
+      "Join must invoke this tournament's join_tournament function",
+    );
+  }
+}
+
 export async function submitSignedXdr(
   signedXdrStr: string,
   intent: "deploy" | "join" | "claim_refund" | "finalize" | "cancel",
@@ -229,7 +276,11 @@ export async function submitSignedXdr(
     }
     if (got.status === "SUCCESS") {
       const contractId = extractContractId(intent, got);
-      return contractId ? { hash, status: "SUCCESS", contractId } : { hash, status: "SUCCESS" };
+      return {
+        hash,
+        status: "SUCCESS",
+        ...(contractId ? { contractId } : {}),
+      };
     }
     if (got.status === "FAILED") return { hash, status: "FAILED" };
     if (intervalMs > 0) await new Promise((r) => setTimeout(r, intervalMs));

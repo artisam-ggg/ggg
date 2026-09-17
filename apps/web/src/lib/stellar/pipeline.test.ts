@@ -75,6 +75,9 @@ describe("simulateAndAssemble", () => {
 
 describe("submitSignedXdr", () => {
   it("submits and polls until SUCCESS, returning hash", async () => {
+    vi.mocked(TransactionBuilder.fromXDR).mockReturnValue({
+      hash: () => Buffer.from("HASH"),
+    } as never);
     rpcRef.current = makeFakeRpc({
       sendTransaction: vi.fn().mockResolvedValue({ status: "PENDING", hash: "HASH" }),
       getTransaction: txStatus("SUCCESS"),
@@ -271,8 +274,8 @@ describe("deployment retry reconciliation", () => {
   const contractId = "CCJZ5DGASBWQXR5MPFCJXMBI333XE5U3FSJTNQU7RIKE3P5GN2K2WYD5";
 
   it("derives the same hash from the signed XDR", async () => {
-    const { deploymentTxHash } = await import("./pipeline");
-    expect(deploymentTxHash("AAAAAgAAAAA=")).toBe(Buffer.from("HASH").toString("hex"));
+    const { signedTransactionHash } = await import("./pipeline");
+    expect(signedTransactionHash("AAAAAgAAAAA=")).toBe(Buffer.from("HASH").toString("hex"));
   });
 
   it("recovers a confirmed deployment and its contract ID", async () => {
@@ -409,6 +412,86 @@ describe("validateDeployXdr", () => {
     const { validateDeployXdr } = await import("./pipeline");
     expect(() => validateDeployXdr("AAAAAgAAAAA=", { ...terms, tournamentId: "other" })).toThrow(
       "Deployment must use this tournament's constructor terms and escrow Wasm",
+    );
+  });
+});
+
+describe("validateJoinXdr", () => {
+  const contractId = "CCJZ5DGASBWQXR5MPFCJXMBI333XE5U3FSJTNQU7RIKE3P5GN2K2WYD5";
+  const player = Keypair.random().publicKey();
+
+  async function invocation(targetContract = contractId, functionName = "join_tournament") {
+    const sdk =
+      await vi.importActual<typeof import("@stellar/stellar-sdk")>("@stellar/stellar-sdk");
+    const source = sdk.Keypair.random().publicKey();
+    return new sdk.TransactionBuilder(new sdk.Account(source, "1"), {
+      fee: "100",
+      networkPassphrase: "Test SDF Network ; September 2015",
+    })
+      .addOperation(
+        new sdk.Contract(targetContract).call(
+          functionName,
+          sdk.nativeToScVal(player, { type: "address" }),
+        ),
+      )
+      .setTimeout(0)
+      .build();
+  }
+
+  it("extracts the player argument instead of the transaction source", async () => {
+    const tx = await invocation();
+    vi.mocked(TransactionBuilder.fromXDR).mockReturnValue(tx as never);
+    const { validateJoinXdr } = await import("./pipeline");
+
+    expect(validateJoinXdr("AAAAAgAAAAA=", { contractId })).toBe(player);
+    expect(tx.source).not.toBe(player);
+  });
+
+  it("rejects a join for another contract", async () => {
+    const otherContract = Address.contract(Buffer.alloc(32, 2)).toString();
+    vi.mocked(TransactionBuilder.fromXDR).mockReturnValue(
+      (await invocation(otherContract)) as never,
+    );
+    const { validateJoinXdr } = await import("./pipeline");
+
+    expect(() => validateJoinXdr("AAAAAgAAAAA=", { contractId })).toThrow(
+      "Join must invoke this tournament's join_tournament function",
+    );
+  });
+
+  it("rejects another contract function", async () => {
+    vi.mocked(TransactionBuilder.fromXDR).mockReturnValue(
+      (await invocation(contractId, "get_players")) as never,
+    );
+    const { validateJoinXdr } = await import("./pipeline");
+
+    expect(() => validateJoinXdr("AAAAAgAAAAA=", { contractId })).toThrow(
+      "Join must invoke this tournament's join_tournament function",
+    );
+  });
+
+  it("rejects an unrelated successful transaction", async () => {
+    const sdk =
+      await vi.importActual<typeof import("@stellar/stellar-sdk")>("@stellar/stellar-sdk");
+    const source = sdk.Keypair.random().publicKey();
+    const tx = new sdk.TransactionBuilder(new sdk.Account(source, "1"), {
+      fee: "100",
+      networkPassphrase: "Test SDF Network ; September 2015",
+    })
+      .addOperation(
+        sdk.Operation.payment({
+          destination: sdk.Keypair.random().publicKey(),
+          asset: sdk.Asset.native(),
+          amount: "0.0000001",
+        }),
+      )
+      .setTimeout(0)
+      .build();
+    vi.mocked(TransactionBuilder.fromXDR).mockReturnValue(tx as never);
+    const { validateJoinXdr } = await import("./pipeline");
+
+    expect(() => validateJoinXdr("AAAAAgAAAAA=", { contractId })).toThrow(
+      "Join must invoke this tournament's join_tournament function",
     );
   });
 });
