@@ -197,6 +197,8 @@ Completed the final Deliverable 2 regression matrix without changing contract be
 
 The web app supports optional, consent-gated PostHog product analytics and masked session replay. PostHog starts opted out, the consent banner appears only when a public project token is configured, and declining does not limit the app. Successful registration and sign-in events attach the authenticated account identity only after consent; signing out resets that analytics identity. The app and homepage privacy policies disclose the processing, and the content security policy permits the PostHog ingestion, script, and replay-worker endpoints.
 
+Connected public wallet addresses are captured as `wallet_connected` event properties only after analytics consent and successful wallet/network validation. Wallet addresses do not replace the authenticated account ID, re-checks do not duplicate connection events, and session replay continues to mask all text and element attributes.
+
 ## Issue #262 — Reflect confirmed refund lifecycle in tournament badges
 
 Tournament detail and organizer-list badges now distinguish `ACTIVE`, `REFUNDS OPEN`, and `REFUNDED` using the confirmed settlement deadline, registered-player count, and persisted `REFUND_CLAIMED` events. Empty pools never imply a full refund, while cancelled and finished tournaments retain their terminal history. Refundable and cancelled views also show confirmed claim progress.

@@ -9,5 +9,8 @@ describe("PrivacyPage", () => {
     expect(screen.getByRole("heading", { name: "Privacy Policy" })).toBeInTheDocument();
     expect(screen.getByText(/PostHog Cloud in the United States/i)).toBeInTheDocument();
     expect(screen.getByText(/Analytics remains disabled if you decline/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/public address may be included as an event property/i),
+    ).toBeInTheDocument();
   });
 });

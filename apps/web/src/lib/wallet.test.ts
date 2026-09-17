@@ -3,10 +3,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@stellar/freighter-api", () => ({
   default: {
     isConnected: vi.fn(async () => ({ isConnected: true })),
-    requestAccess: vi.fn(async () => ({ address: "G_ME" })),
-    getAddress: vi.fn(async () => ({ address: "G_ME" })),
+    requestAccess: vi.fn(async () => ({
+      address: "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI",
+    })),
+    getAddress: vi.fn(async () => ({
+      address: "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI",
+    })),
     getNetwork: vi.fn(async () => ({ networkPassphrase: "Test SDF Network ; September 2015" })),
-    signTransaction: vi.fn(async () => ({ signedTxXdr: "SIGNED", signerAddress: "G_ME" })),
+    signTransaction: vi.fn(async () => ({
+      signedTxXdr: "SIGNED",
+      signerAddress: "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI",
+    })),
   },
 }));
 
@@ -28,7 +35,9 @@ describe("ensureWallet", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("returns address when network matches", async () => {
-    expect(await ensureWallet(PASS)).toBe("G_ME");
+    expect(await ensureWallet(PASS)).toBe(
+      "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI",
+    );
   });
 
   it("throws on wrong network passphrase", async () => {
@@ -68,6 +77,12 @@ describe("ensureWallet", () => {
       error: { code: 2, message: "Could not get address" },
     });
     await expect(ensureWallet(PASS)).rejects.toThrow(/Could not get address/);
+  });
+
+  it("rejects an invalid address returned by Freighter", async () => {
+    mocked.getAddress.mockResolvedValueOnce({ address: "G_INVALID" });
+
+    await expect(ensureWallet(PASS)).rejects.toThrow(/invalid Stellar address/);
   });
 });
 

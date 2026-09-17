@@ -1,6 +1,7 @@
 "use client";
 import freighter from "@stellar/freighter-api";
 import { apiResponseSchema } from "@/lib/api";
+import { stellarPublicKey } from "@/lib/stellar/validation";
 import { z } from "zod";
 
 export type SubmitResult = {
@@ -46,6 +47,8 @@ export async function ensureWallet(expectedPassphrase: string): Promise<string> 
 
   const { address, error: addrError } = await freighter.getAddress();
   if (addrError) throw new Error(`Freighter could not get address: ${addrError.message}`);
+  const parsedAddress = stellarPublicKey.safeParse(address);
+  if (!parsedAddress.success) throw new Error("Freighter returned an invalid Stellar address.");
 
   const { networkPassphrase, error: netError } = await freighter.getNetwork();
   if (netError) throw new Error(`Freighter could not get network: ${netError.message}`);
@@ -56,7 +59,7 @@ export async function ensureWallet(expectedPassphrase: string): Promise<string> 
       retryable: false,
     });
 
-  return address;
+  return parsedAddress.data;
 }
 
 export async function signAndSubmit(

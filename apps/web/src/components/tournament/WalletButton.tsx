@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { Wallet } from "lucide-react";
 import { ensureWallet } from "@/lib/wallet";
+import { captureWalletConnected } from "@/lib/analytics";
 
 interface WalletButtonProps {
   expectedPassphrase: string;
@@ -74,6 +75,7 @@ export function WalletButton({ expectedPassphrase, onConnected }: WalletButtonPr
         setNotice("Wallet re-checked");
       } else {
         setAddress(a);
+        captureWalletConnected(a);
         onConnected(a);
       }
     } catch (e: unknown) {
