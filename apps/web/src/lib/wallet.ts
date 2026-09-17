@@ -1,6 +1,7 @@
 "use client";
 import freighter from "@stellar/freighter-api";
 import { apiResponseSchema } from "@/lib/api";
+import { captureWalletTransactionSucceeded, type WalletTransactionType } from "@/lib/analytics";
 import { stellarPublicKey } from "@/lib/stellar/validation";
 import { z } from "zod";
 
@@ -64,7 +65,7 @@ export async function ensureWallet(expectedPassphrase: string): Promise<string> 
 
 export async function signAndSubmit(
   unsignedXdr: string,
-  intent: "deploy" | "join" | "claim_refund" | "finalize" | "cancel",
+  intent: WalletTransactionType,
   submitUrl: string,
   expectedPassphrase: string,
 ): Promise<SubmitResult> {
@@ -99,7 +100,11 @@ export async function signAndSubmit(
       throw new Error("Your session has ended. Please log in again.");
     throw new Error("Submission failed");
   }
-  if (json.data.ok) return json.data.data;
+  if (json.data.ok) {
+    const result = json.data.data;
+    captureWalletTransactionSucceeded(address, result.txHash, intent);
+    return result;
+  }
   const { code, message, txHash, retryable } = json.data.error;
   throw new SubmissionError(message, {
     code,

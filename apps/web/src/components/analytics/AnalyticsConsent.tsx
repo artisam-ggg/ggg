@@ -43,8 +43,9 @@ export function AnalyticsConsent() {
       <p className="font-semibold text-on-surface">Help us improve GGG</p>
       <p className="mt-1 text-sm text-on-surface-variant">
         We use optional product analytics and session replay to understand how GGG is used. If you
-        connect a wallet, its public address may be sent to PostHog. Sensitive form text is masked,
-        and nothing is collected unless you accept. Read our{" "}
+        connect a wallet, its public address may be sent to PostHog. After a successful transaction,
+        its hash and type may also be sent with that address. Sensitive form text is masked, and
+        nothing is collected unless you accept. Read our{" "}
         <Link href="/privacy" className="text-primary underline underline-offset-2">
           Privacy Policy
         </Link>

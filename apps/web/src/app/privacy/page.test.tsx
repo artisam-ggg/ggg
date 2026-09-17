@@ -12,5 +12,8 @@ describe("PrivacyPage", () => {
     expect(
       screen.getByText(/public address may be included as an event property/i),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText(/transaction.*hash and type may also be included/i),
+    ).toBeInTheDocument();
   });
 });
