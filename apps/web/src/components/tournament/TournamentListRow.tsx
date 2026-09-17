@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { TournamentDisplayStatus } from "@/server/services/tournaments";
 import { StatusChip } from "./StatusChip";
 
 export type ListItem = {
@@ -6,10 +7,12 @@ export type ListItem = {
   name: string;
   gameTitle: string;
   status: "DRAFT" | "ACTIVE" | "FINISHED" | "CANCELLED";
+  displayStatus: TournamentDisplayStatus;
   asset: "XLM" | "USDC";
   entryFee: string;
   pool: string;
   participantCount: number;
+  refundClaimedCount: number;
 };
 
 function formatAmount(stroops: string) {
@@ -30,11 +33,21 @@ export function TournamentListRow({ t }: { t: ListItem }) {
         <p className="label-caps mt-1 text-on-surface-variant">{t.gameTitle}</p>
       </div>
       <div className="flex items-center gap-6">
+        {(t.displayStatus === "REFUNDS_OPEN" ||
+          t.displayStatus === "REFUNDED" ||
+          t.displayStatus === "CANCELLED") && (
+          <span
+            className="data-mono text-on-surface-variant"
+            aria-label={`${t.refundClaimedCount} of ${t.participantCount} refunds claimed`}
+          >
+            {t.refundClaimedCount}/{t.participantCount} refunds
+          </span>
+        )}
         <span className="data-mono text-acid-yellow">
           {formatAmount(t.pool)} {t.asset}
         </span>
         <span className="data-mono text-on-surface-variant">{t.participantCount}</span>
-        <StatusChip status={t.status} />
+        <StatusChip status={t.displayStatus} />
       </div>
     </Link>
   );

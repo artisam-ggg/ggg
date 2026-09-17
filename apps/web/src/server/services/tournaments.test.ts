@@ -48,8 +48,85 @@ vi.mock("@/lib/stellar", () => ({
   validateDeployXdr: validateDeployMock,
 }));
 
-import { getTournamentDetail, submitTournamentTx } from "./tournaments";
+import { getTournamentDetail, getTournamentDisplayStatus, submitTournamentTx } from "./tournaments";
 import { StellarError } from "@/lib/stellar";
+
+describe("getTournamentDisplayStatus", () => {
+  const deadline = new Date("2026-09-17T12:00:00.000Z");
+  const confirmedAt = new Date("2026-09-16T12:00:00.000Z");
+
+  it("keeps the tournament active immediately before the deadline", () => {
+    expect(
+      getTournamentDisplayStatus(
+        {
+          status: "ACTIVE",
+          settlementDeadline: deadline,
+          deadlineConfirmedAt: confirmedAt,
+          participantCount: 2,
+          refundClaimedCount: 0,
+        },
+        deadline.getTime() - 1,
+      ),
+    ).toBe("ACTIVE");
+  });
+
+  it("opens refunds at the exact deadline and during partial claims", () => {
+    expect(
+      getTournamentDisplayStatus(
+        {
+          status: "ACTIVE",
+          settlementDeadline: deadline,
+          deadlineConfirmedAt: confirmedAt,
+          participantCount: 2,
+          refundClaimedCount: 1,
+        },
+        deadline.getTime(),
+      ),
+    ).toBe("REFUNDS_OPEN");
+  });
+
+  it("marks all confirmed participant claims as refunded", () => {
+    expect(
+      getTournamentDisplayStatus(
+        {
+          status: "ACTIVE",
+          settlementDeadline: deadline,
+          deadlineConfirmedAt: confirmedAt,
+          participantCount: 2,
+          refundClaimedCount: 2,
+        },
+        deadline.getTime(),
+      ),
+    ).toBe("REFUNDED");
+  });
+
+  it("does not infer a full refund from an empty pool", () => {
+    expect(
+      getTournamentDisplayStatus(
+        {
+          status: "ACTIVE",
+          settlementDeadline: deadline,
+          deadlineConfirmedAt: confirmedAt,
+          participantCount: 0,
+          refundClaimedCount: 0,
+        },
+        deadline.getTime(),
+      ),
+    ).toBe("REFUNDS_OPEN");
+  });
+
+  it.each(["CANCELLED", "FINISHED"] as const)("preserves confirmed %s state", (status) => {
+    expect(
+      getTournamentDisplayStatus({
+        status,
+        settlementDeadline: deadline,
+        deadlineConfirmedAt: confirmedAt,
+        participantCount: 2,
+        refundClaimedCount: 2,
+      }),
+    ).toBe(status);
+  });
+});
 
 describe("getTournamentDetail", () => {
   beforeEach(() => vi.clearAllMocks());

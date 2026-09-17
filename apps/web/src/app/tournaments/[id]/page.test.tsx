@@ -49,6 +49,7 @@ const ACTIVE_TOURNAMENT = {
   gameTitle: "Street Fighter 6",
   coverImageUrl: null,
   status: "ACTIVE" as const,
+  displayStatus: "ACTIVE" as const,
   asset: "XLM" as const,
   entryFee: "10000000",
   distributionBps: [6000, 3000, 1000] as const,
@@ -59,6 +60,7 @@ const ACTIVE_TOURNAMENT = {
   organizerId: "user_org_1",
   refereeAddr: "GREF",
   pool: "30000000",
+  refundClaimedPlayers: [],
   participants: [
     {
       playerAddr: "GP1AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
@@ -74,6 +76,7 @@ const FINISHED_TOURNAMENT = {
   id: "t_2",
   name: "Winter Cup",
   status: "FINISHED" as const,
+  displayStatus: "FINISHED" as const,
   winners: [
     {
       rank: 1,
@@ -90,6 +93,7 @@ const CANCELLED_TOURNAMENT = {
   id: "t_3",
   name: "Cancelled Cup",
   status: "CANCELLED" as const,
+  displayStatus: "CANCELLED" as const,
   contractId: null,
   refundsClaimable: true,
 };
@@ -128,6 +132,7 @@ describe("/tournaments/[id] — public detail page", () => {
     mockGetTournamentDetail.mockResolvedValue({
       ...ACTIVE_TOURNAMENT,
       status: "DRAFT",
+      displayStatus: "DRAFT",
       contractId: null,
     });
     render(await Page({ params: Promise.resolve({ id: "t_1" }) }));
@@ -224,6 +229,22 @@ describe("/tournaments/[id] — public detail page", () => {
       render(await Page({ params: Promise.resolve({ id: "t_1" }) }));
 
       expect(screen.queryByText(/settlement complete/i)).not.toBeInTheDocument();
+    });
+
+    it("shows confirmed full-refund completion without another claim action", async () => {
+      mockGetTournamentDetail.mockResolvedValue({
+        ...ACTIVE_TOURNAMENT,
+        displayStatus: "REFUNDED",
+        refundsClaimable: true,
+        refundClaimedPlayers: [ACTIVE_TOURNAMENT.participants[0]!.playerAddr],
+      });
+      render(await Page({ params: Promise.resolve({ id: "t_1" }) }));
+
+      expect(screen.getByText("REFUNDED")).toBeInTheDocument();
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "All registered players have claimed their refunds.",
+      );
+      expect(screen.queryByRole("button", { name: "Claim Refund" })).not.toBeInTheDocument();
     });
   });
 

@@ -38,6 +38,8 @@ export default async function TournamentDetailPage({
 
   const isOrganiser = currentUser?.id === t.organizerId;
   const canCancel = isOrganiser && t.status === "ACTIVE" && !t.refundsClaimable;
+  const allRefundsClaimed =
+    t.participants.length > 0 && t.refundClaimedPlayers.length === t.participants.length;
 
   // Extract participant wallet addresses for the counter
   const participantAddresses = t.participants.map((p) => p.playerAddr);
@@ -75,7 +77,7 @@ export default async function TournamentDetailPage({
             )}
           </div>
         </div>
-        <StatusChip status={t.status} />
+        <StatusChip status={t.displayStatus} />
       </header>
 
       {t.coverImageUrl && <TournamentCover src={t.coverImageUrl} name={t.name} />}
@@ -96,10 +98,13 @@ export default async function TournamentDetailPage({
           className="mt-8 rounded-2xl border-2 border-error bg-error-container p-6"
         >
           <p id="cancelled-heading" className="label-caps text-error" role="alert">
-            {t.status === "CANCELLED"
-              ? "This tournament has been cancelled."
-              : "The settlement deadline has passed."}{" "}
-            Registered players may now claim their refund.
+            {allRefundsClaimed
+              ? t.status === "CANCELLED"
+                ? "This tournament was cancelled. All registered players have claimed their refunds."
+                : "All registered players have claimed their refunds."
+              : t.status === "CANCELLED"
+                ? "This tournament has been cancelled. Registered players may now claim their refund."
+                : "The settlement deadline has passed. Registered players may now claim their refund."}
           </p>
           <RefundList
             participants={t.participants}
@@ -107,7 +112,7 @@ export default async function TournamentDetailPage({
             asset={t.asset}
             claimedPlayers={t.refundClaimedPlayers}
           />
-          {t.contractId && (
+          {t.contractId && !allRefundsClaimed && (
             <ClaimRefundButton
               tournamentId={t.id}
               passphrase={passphrase}
