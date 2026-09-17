@@ -244,6 +244,7 @@ describe("/tournaments/[id] — public detail page", () => {
       expect(screen.getByRole("alert")).toHaveTextContent(
         "All registered players have claimed their refunds.",
       );
+      expect(screen.queryByRole("button", { name: "Connect Wallet" })).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "Claim Refund" })).not.toBeInTheDocument();
     });
   });
