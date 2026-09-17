@@ -180,6 +180,7 @@ describe("signAndSubmit", () => {
   });
 
   it("throws a generic message when envelope ok:false has no error field", async () => {
+    localStorage.setItem(ANALYTICS_CONSENT_KEY, "accepted");
     vi.stubGlobal(
       "fetch",
       vi.fn(
@@ -192,7 +193,28 @@ describe("signAndSubmit", () => {
       ),
     );
     await expect(signAndSubmit("U", "join", "/x", PASS)).rejects.toThrow("Submission failed");
+    expect(posthog.capture).not.toHaveBeenCalled();
   });
+
+  it.each([{}, { txHash: "" }])(
+    "does not capture a malformed success response: %j",
+    async (data) => {
+      localStorage.setItem(ANALYTICS_CONSENT_KEY, "accepted");
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(
+          async () =>
+            new Response(JSON.stringify({ ok: true, data }), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            }),
+        ),
+      );
+
+      await expect(signAndSubmit("U", "join", "/x", PASS)).rejects.toThrow("Submission failed");
+      expect(posthog.capture).not.toHaveBeenCalled();
+    },
+  );
 
   it("throws a clean Error (not SyntaxError) when server returns non-JSON 5xx", async () => {
     localStorage.setItem(ANALYTICS_CONSENT_KEY, "accepted");
@@ -214,6 +236,7 @@ describe("signAndSubmit", () => {
   });
 
   it.each([401, 403, 405])("handles a non-JSON %i submit response safely", async (status) => {
+    localStorage.setItem(ANALYTICS_CONSENT_KEY, "accepted");
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => new Response("METHOD NOT ALLOWED", { status })),
@@ -223,6 +246,7 @@ describe("signAndSubmit", () => {
         ? "Your session has ended. Please log in again."
         : "Transaction submission failed. Please try again.",
     );
+    expect(posthog.capture).not.toHaveBeenCalled();
   });
 
   it("throws when signTransaction returns an error field", async () => {
