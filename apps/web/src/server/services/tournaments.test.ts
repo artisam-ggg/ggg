@@ -214,6 +214,43 @@ describe("getTournamentDetail", () => {
     });
   });
 
+  it("subtracts confirmed payouts and deduplicated refunds from the detail pool", async () => {
+    findUniqueMock.mockResolvedValue({
+      id: "t_1",
+      name: "Tournament",
+      gameTitle: "Game",
+      coverImageKey: null,
+      status: "FINISHED",
+      asset: "XLM",
+      entryFee: 10n,
+      firstBps: 6000,
+      secondBps: 3000,
+      thirdBps: 1000,
+      contractId: "CESCROW",
+      tokenAddr: "CTOKEN",
+      organizerId: "user_1",
+      organizerAddr: "GORG",
+      refereeAddr: "GREF",
+      settlementDeadline: null,
+      deadlineConfirmedAt: null,
+      participants: [
+        { playerAddr: "GA", joinedAt: new Date(), joinTxHash: null },
+        { playerAddr: "GB", joinedAt: new Date(), joinTxHash: null },
+        { playerAddr: "GC", joinedAt: new Date(), joinTxHash: null },
+      ],
+      payouts: [{ rank: 1, playerAddr: "GA", amount: 18n, txHash: "TX1" }],
+      events: [
+        { payload: { player: "GB", amount: "10" } },
+        { payload: { player: "GB", amount: "10" } },
+      ],
+    });
+
+    await expect(getTournamentDetail("t_1")).resolves.toMatchObject({
+      pool: "2",
+      refundClaimedPlayers: ["GB"],
+    });
+  });
+
   it("does not present a draft deadline as confirmed", async () => {
     findUniqueMock.mockResolvedValue({
       id: "t_1",

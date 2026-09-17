@@ -200,3 +200,7 @@ The web app supports optional, consent-gated PostHog product analytics and maske
 ## Issue #262 — Reflect confirmed refund lifecycle in tournament badges
 
 Tournament detail and organizer-list badges now distinguish `ACTIVE`, `REFUNDS OPEN`, and `REFUNDED` using the confirmed settlement deadline, registered-player count, and persisted `REFUND_CLAIMED` events. Empty pools never imply a full refund, while cancelled and finished tournaments retain their terminal history. Refundable and cancelled views also show confirmed claim progress.
+
+## Issue #288 — Reconcile organizer-list prize-pool totals
+
+Organizer tournament rows now subtract confirmed payouts and refunds from total entry fees to show the remaining escrow pool. Each row labels the remaining pool, total collected, total paid out, and total refunded separately so settled funds are never presented as funds still held by the contract.

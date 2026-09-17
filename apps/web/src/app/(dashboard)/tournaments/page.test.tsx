@@ -49,6 +49,9 @@ const SAMPLE_ITEMS = [
     asset: "XLM" as const,
     entryFee: "10000000",
     pool: "30000000",
+    totalCollected: "30000000",
+    totalPaidOut: "0",
+    totalRefunded: "0",
     participantCount: 3,
     refundClaimedCount: 0,
   },
@@ -61,6 +64,9 @@ const SAMPLE_ITEMS = [
     asset: "USDC" as const,
     entryFee: "5000000",
     pool: "0",
+    totalCollected: "0",
+    totalPaidOut: "0",
+    totalRefunded: "0",
     participantCount: 0,
     refundClaimedCount: 0,
   },
@@ -88,7 +94,7 @@ describe("/tournaments page", () => {
     render(await TournamentsPage({ searchParams: Promise.resolve({}) }));
 
     // pool formatted from stroops
-    expect(screen.getByText(/3\.0000000 XLM/)).toBeInTheDocument();
+    expect(screen.getAllByText(/3\.0000000 XLM/)).toHaveLength(2);
     // participant counts
     expect(screen.getByText("3")).toBeInTheDocument();
     expect(screen.getByText("0")).toBeInTheDocument();

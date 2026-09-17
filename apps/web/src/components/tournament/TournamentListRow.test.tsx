@@ -31,6 +31,9 @@ describe("TournamentListRow", () => {
           asset: "XLM",
           entryFee: "10000000",
           pool: "30000000",
+          totalCollected: "30000000",
+          totalPaidOut: "0",
+          totalRefunded: "0",
           participantCount: 3,
           refundClaimedCount: 0,
         }}
@@ -41,7 +44,7 @@ describe("TournamentListRow", () => {
     expect(screen.getByText("ACTIVE")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
 
-    const pool = screen.getByText(/3\.0000000 XLM/);
+    const [pool] = screen.getAllByText(/3\.0000000 XLM/);
     expect(pool).toHaveClass("data-mono");
 
     expect(screen.getByRole("link")).toHaveAttribute("href", "/tournaments/t_1");
@@ -59,6 +62,9 @@ describe("TournamentListRow", () => {
           asset: "XLM",
           entryFee: "10000000",
           pool: "30000000",
+          totalCollected: "30000000",
+          totalPaidOut: "0",
+          totalRefunded: "0",
           participantCount: 3,
           refundClaimedCount: 0,
         }}
@@ -81,13 +87,17 @@ describe("TournamentListRow", () => {
           asset: "USDC",
           entryFee: "0",
           pool: "0",
+          totalCollected: "0",
+          totalPaidOut: "0",
+          totalRefunded: "0",
           participantCount: 0,
           refundClaimedCount: 0,
         }}
       />,
     );
 
-    expect(screen.getByText(/0\.0000000 USDC/)).toBeInTheDocument();
+    expect(screen.getAllByText(/0\.0000000 USDC/)).toHaveLength(1);
+    expect(screen.queryByText("Total collected")).not.toBeInTheDocument();
     expect(screen.getByText("DRAFT")).toBeInTheDocument();
   });
 
@@ -103,6 +113,9 @@ describe("TournamentListRow", () => {
           asset: "XLM",
           entryFee: "5000000",
           pool: "50000000",
+          totalCollected: "50000000",
+          totalPaidOut: "0",
+          totalRefunded: "0",
           participantCount: 10,
           refundClaimedCount: 0,
         }}
@@ -125,6 +138,9 @@ describe("TournamentListRow", () => {
           asset: "XLM",
           entryFee: "10000000",
           pool: "10000000",
+          totalCollected: "20000000",
+          totalPaidOut: "0",
+          totalRefunded: "10000000",
           participantCount: 2,
           refundClaimedCount: 1,
         }}
@@ -133,5 +149,33 @@ describe("TournamentListRow", () => {
 
     expect(screen.getByText("REFUNDS OPEN")).toBeInTheDocument();
     expect(screen.getByLabelText("1 of 2 refunds claimed")).toHaveTextContent("1/2 refunds");
+  });
+
+  it("labels remaining, collected, paid-out, and refunded totals", () => {
+    render(
+      <TournamentListRow
+        t={{
+          id: "t_5",
+          name: "Settled Cup",
+          gameTitle: "SF6",
+          status: "FINISHED",
+          displayStatus: "FINISHED",
+          asset: "XLM",
+          entryFee: "10000000",
+          pool: "0",
+          totalCollected: "30000000",
+          totalPaidOut: "29000000",
+          totalRefunded: "1000000",
+          participantCount: 3,
+          refundClaimedCount: 0,
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Pool remaining")).toBeInTheDocument();
+    expect(screen.getByText("Total collected")).toBeInTheDocument();
+    expect(screen.getByText("Total paid out")).toBeInTheDocument();
+    expect(screen.getByText("Total refunded")).toBeInTheDocument();
+    expect(screen.getByLabelText("3 participants")).toBeInTheDocument();
   });
 });
