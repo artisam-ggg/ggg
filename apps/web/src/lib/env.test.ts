@@ -58,4 +58,14 @@ describe("parseEnv", () => {
     const env = parseEnv(valid);
     expect(env.ALLOWED_ORIGINS).toBe("https://app.example.com,https://admin.example.com");
   });
+
+  it("treats blank optional PostHog server credentials as unconfigured", () => {
+    const env = parseEnv({
+      ...valid,
+      POSTHOG_PERSONAL_API_KEY: "",
+      POSTHOG_PROJECT_ID: "",
+    });
+    expect(env.POSTHOG_PERSONAL_API_KEY).toBeUndefined();
+    expect(env.POSTHOG_PROJECT_ID).toBeUndefined();
+  });
 });

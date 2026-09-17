@@ -1,6 +1,10 @@
 import { z } from "zod";
 
 const booleanString = z.enum(["true", "false"]).transform((v) => v === "true");
+const optionalNonEmptyString = z.preprocess(
+  (value) => (value === "" ? undefined : value),
+  z.string().min(1).optional(),
+);
 
 const envSchema = z.object({
   // App
@@ -36,6 +40,11 @@ const envSchema = z.object({
   S3_ACCESS_KEY_ID: z.string().min(1),
   S3_SECRET_ACCESS_KEY: z.string().min(1),
   S3_FORCE_PATH_STYLE: booleanString.default(false),
+
+  // Optional server-only PostHog query access for the public homepage metrics.
+  POSTHOG_PERSONAL_API_KEY: optionalNonEmptyString,
+  POSTHOG_PROJECT_ID: optionalNonEmptyString,
+  POSTHOG_API_HOST: z.string().url().default("https://us.posthog.com"),
 });
 
 export type Env = z.infer<typeof envSchema>;
