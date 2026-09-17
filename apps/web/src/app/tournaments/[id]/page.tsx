@@ -42,6 +42,9 @@ export default async function TournamentDetailPage({
   const allRefundsClaimed =
     t.participants.length > 0 &&
     t.participants.every((participant) => claimedPlayers.has(participant.playerAddr));
+  const hasUnclaimedRefunds = t.participants.some(
+    (participant) => !claimedPlayers.has(participant.playerAddr),
+  );
 
   // Extract participant wallet addresses for the counter
   const participantAddresses = t.participants.map((p) => p.playerAddr);
@@ -114,7 +117,7 @@ export default async function TournamentDetailPage({
             asset={t.asset}
             claimedPlayers={t.refundClaimedPlayers}
           />
-          {t.contractId && !allRefundsClaimed && (
+          {t.contractId && hasUnclaimedRefunds && (
             <ClaimRefundButton
               tournamentId={t.id}
               passphrase={passphrase}

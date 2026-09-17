@@ -217,7 +217,7 @@ describe("GET /api/tournaments", () => {
 
     expect(json.data.items[0]).toMatchObject({
       displayStatus: "REFUNDS_OPEN",
-      refundClaimedCount: 2,
+      refundClaimedCount: 1,
     });
   });
 

@@ -260,6 +260,21 @@ describe("/tournaments/[id] — public detail page", () => {
       expect(screen.getByRole("button", { name: "Connect Wallet" })).toBeInTheDocument();
       expect(screen.getByRole("alert")).not.toHaveTextContent("All registered players");
     });
+
+    it("hides the claim action when a cancelled tournament has no participants", async () => {
+      mockGetTournamentDetail.mockResolvedValue({
+        ...ACTIVE_TOURNAMENT,
+        status: "CANCELLED",
+        displayStatus: "CANCELLED",
+        refundsClaimable: true,
+        participants: [],
+      });
+      render(await Page({ params: Promise.resolve({ id: "t_1" }) }));
+
+      expect(screen.getByRole("alert")).toHaveTextContent("This tournament has been cancelled");
+      expect(screen.queryByRole("button", { name: "Connect Wallet" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Claim Refund" })).not.toBeInTheDocument();
+    });
   });
 
   // -------------------------------------------------------------------------

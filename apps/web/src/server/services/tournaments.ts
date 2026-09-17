@@ -315,9 +315,13 @@ export async function listTournaments(userId: string, q: ListQueryInput) {
   });
 
   const items = rows.slice(0, q.take).map((t) => {
+    const participantAddresses = (t.participants ?? []).map(
+      (participant) => participant.playerAddr,
+    );
     const refundClaimedPlayers = [
       ...new Set(parseRefundClaims(t.events ?? []).map((claim) => claim.player)),
     ];
+    const participants = new Set(participantAddresses);
     return {
       id: t.id,
       name: t.name,
@@ -327,14 +331,14 @@ export async function listTournaments(userId: string, q: ListQueryInput) {
         status: t.status,
         settlementDeadline: t.settlementDeadline,
         deadlineConfirmedAt: t.deadlineConfirmedAt,
-        participantAddresses: (t.participants ?? []).map((participant) => participant.playerAddr),
+        participantAddresses,
         refundClaimedPlayers,
       }),
       asset: t.asset,
       entryFee: t.entryFee.toString(),
       pool: (t.entryFee * BigInt(t._count.participants)).toString(),
       participantCount: t._count.participants,
-      refundClaimedCount: refundClaimedPlayers.length,
+      refundClaimedCount: refundClaimedPlayers.filter((player) => participants.has(player)).length,
     };
   });
 
