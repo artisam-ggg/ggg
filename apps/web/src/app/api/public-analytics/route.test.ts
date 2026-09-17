@@ -4,16 +4,21 @@ const env = {
   POSTHOG_PERSONAL_API_KEY: "phx_test",
   POSTHOG_PROJECT_ID: "123",
   POSTHOG_API_HOST: "https://us.posthog.com",
-  ALLOWED_ORIGINS: "http://localhost:4173",
+  ALLOWED_ORIGINS: "https://csrf-only.example",
+  PUBLIC_ANALYTICS_ALLOWED_ORIGINS: "http://localhost:4173",
 };
 
 vi.mock("@/lib/env", () => ({ env }));
+vi.mock("@/lib/rate-limit", () => ({ rateLimit: vi.fn() }));
+
+import { rateLimit } from "@/lib/rate-limit";
 
 describe("GET /api/public-analytics", () => {
   beforeEach(() => {
     env.POSTHOG_PERSONAL_API_KEY = "phx_test";
     env.POSTHOG_PROJECT_ID = "123";
     vi.restoreAllMocks();
+    vi.mocked(rateLimit).mockResolvedValue({ ok: true, remaining: 29 });
   });
 
   function request(origin = "https://ggg.quest") {
@@ -60,6 +65,39 @@ describe("GET /api/public-analytics", () => {
     const response = await GET(request("https://attacker.example"));
 
     expect(response.headers.has("Access-Control-Allow-Origin")).toBe(false);
+  });
+
+  it("does not reuse the CSRF origin allowlist", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ results: [[42]] }))),
+    );
+    const { GET } = await import("./route");
+
+    const response = await GET(request("https://csrf-only.example"));
+
+    expect(response.headers.has("Access-Control-Allow-Origin")).toBe(false);
+  });
+
+  it("rate-limits upstream PostHog queries by client IP", async () => {
+    vi.mocked(rateLimit).mockResolvedValue({ ok: false, remaining: 0 });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { GET } = await import("./route");
+
+    const response = await GET(
+      new Request("http://localhost/api/public-analytics", {
+        headers: { origin: "https://ggg.quest", "x-forwarded-for": "203.0.113.10" },
+      }),
+    );
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(rateLimit).toHaveBeenCalledWith("public-analytics:203.0.113.10", {
+      limit: 30,
+      windowSec: 60,
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it.each([

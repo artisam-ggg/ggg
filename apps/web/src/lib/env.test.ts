@@ -74,4 +74,10 @@ describe("parseEnv", () => {
       parseEnv({ ...valid, POSTHOG_API_HOST: "http://posthog.example.com" }),
     ).toThrowError(/POSTHOG_API_HOST/);
   });
+
+  it("normalizes a blank public analytics origin allowlist", () => {
+    expect(
+      parseEnv({ ...valid, PUBLIC_ANALYTICS_ALLOWED_ORIGINS: "" }).PUBLIC_ANALYTICS_ALLOWED_ORIGINS,
+    ).toBeUndefined();
+  });
 });

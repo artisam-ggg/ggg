@@ -1,5 +1,6 @@
 import { err, ok } from "@/lib/api";
 import { env } from "@/lib/env";
+import { rateLimit } from "@/lib/rate-limit";
 import { z } from "zod";
 
 const HOMEPAGE_ORIGIN = "https://ggg.quest";
@@ -12,7 +13,7 @@ function withHomepageCors(response: Response, request: Request): Response {
   const origin = request.headers.get("Origin");
   const allowedOrigins = new Set([
     HOMEPAGE_ORIGIN,
-    ...(env.ALLOWED_ORIGINS?.split(",").map((value) => value.trim()) ?? []),
+    ...(env.PUBLIC_ANALYTICS_ALLOWED_ORIGINS?.split(",").map((value) => value.trim()) ?? []),
   ]);
   if (origin && allowedOrigins.has(origin)) {
     response.headers.set("Access-Control-Allow-Origin", origin);
@@ -36,6 +37,18 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   try {
+    const ip =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      request.headers.get("x-real-ip") ||
+      "unknown";
+    const limit = await rateLimit(`public-analytics:${ip}`, { limit: 30, windowSec: 60 });
+    if (!limit.ok) {
+      return withHomepageCors(
+        err("TOO_MANY_REQUESTS", "Too many requests. Try again later.", 429),
+        request,
+      );
+    }
+
     const response = await fetch(
       `${env.POSTHOG_API_HOST}/api/projects/${env.POSTHOG_PROJECT_ID}/query/`,
       {

@@ -49,6 +49,7 @@ const envSchema = z.object({
   POSTHOG_PERSONAL_API_KEY: optionalNonEmptyString,
   POSTHOG_PROJECT_ID: optionalNonEmptyString,
   POSTHOG_API_HOST: httpsUrl.default("https://us.posthog.com"),
+  PUBLIC_ANALYTICS_ALLOWED_ORIGINS: optionalNonEmptyString,
 });
 
 export type Env = z.infer<typeof envSchema>;
