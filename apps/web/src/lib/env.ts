@@ -5,6 +5,10 @@ const optionalNonEmptyString = z.preprocess(
   (value) => (value === "" ? undefined : value),
   z.string().min(1).optional(),
 );
+const httpsUrl = z
+  .string()
+  .url()
+  .refine((value) => new URL(value).protocol === "https:", "must use HTTPS");
 
 const envSchema = z.object({
   // App
@@ -44,7 +48,7 @@ const envSchema = z.object({
   // Optional server-only PostHog query access for the public homepage metrics.
   POSTHOG_PERSONAL_API_KEY: optionalNonEmptyString,
   POSTHOG_PROJECT_ID: optionalNonEmptyString,
-  POSTHOG_API_HOST: z.string().url().default("https://us.posthog.com"),
+  POSTHOG_API_HOST: httpsUrl.default("https://us.posthog.com"),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -1,15 +1,21 @@
 import { err, ok } from "@/lib/api";
 import { env } from "@/lib/env";
+import { z } from "zod";
 
 const HOMEPAGE_ORIGIN = "https://ggg.quest";
-const THIRTY_DAYS = 60 * 60 * 24 * 30;
+const SUCCESS_CACHE_SECONDS = 5 * 60;
+const postHogQueryResultSchema = z.object({
+  results: z.tuple([z.tuple([z.number().int().nonnegative().safe()])]),
+});
 
 function withHomepageCors(response: Response): Response {
   response.headers.set("Access-Control-Allow-Origin", HOMEPAGE_ORIGIN);
   response.headers.set("Vary", "Origin");
   response.headers.set(
     "Cache-Control",
-    `public, s-maxage=${THIRTY_DAYS}, stale-while-revalidate=86400`,
+    response.ok
+      ? `public, s-maxage=${SUCCESS_CACHE_SECONDS}, stale-while-revalidate=${SUCCESS_CACHE_SECONDS}`
+      : "no-store",
   );
   return response;
 }
@@ -28,6 +34,7 @@ export async function GET(): Promise<Response> {
           Authorization: `Bearer ${env.POSTHOG_PERSONAL_API_KEY}`,
           "Content-Type": "application/json",
         },
+        signal: AbortSignal.timeout(10_000),
         body: JSON.stringify({
           query: {
             kind: "HogQLQuery",
@@ -40,13 +47,12 @@ export async function GET(): Promise<Response> {
 
     if (!response.ok) throw new Error(`PostHog query failed with ${response.status}`);
 
-    const body: unknown = await response.json();
-    const visits = Number((body as { results?: unknown[][] }).results?.[0]?.[0]);
-    if (!Number.isSafeInteger(visits) || visits < 0)
-      throw new Error("PostHog returned an invalid visit count");
+    const body = postHogQueryResultSchema.safeParse(await response.json());
+    if (!body.success) throw new Error("PostHog returned an invalid pageview count");
+    const pageviews = body.data.results[0][0];
 
     return withHomepageCors(
-      ok({ visitsLast30Days: visits, generatedAt: new Date().toISOString() }),
+      ok({ pageviewsLast30Days: pageviews, generatedAt: new Date().toISOString() }),
     );
   } catch {
     return withHomepageCors(

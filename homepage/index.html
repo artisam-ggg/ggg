@@ -1002,8 +1002,8 @@
           </div>
           <div class="analytics-grid">
             <article class="analytics-card">
-              <span class="eyebrow-muted">App visits</span>
-              <p class="analytics-value" id="analytics-visits" aria-live="polite">—</p>
+              <span class="eyebrow-muted">App pageviews</span>
+              <p class="analytics-value" id="analytics-pageviews" aria-live="polite">—</p>
               <p class="eyebrow-muted">Last 30 days</p>
             </article>
           </div>
@@ -1176,7 +1176,7 @@
         }
 
         // Homepage metrics are aggregate-only and fetched from the app's public endpoint.
-        var analyticsValue = document.getElementById("analytics-visits");
+        var analyticsValue = document.getElementById("analytics-pageviews");
         var analyticsStatus = document.getElementById("analytics-status");
         fetch("https://beta.app.ggg.quest/api/public-analytics")
           .then(function (response) {
@@ -1184,9 +1184,11 @@
             return response.json();
           })
           .then(function (payload) {
-            var visits = payload && payload.data && payload.data.visitsLast30Days;
-            if (!Number.isSafeInteger(visits) || visits < 0) throw new Error("Invalid analytics");
-            if (analyticsValue) analyticsValue.textContent = new Intl.NumberFormat().format(visits);
+            var pageviews = payload && payload.data && payload.data.pageviewsLast30Days;
+            if (!Number.isSafeInteger(pageviews) || pageviews < 0)
+              throw new Error("Invalid analytics");
+            if (analyticsValue)
+              analyticsValue.textContent = new Intl.NumberFormat().format(pageviews);
             if (analyticsStatus) analyticsStatus.textContent = "Updated from aggregate PostHog data.";
           })
           .catch(function () {

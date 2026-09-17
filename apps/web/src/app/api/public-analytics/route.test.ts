@@ -15,7 +15,7 @@ describe("GET /api/public-analytics", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns an aggregate 30-day visit count with homepage-only CORS", async () => {
+  it("returns an aggregate 30-day pageview count with homepage-only CORS", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(new Response(JSON.stringify({ results: [[42]] }))),
@@ -26,10 +26,39 @@ describe("GET /api/public-analytics", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe("https://ggg.quest");
+    expect(response.headers.get("Cache-Control")).toContain("s-maxage=300");
     await expect(response.json()).resolves.toMatchObject({
       ok: true,
-      data: { visitsLast30Days: 42 },
+      data: { pageviewsLast30Days: 42 },
     });
+  });
+
+  it.each([
+    ["empty", { results: [] }],
+    ["null", { results: [[null]] }],
+    ["blank", { results: [[""]] }],
+    ["fractional", { results: [[1.5]] }],
+  ])("fails closed for %s PostHog data", async (_case, body) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(body))));
+    const { GET } = await import("./route");
+
+    const response = await GET();
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+  });
+
+  it("returns the unavailable response when PostHog times out", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new DOMException("Timed out", "TimeoutError")),
+    );
+    const { GET } = await import("./route");
+
+    const response = await GET();
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
   });
 
   it("does not query PostHog without server credentials", async () => {
@@ -41,6 +70,19 @@ describe("GET /api/public-analytics", () => {
     const response = await GET();
 
     expect(response.status).toBe(503);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not expose the personal API key in its public response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ results: [[42]] }))),
+    );
+    const { GET } = await import("./route");
+
+    const response = await GET();
+
+    expect(await response.text()).not.toContain(env.POSTHOG_PERSONAL_API_KEY);
   });
 });

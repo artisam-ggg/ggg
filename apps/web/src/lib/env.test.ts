@@ -68,4 +68,10 @@ describe("parseEnv", () => {
     expect(env.POSTHOG_PERSONAL_API_KEY).toBeUndefined();
     expect(env.POSTHOG_PROJECT_ID).toBeUndefined();
   });
+
+  it("rejects an insecure PostHog API host", () => {
+    expect(() =>
+      parseEnv({ ...valid, POSTHOG_API_HOST: "http://posthog.example.com" }),
+    ).toThrowError(/POSTHOG_API_HOST/);
+  });
 });

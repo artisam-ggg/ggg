@@ -199,4 +199,4 @@ The web app supports optional, consent-gated PostHog product analytics and maske
 
 ## Issue #292 — Public homepage analytics
 
-The static homepage includes an aggregate-only App visits metric for the last 30 days. It reads a cached, public endpoint hosted by the web app; that endpoint queries PostHog using server-only credentials and exposes neither a PostHog key nor user-level data. When the server credentials are absent or PostHog is unavailable, the homepage keeps working and reports that live analytics are temporarily unavailable.
+The static homepage includes an aggregate-only App pageviews metric for the last 30 days, defined as the number of PostHog `$pageview` events. It reads a public endpoint hosted by the web app, cached for five minutes; that endpoint queries PostHog using server-only credentials and exposes neither a PostHog key nor user-level data. Missing, delayed, empty, malformed, or unavailable upstream data is not cached and leaves the homepage working with a temporary-unavailability message.
