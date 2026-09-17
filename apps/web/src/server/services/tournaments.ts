@@ -14,6 +14,7 @@ import {
   StellarError,
   submitSignedXdr,
   validateDeployXdr,
+  validateJoinXdr,
 } from "@/lib/stellar";
 
 import type {
@@ -138,8 +139,7 @@ function requireFutureSettlementDeadline(deadline: Date | null): Date {
  * optimistic or failed result.
  *
  * Ownership: deploy/cancel are organiser-only; finalize is organiser/referee;
- * join is public (participant records are created by the event subscriber in
- * Phase 5).
+ * join is public and its confirmed participant is reconciled with the event subscriber.
  */
 export async function submitTournamentTx(
   id: string,
@@ -212,6 +212,14 @@ export async function submitTournamentTx(
         });
       }
     }
+  }
+
+  let joinPlayer: string | null = null;
+  if (input.intent === "join") {
+    if (tournament.status !== "ACTIVE" || !tournament.contractId) {
+      throw Object.assign(new Error("Tournament is not open for joining"), { status: 409 });
+    }
+    joinPlayer = validateJoinXdr(input.signedXdr, { contractId: tournament.contractId });
   }
 
   let result: Awaited<ReturnType<typeof submitSignedXdr>>;
@@ -295,17 +303,12 @@ export async function submitTournamentTx(
     };
   }
 
-  if (input.intent === "join") {
-    if (!result.source) {
-      throw Object.assign(new Error("Confirmed join is missing its source account"), {
-        status: 502,
-      });
-    }
+  if (input.intent === "join" && joinPlayer) {
     await prisma.participant.upsert({
-      where: { tournamentId_playerAddr: { tournamentId: id, playerAddr: result.source } },
+      where: { tournamentId_playerAddr: { tournamentId: id, playerAddr: joinPlayer } },
       create: {
         tournamentId: id,
-        playerAddr: result.source,
+        playerAddr: joinPlayer,
         joinTxHash: result.hash,
         joinedAt: submittedAt,
       },

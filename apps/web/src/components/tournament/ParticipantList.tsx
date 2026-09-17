@@ -8,12 +8,12 @@ function trunc(addr: string) {
   return `${addr.slice(0, 6)}…${addr.slice(-6)}`;
 }
 
+const subscribe = () => () => {};
+const getSnapshot = () => true;
+const getServerSnapshot = () => false;
+
 export function ParticipantList({ participants }: { participants: Participant[] }) {
-  const isBrowser = useSyncExternalStore(
-    () => () => {},
-    () => true,
-    () => false,
-  );
+  const isBrowser = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   if (participants.length === 0) {
     return <p className="text-on-surface-variant">No players have joined yet.</p>;

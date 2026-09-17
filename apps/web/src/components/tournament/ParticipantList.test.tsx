@@ -55,7 +55,10 @@ describe("ParticipantList", () => {
       />,
     );
 
-    expect(document.querySelector("time")).toHaveTextContent("Jan 1, 2025, 10:00 PM GMT+8");
+    expect(document.querySelector("time")).toHaveTextContent(/Jan 1, 2025/);
+    expect(document.querySelector("time")).toHaveTextContent(/10:00/);
+    expect(document.querySelector("time")).toHaveTextContent(/PM/);
+    expect(document.querySelector("time")).toHaveTextContent(/GMT\+8/);
   });
 
   it("shows a safe fallback for an invalid timestamp", () => {

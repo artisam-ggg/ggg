@@ -6,6 +6,7 @@ const {
   participantUpsertMock,
   submitMock,
   validateDeployMock,
+  validateJoinMock,
   lookupDeployMock,
 } = vi.hoisted(() => ({
   findUniqueMock: vi.fn(),
@@ -13,6 +14,7 @@ const {
   participantUpsertMock: vi.fn(),
   submitMock: vi.fn(),
   validateDeployMock: vi.fn(),
+  validateJoinMock: vi.fn(),
   lookupDeployMock: vi.fn(),
 }));
 
@@ -53,6 +55,7 @@ vi.mock("@/lib/stellar", () => ({
   },
   submitSignedXdr: submitMock,
   validateDeployXdr: validateDeployMock,
+  validateJoinXdr: validateJoinMock,
 }));
 
 import { getTournamentDetail, getTournamentDisplayStatus, submitTournamentTx } from "./tournaments";
@@ -660,6 +663,7 @@ describe("submitTournamentTx join timestamp", () => {
       status: "ACTIVE",
       contractId: "CESCROW",
     });
+    validateJoinMock.mockReturnValue("GPLAYER");
   });
 
   afterEach(() => vi.useRealTimers());
@@ -667,7 +671,7 @@ describe("submitTournamentTx join timestamp", () => {
   it("persists app submission time even when Stellar confirmation is delayed", async () => {
     submitMock.mockImplementation(async () => {
       vi.setSystemTime(new Date("2026-09-17T14:05:00.000Z"));
-      return { hash: "TX_JOIN", source: "GPLAYER", status: "SUCCESS" };
+      return { hash: "TX_JOIN", status: "SUCCESS" };
     });
 
     await expect(
@@ -689,5 +693,33 @@ describe("submitTournamentTx join timestamp", () => {
         joinedAt: new Date("2026-09-17T14:00:00.000Z"),
       },
     });
+    expect(validateJoinMock).toHaveBeenCalledWith("XDR", { contractId: "CESCROW" });
+  });
+
+  it("rejects a mismatched join before broadcasting", async () => {
+    validateJoinMock.mockImplementation(() => {
+      throw new StellarError("INVALID_INPUT", "Wrong join contract");
+    });
+
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "join" }, "user_1"),
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    expect(submitMock).not.toHaveBeenCalled();
+    expect(participantUpsertMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects joins for inactive tournaments before broadcasting", async () => {
+    findUniqueMock.mockResolvedValue({
+      id: "t_1",
+      organizerId: "organizer_1",
+      status: "FINISHED",
+      contractId: "CESCROW",
+    });
+
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "join" }, "user_1"),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(validateJoinMock).not.toHaveBeenCalled();
+    expect(submitMock).not.toHaveBeenCalled();
   });
 });
