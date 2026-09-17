@@ -4,6 +4,7 @@ const env = {
   POSTHOG_PERSONAL_API_KEY: "phx_test",
   POSTHOG_PROJECT_ID: "123",
   POSTHOG_API_HOST: "https://us.posthog.com",
+  ALLOWED_ORIGINS: "http://localhost:4173",
 };
 
 vi.mock("@/lib/env", () => ({ env }));
@@ -15,6 +16,10 @@ describe("GET /api/public-analytics", () => {
     vi.restoreAllMocks();
   });
 
+  function request(origin = "https://ggg.quest") {
+    return new Request("http://localhost/api/public-analytics", { headers: { origin } });
+  }
+
   it("returns an aggregate 30-day pageview count with homepage-only CORS", async () => {
     vi.stubGlobal(
       "fetch",
@@ -22,7 +27,7 @@ describe("GET /api/public-analytics", () => {
     );
     const { GET } = await import("./route");
 
-    const response = await GET();
+    const response = await GET(request());
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe("https://ggg.quest");
@@ -31,6 +36,30 @@ describe("GET /api/public-analytics", () => {
       ok: true,
       data: { pageviewsLast30Days: 42 },
     });
+  });
+
+  it("allows a configured local homepage origin", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ results: [[42]] }))),
+    );
+    const { GET } = await import("./route");
+
+    const response = await GET(request("http://localhost:4173"));
+
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe("http://localhost:4173");
+  });
+
+  it("does not allow an unconfigured origin", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ results: [[42]] }))),
+    );
+    const { GET } = await import("./route");
+
+    const response = await GET(request("https://attacker.example"));
+
+    expect(response.headers.has("Access-Control-Allow-Origin")).toBe(false);
   });
 
   it.each([
@@ -42,7 +71,7 @@ describe("GET /api/public-analytics", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(body))));
     const { GET } = await import("./route");
 
-    const response = await GET();
+    const response = await GET(request());
 
     expect(response.status).toBe(503);
     expect(response.headers.get("Cache-Control")).toBe("no-store");
@@ -55,7 +84,7 @@ describe("GET /api/public-analytics", () => {
     );
     const { GET } = await import("./route");
 
-    const response = await GET();
+    const response = await GET(request());
 
     expect(response.status).toBe(503);
     expect(response.headers.get("Cache-Control")).toBe("no-store");
@@ -67,7 +96,7 @@ describe("GET /api/public-analytics", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { GET } = await import("./route");
 
-    const response = await GET();
+    const response = await GET(request());
 
     expect(response.status).toBe(503);
     expect(response.headers.get("Cache-Control")).toBe("no-store");
@@ -81,7 +110,7 @@ describe("GET /api/public-analytics", () => {
     );
     const { GET } = await import("./route");
 
-    const response = await GET();
+    const response = await GET(request());
 
     expect(await response.text()).not.toContain(env.POSTHOG_PERSONAL_API_KEY);
   });

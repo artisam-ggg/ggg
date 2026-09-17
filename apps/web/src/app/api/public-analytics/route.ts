@@ -8,8 +8,15 @@ const postHogQueryResultSchema = z.object({
   results: z.tuple([z.tuple([z.number().int().nonnegative().safe()])]),
 });
 
-function withHomepageCors(response: Response): Response {
-  response.headers.set("Access-Control-Allow-Origin", HOMEPAGE_ORIGIN);
+function withHomepageCors(response: Response, request: Request): Response {
+  const origin = request.headers.get("Origin");
+  const allowedOrigins = new Set([
+    HOMEPAGE_ORIGIN,
+    ...(env.ALLOWED_ORIGINS?.split(",").map((value) => value.trim()) ?? []),
+  ]);
+  if (origin && allowedOrigins.has(origin)) {
+    response.headers.set("Access-Control-Allow-Origin", origin);
+  }
   response.headers.set("Vary", "Origin");
   response.headers.set(
     "Cache-Control",
@@ -20,9 +27,12 @@ function withHomepageCors(response: Response): Response {
   return response;
 }
 
-export async function GET(): Promise<Response> {
+export async function GET(request: Request): Promise<Response> {
   if (!env.POSTHOG_PERSONAL_API_KEY || !env.POSTHOG_PROJECT_ID) {
-    return withHomepageCors(err("ANALYTICS_UNAVAILABLE", "Analytics is not configured.", 503));
+    return withHomepageCors(
+      err("ANALYTICS_UNAVAILABLE", "Analytics is not configured.", 503),
+      request,
+    );
   }
 
   try {
@@ -53,10 +63,12 @@ export async function GET(): Promise<Response> {
 
     return withHomepageCors(
       ok({ pageviewsLast30Days: pageviews, generatedAt: new Date().toISOString() }),
+      request,
     );
   } catch {
     return withHomepageCors(
       err("ANALYTICS_UNAVAILABLE", "Analytics is temporarily unavailable.", 503),
+      request,
     );
   }
 }
