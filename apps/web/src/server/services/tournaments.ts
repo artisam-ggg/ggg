@@ -146,6 +146,7 @@ export async function submitTournamentTx(
   input: SubmitInput,
   userId: string,
 ): Promise<SubmitTxResult> {
+  const submittedAt = new Date();
   const tournament = await prisma.tournament.findUnique({ where: { id } });
   if (!tournament) {
     throw Object.assign(new Error("Tournament not found"), { status: 404 });
@@ -294,7 +295,24 @@ export async function submitTournamentTx(
     };
   }
 
-  // join: participant records created by event subscriber (Phase 5); no DB mutation here.
+  if (input.intent === "join") {
+    if (!result.source) {
+      throw Object.assign(new Error("Confirmed join is missing its source account"), {
+        status: 502,
+      });
+    }
+    await prisma.participant.upsert({
+      where: { tournamentId_playerAddr: { tournamentId: id, playerAddr: result.source } },
+      create: {
+        tournamentId: id,
+        playerAddr: result.source,
+        joinTxHash: result.hash,
+        joinedAt: submittedAt,
+      },
+      update: { joinTxHash: result.hash, joinedAt: submittedAt },
+    });
+  }
+
   return {
     txHash: result.hash,
     status: tournament.status,

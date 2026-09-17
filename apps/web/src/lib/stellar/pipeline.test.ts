@@ -75,13 +75,17 @@ describe("simulateAndAssemble", () => {
 
 describe("submitSignedXdr", () => {
   it("submits and polls until SUCCESS, returning hash", async () => {
+    vi.mocked(TransactionBuilder.fromXDR).mockReturnValue({
+      hash: () => Buffer.from("HASH"),
+      source: "GPLAYER",
+    } as never);
     rpcRef.current = makeFakeRpc({
       sendTransaction: vi.fn().mockResolvedValue({ status: "PENDING", hash: "HASH" }),
       getTransaction: txStatus("SUCCESS"),
     });
     const { submitSignedXdr } = await import("./pipeline");
     const res = await submitSignedXdr("AAAAAgAAAAA=", "join");
-    expect(res).toMatchObject({ hash: "HASH", status: "SUCCESS" });
+    expect(res).toMatchObject({ hash: "HASH", source: "GPLAYER", status: "SUCCESS" });
   });
   it("returns FAILED status when getTransaction is FAILED", async () => {
     rpcRef.current = makeFakeRpc({ getTransaction: txStatus("FAILED") });

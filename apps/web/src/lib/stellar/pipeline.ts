@@ -42,6 +42,7 @@ export async function simulateAndAssemble(tx: Transaction): Promise<Transaction>
 export interface SubmitResult {
   hash: string;
   contractId?: string;
+  source?: string;
   status: "SUCCESS" | "FAILED";
 }
 
@@ -229,7 +230,13 @@ export async function submitSignedXdr(
     }
     if (got.status === "SUCCESS") {
       const contractId = extractContractId(intent, got);
-      return contractId ? { hash, status: "SUCCESS", contractId } : { hash, status: "SUCCESS" };
+      const source = "source" in tx ? tx.source : undefined;
+      return {
+        hash,
+        status: "SUCCESS",
+        ...(contractId ? { contractId } : {}),
+        ...(source ? { source } : {}),
+      };
     }
     if (got.status === "FAILED") return { hash, status: "FAILED" };
     if (intervalMs > 0) await new Promise((r) => setTimeout(r, intervalMs));

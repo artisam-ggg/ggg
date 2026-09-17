@@ -1,14 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { findUniqueMock, updateMock, submitMock, validateDeployMock, lookupDeployMock } = vi.hoisted(
-  () => ({
-    findUniqueMock: vi.fn(),
-    updateMock: vi.fn(),
-    submitMock: vi.fn(),
-    validateDeployMock: vi.fn(),
-    lookupDeployMock: vi.fn(),
-  }),
-);
+const {
+  findUniqueMock,
+  updateMock,
+  participantUpsertMock,
+  submitMock,
+  validateDeployMock,
+  lookupDeployMock,
+} = vi.hoisted(() => ({
+  findUniqueMock: vi.fn(),
+  updateMock: vi.fn(),
+  participantUpsertMock: vi.fn(),
+  submitMock: vi.fn(),
+  validateDeployMock: vi.fn(),
+  lookupDeployMock: vi.fn(),
+}));
 
 vi.mock("@/lib/db", () => ({
   prisma: {
@@ -16,6 +22,7 @@ vi.mock("@/lib/db", () => ({
       findUnique: findUniqueMock,
       update: updateMock,
     },
+    participant: { upsert: participantUpsertMock },
   },
 }));
 
@@ -639,5 +646,48 @@ describe("submitTournamentTx constructor deployment", () => {
       submitTournamentTx("t_1", { signedXdr: "XDR", intent: "deploy" }, "user_1"),
     ).rejects.toMatchObject({ status: 409 });
     expect(submitMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("submitTournamentTx join timestamp", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-17T14:00:00.000Z"));
+    vi.clearAllMocks();
+    findUniqueMock.mockResolvedValue({
+      id: "t_1",
+      organizerId: "organizer_1",
+      status: "ACTIVE",
+      contractId: "CESCROW",
+    });
+  });
+
+  afterEach(() => vi.useRealTimers());
+
+  it("persists app submission time even when Stellar confirmation is delayed", async () => {
+    submitMock.mockImplementation(async () => {
+      vi.setSystemTime(new Date("2026-09-17T14:05:00.000Z"));
+      return { hash: "TX_JOIN", source: "GPLAYER", status: "SUCCESS" };
+    });
+
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "join" }, "user_1"),
+    ).resolves.toMatchObject({ txHash: "TX_JOIN", status: "ACTIVE" });
+
+    expect(participantUpsertMock).toHaveBeenCalledWith({
+      where: {
+        tournamentId_playerAddr: { tournamentId: "t_1", playerAddr: "GPLAYER" },
+      },
+      create: {
+        tournamentId: "t_1",
+        playerAddr: "GPLAYER",
+        joinTxHash: "TX_JOIN",
+        joinedAt: new Date("2026-09-17T14:00:00.000Z"),
+      },
+      update: {
+        joinTxHash: "TX_JOIN",
+        joinedAt: new Date("2026-09-17T14:00:00.000Z"),
+      },
+    });
   });
 });

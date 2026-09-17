@@ -204,3 +204,7 @@ Tournament detail and organizer-list badges now distinguish `ACTIVE`, `REFUNDS O
 ## Issue #288 — Reconcile organizer-list prize-pool totals
 
 Organizer tournament rows now subtract confirmed payouts and refunds from total entry fees to show the remaining escrow pool. Each row labels the remaining pool, total collected, total paid out, and total refunded separately so settled funds are never presented as funds still held by the contract.
+
+## Issue #286 — Show participant app join times
+
+Confirmed joins now preserve the server timestamp from the signed app submission instead of using the later subscriber/event time. The participant log identifies these as app join times and renders them in the viewer's local timezone with a visible timezone indicator; exact ISO timestamps remain available to assistive technology.

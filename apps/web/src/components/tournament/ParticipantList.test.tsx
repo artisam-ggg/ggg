@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import { ParticipantList } from "./ParticipantList";
 
 const participants = [
@@ -14,6 +14,8 @@ const participants = [
 ];
 
 describe("ParticipantList", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
   it("renders each participant's truncated address", () => {
     render(<ParticipantList participants={participants} />);
     // First address: slice(0,6)="GABCDE", slice(-6)="56A" → but address must be ≥12 chars
@@ -37,12 +39,23 @@ describe("ParticipantList", () => {
     expect(times[1]).toHaveAttribute("dateTime", "2025-01-01T11:30:00.000Z");
   });
 
-  it("shows timezone information and an exact UTC accessible timestamp", () => {
+  it("labels the timestamp basis and exposes the exact app join timestamp", () => {
     render(<ParticipantList participants={participants} />);
     const time = document.querySelector("time");
 
-    expect(time).toHaveAccessibleName("Joined at 2025-01-01T10:00:00.000Z UTC");
-    expect(time).toHaveTextContent("10:00:00 AM UTC");
+    expect(screen.getByText("App join times shown in your local timezone.")).toBeInTheDocument();
+    expect(time).toHaveAccessibleName("App join time 2025-01-01T10:00:00.000Z");
+  });
+
+  it("converts a known app join time to the viewer timezone", () => {
+    vi.stubEnv("TZ", "Asia/Manila");
+    render(
+      <ParticipantList
+        participants={[{ ...participants[0]!, joinedAt: "2025-01-01T14:00:00.000Z" }]}
+      />,
+    );
+
+    expect(document.querySelector("time")).toHaveTextContent("Jan 1, 2025, 10:00 PM GMT+8");
   });
 
   it("shows a safe fallback for an invalid timestamp", () => {
