@@ -38,8 +38,8 @@ export function getTournamentDisplayStatus(
     status: PersistedStatus;
     settlementDeadline: Date | null;
     deadlineConfirmedAt: Date | null;
-    participantCount: number;
-    refundClaimedCount: number;
+    participantAddresses: string[];
+    refundClaimedPlayers: string[];
   },
   now = Date.now(),
 ): TournamentDisplayStatus {
@@ -51,8 +51,9 @@ export function getTournamentDisplayStatus(
   ) {
     return "ACTIVE";
   }
-  return tournament.participantCount > 0 &&
-    tournament.refundClaimedCount === tournament.participantCount
+  const claimedPlayers = new Set(tournament.refundClaimedPlayers);
+  return tournament.participantAddresses.length > 0 &&
+    tournament.participantAddresses.every((player) => claimedPlayers.has(player))
     ? "REFUNDED"
     : "REFUNDS_OPEN";
 }
@@ -302,6 +303,7 @@ export async function listTournaments(userId: string, q: ListQueryInput) {
     },
     include: {
       _count: { select: { participants: true } },
+      participants: { select: { playerAddr: true } },
       events: {
         where: { type: "REFUND_CLAIMED" },
         select: { payload: true },
@@ -313,9 +315,9 @@ export async function listTournaments(userId: string, q: ListQueryInput) {
   });
 
   const items = rows.slice(0, q.take).map((t) => {
-    const refundClaimedCount = new Set(
-      parseRefundClaims(t.events ?? []).map((claim) => claim.player),
-    ).size;
+    const refundClaimedPlayers = [
+      ...new Set(parseRefundClaims(t.events ?? []).map((claim) => claim.player)),
+    ];
     return {
       id: t.id,
       name: t.name,
@@ -325,14 +327,14 @@ export async function listTournaments(userId: string, q: ListQueryInput) {
         status: t.status,
         settlementDeadline: t.settlementDeadline,
         deadlineConfirmedAt: t.deadlineConfirmedAt,
-        participantCount: t._count.participants,
-        refundClaimedCount,
+        participantAddresses: (t.participants ?? []).map((participant) => participant.playerAddr),
+        refundClaimedPlayers,
       }),
       asset: t.asset,
       entryFee: t.entryFee.toString(),
       pool: (t.entryFee * BigInt(t._count.participants)).toString(),
       participantCount: t._count.participants,
-      refundClaimedCount,
+      refundClaimedCount: refundClaimedPlayers.length,
     };
   });
 
@@ -473,6 +475,7 @@ export async function getTournamentDetail(id: string) {
   const grossPool = t.entryFee * BigInt(t.participants.length);
   const pool = (grossPool > refunded ? grossPool - refunded : 0n).toString();
   const confirmedSettlementDeadline = t.deadlineConfirmedAt ? t.settlementDeadline : null;
+  const now = Date.now();
 
   return {
     id: t.id,
@@ -480,13 +483,16 @@ export async function getTournamentDetail(id: string) {
     gameTitle: t.gameTitle,
     coverImageUrl: t.coverImageKey ? `/api/tournaments/${encodeURIComponent(t.id)}/cover` : null,
     status: t.status,
-    displayStatus: getTournamentDisplayStatus({
-      status: t.status,
-      settlementDeadline: t.settlementDeadline,
-      deadlineConfirmedAt: t.deadlineConfirmedAt,
-      participantCount: t.participants.length,
-      refundClaimedCount: refundClaimedPlayers.length,
-    }),
+    displayStatus: getTournamentDisplayStatus(
+      {
+        status: t.status,
+        settlementDeadline: t.settlementDeadline,
+        deadlineConfirmedAt: t.deadlineConfirmedAt,
+        participantAddresses: t.participants.map((participant) => participant.playerAddr),
+        refundClaimedPlayers,
+      },
+      now,
+    ),
     asset: t.asset,
     entryFee: t.entryFee.toString(),
     distributionBps: [t.firstBps, t.secondBps, t.thirdBps] as const,
@@ -523,6 +529,6 @@ export async function getTournamentDetail(id: string) {
       (t.status === "ACTIVE" &&
         t.deadlineConfirmedAt != null &&
         t.settlementDeadline != null &&
-        t.settlementDeadline.getTime() <= Date.now()),
+        t.settlementDeadline.getTime() <= now),
   };
 }

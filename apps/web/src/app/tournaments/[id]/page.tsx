@@ -38,8 +38,10 @@ export default async function TournamentDetailPage({
 
   const isOrganiser = currentUser?.id === t.organizerId;
   const canCancel = isOrganiser && t.status === "ACTIVE" && !t.refundsClaimable;
+  const claimedPlayers = new Set(t.refundClaimedPlayers);
   const allRefundsClaimed =
-    t.participants.length > 0 && t.refundClaimedPlayers.length === t.participants.length;
+    t.participants.length > 0 &&
+    t.participants.every((participant) => claimedPlayers.has(participant.playerAddr));
 
   // Extract participant wallet addresses for the counter
   const participantAddresses = t.participants.map((p) => p.playerAddr);

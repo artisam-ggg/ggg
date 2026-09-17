@@ -177,6 +177,7 @@ describe("GET /api/tournaments", () => {
         entryFee: 10n,
         asset: "XLM",
         events: [{ payload: { player: "GPLAYER", amount: "10" } }],
+        participants: [{ playerAddr: "GPLAYER" }, { playerAddr: "GOTHER" }],
         _count: { participants: 2 },
       },
     ]);
@@ -188,6 +189,35 @@ describe("GET /api/tournaments", () => {
       status: "ACTIVE",
       displayStatus: "REFUNDS_OPEN",
       refundClaimedCount: 1,
+    });
+  });
+
+  it("does not mark a roster refunded when claim addresses only match its size", async () => {
+    findMany.mockResolvedValue([
+      {
+        id: "t_1",
+        name: "Cup",
+        gameTitle: "G",
+        status: "ACTIVE",
+        settlementDeadline: new Date("2026-09-17T00:00:00.000Z"),
+        deadlineConfirmedAt: new Date("2026-09-16T00:00:00.000Z"),
+        entryFee: 10n,
+        asset: "XLM",
+        events: [
+          { payload: { player: "GPLAYER", amount: "10" } },
+          { payload: { player: "GDIFFERENT", amount: "10" } },
+        ],
+        participants: [{ playerAddr: "GPLAYER" }, { playerAddr: "GOTHER" }],
+        _count: { participants: 2 },
+      },
+    ]);
+
+    const res = await GET(makeGetReq("http://localhost/api/tournaments?take=20"));
+    const json = await res.json();
+
+    expect(json.data.items[0]).toMatchObject({
+      displayStatus: "REFUNDS_OPEN",
+      refundClaimedCount: 2,
     });
   });
 

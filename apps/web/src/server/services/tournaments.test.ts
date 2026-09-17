@@ -62,8 +62,8 @@ describe("getTournamentDisplayStatus", () => {
           status: "ACTIVE",
           settlementDeadline: deadline,
           deadlineConfirmedAt: confirmedAt,
-          participantCount: 2,
-          refundClaimedCount: 0,
+          participantAddresses: ["GA", "GB"],
+          refundClaimedPlayers: [],
         },
         deadline.getTime() - 1,
       ),
@@ -77,8 +77,8 @@ describe("getTournamentDisplayStatus", () => {
           status: "ACTIVE",
           settlementDeadline: deadline,
           deadlineConfirmedAt: confirmedAt,
-          participantCount: 2,
-          refundClaimedCount: 1,
+          participantAddresses: ["GA", "GB"],
+          refundClaimedPlayers: ["GA"],
         },
         deadline.getTime(),
       ),
@@ -92,8 +92,8 @@ describe("getTournamentDisplayStatus", () => {
           status: "ACTIVE",
           settlementDeadline: deadline,
           deadlineConfirmedAt: confirmedAt,
-          participantCount: 2,
-          refundClaimedCount: 2,
+          participantAddresses: ["GA", "GB"],
+          refundClaimedPlayers: ["GA", "GB"],
         },
         deadline.getTime(),
       ),
@@ -107,8 +107,8 @@ describe("getTournamentDisplayStatus", () => {
           status: "ACTIVE",
           settlementDeadline: deadline,
           deadlineConfirmedAt: confirmedAt,
-          participantCount: 0,
-          refundClaimedCount: 0,
+          participantAddresses: [],
+          refundClaimedPlayers: [],
         },
         deadline.getTime(),
       ),
@@ -121,10 +121,25 @@ describe("getTournamentDisplayStatus", () => {
         status,
         settlementDeadline: deadline,
         deadlineConfirmedAt: confirmedAt,
-        participantCount: 2,
-        refundClaimedCount: 2,
+        participantAddresses: ["GA", "GB"],
+        refundClaimedPlayers: ["GA", "GB"],
       }),
     ).toBe(status);
+  });
+
+  it("does not infer a full refund from equal counts with different addresses", () => {
+    expect(
+      getTournamentDisplayStatus(
+        {
+          status: "ACTIVE",
+          settlementDeadline: deadline,
+          deadlineConfirmedAt: confirmedAt,
+          participantAddresses: ["GA", "GB"],
+          refundClaimedPlayers: ["GA", "GC"],
+        },
+        deadline.getTime(),
+      ),
+    ).toBe("REFUNDS_OPEN");
   });
 });
 
@@ -309,6 +324,40 @@ describe("getTournamentDetail", () => {
     });
 
     await expect(getTournamentDetail("t_1")).resolves.toMatchObject({ refundsClaimable: true });
+  });
+
+  it("uses one timestamp for deadline status and refund eligibility", async () => {
+    const deadline = new Date("2026-09-17T12:00:00.000Z");
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(deadline.getTime());
+    findUniqueMock.mockResolvedValue({
+      id: "t_1",
+      name: "Tournament",
+      gameTitle: "Game",
+      coverImageKey: null,
+      status: "ACTIVE",
+      asset: "XLM",
+      entryFee: 10_000_000n,
+      firstBps: 6000,
+      secondBps: 3000,
+      thirdBps: 1000,
+      contractId: "CESCROW",
+      tokenAddr: "CTOKEN",
+      organizerId: "user_1",
+      organizerAddr: "GORG",
+      refereeAddr: "GREF",
+      settlementDeadline: deadline,
+      deadlineConfirmedAt: new Date("2026-09-16T12:00:00.000Z"),
+      participants: [{ playerAddr: "GA", joinedAt: new Date(), joinTxHash: null }],
+      payouts: [],
+      events: [],
+    });
+
+    await expect(getTournamentDetail("t_1")).resolves.toMatchObject({
+      displayStatus: "REFUNDS_OPEN",
+      refundsClaimable: true,
+    });
+    expect(nowSpy).toHaveBeenCalledOnce();
+    nowSpy.mockRestore();
   });
 });
 

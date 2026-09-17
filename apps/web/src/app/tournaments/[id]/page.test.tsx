@@ -247,6 +247,19 @@ describe("/tournaments/[id] — public detail page", () => {
       expect(screen.queryByRole("button", { name: "Connect Wallet" })).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "Claim Refund" })).not.toBeInTheDocument();
     });
+
+    it("keeps the claim action when equal claim and participant counts contain different wallets", async () => {
+      mockGetTournamentDetail.mockResolvedValue({
+        ...ACTIVE_TOURNAMENT,
+        displayStatus: "REFUNDS_OPEN",
+        refundsClaimable: true,
+        refundClaimedPlayers: ["GDIFFERENT"],
+      });
+      render(await Page({ params: Promise.resolve({ id: "t_1" }) }));
+
+      expect(screen.getByRole("button", { name: "Connect Wallet" })).toBeInTheDocument();
+      expect(screen.getByRole("alert")).not.toHaveTextContent("All registered players");
+    });
   });
 
   // -------------------------------------------------------------------------
