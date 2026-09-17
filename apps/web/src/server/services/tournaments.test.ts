@@ -4,6 +4,8 @@ const {
   findUniqueMock,
   updateMock,
   participantUpsertMock,
+  joinSubmissionUpsertMock,
+  joinSubmissionDeleteManyMock,
   submitMock,
   validateDeployMock,
   validateJoinMock,
@@ -12,6 +14,8 @@ const {
   findUniqueMock: vi.fn(),
   updateMock: vi.fn(),
   participantUpsertMock: vi.fn(),
+  joinSubmissionUpsertMock: vi.fn(),
+  joinSubmissionDeleteManyMock: vi.fn(),
   submitMock: vi.fn(),
   validateDeployMock: vi.fn(),
   validateJoinMock: vi.fn(),
@@ -25,6 +29,10 @@ vi.mock("@/lib/db", () => ({
       update: updateMock,
     },
     participant: { upsert: participantUpsertMock },
+    joinSubmission: {
+      upsert: joinSubmissionUpsertMock,
+      deleteMany: joinSubmissionDeleteManyMock,
+    },
   },
 }));
 
@@ -35,7 +43,7 @@ vi.mock("@/lib/stellar", () => ({
   buildDeployInitializeTx: vi.fn(),
   buildFinalizeTx: vi.fn(),
   buildJoinTx: vi.fn(),
-  deploymentTxHash: vi.fn(() => "CURRENT_HASH"),
+  signedTransactionHash: vi.fn(() => "CURRENT_HASH"),
   explorerContractUrl: vi.fn(),
   explorerTxUrl: vi.fn(),
   lookupDeployment: lookupDeployMock,
@@ -664,6 +672,12 @@ describe("submitTournamentTx join timestamp", () => {
       contractId: "CESCROW",
     });
     validateJoinMock.mockReturnValue("GPLAYER");
+    joinSubmissionUpsertMock.mockResolvedValue({
+      txHash: "CURRENT_HASH",
+      tournamentId: "t_1",
+      playerAddr: "GPLAYER",
+      submittedAt: new Date("2026-09-17T14:00:00.000Z"),
+    });
   });
 
   afterEach(() => vi.useRealTimers());
@@ -694,6 +708,31 @@ describe("submitTournamentTx join timestamp", () => {
       },
     });
     expect(validateJoinMock).toHaveBeenCalledWith("XDR", { contractId: "CESCROW" });
+    expect(joinSubmissionUpsertMock).toHaveBeenCalledWith({
+      where: { txHash: "CURRENT_HASH" },
+      create: {
+        txHash: "CURRENT_HASH",
+        tournamentId: "t_1",
+        playerAddr: "GPLAYER",
+        submittedAt: new Date("2026-09-17T14:00:00.000Z"),
+      },
+      update: {},
+    });
+    expect(joinSubmissionDeleteManyMock).toHaveBeenCalledWith({
+      where: { txHash: "CURRENT_HASH" },
+    });
+  });
+
+  it("returns the confirmed join when participant persistence is temporarily unavailable", async () => {
+    submitMock.mockResolvedValue({ hash: "TX_JOIN", status: "SUCCESS" });
+    participantUpsertMock.mockRejectedValueOnce(new Error("database unavailable"));
+
+    await expect(
+      submitTournamentTx("t_1", { signedXdr: "XDR", intent: "join" }, "user_1"),
+    ).resolves.toMatchObject({ txHash: "TX_JOIN", status: "ACTIVE" });
+
+    expect(joinSubmissionUpsertMock).toHaveBeenCalledOnce();
+    expect(joinSubmissionDeleteManyMock).not.toHaveBeenCalled();
   });
 
   it("rejects a mismatched join before broadcasting", async () => {

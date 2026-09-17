@@ -45,8 +45,8 @@ export interface SubmitResult {
   status: "SUCCESS" | "FAILED";
 }
 
-/** Hash the signed transaction independently of its signatures for retry reconciliation. */
-export function deploymentTxHash(signedXdrStr: string): string {
+/** Hash a signed transaction independently of its signatures for retry reconciliation. */
+export function signedTransactionHash(signedXdrStr: string): string {
   const parsed = signedXdrSchema.safeParse(signedXdrStr);
   if (!parsed.success) throw new StellarError("INVALID_INPUT", "Malformed signed XDR");
   try {

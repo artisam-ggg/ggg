@@ -7,7 +7,7 @@ export {
   buildCancelTx,
 } from "./builders";
 export {
-  deploymentTxHash,
+  signedTransactionHash,
   lookupDeployment,
   submitSignedXdr,
   validateDeployXdr,

@@ -274,8 +274,8 @@ describe("deployment retry reconciliation", () => {
   const contractId = "CCJZ5DGASBWQXR5MPFCJXMBI333XE5U3FSJTNQU7RIKE3P5GN2K2WYD5";
 
   it("derives the same hash from the signed XDR", async () => {
-    const { deploymentTxHash } = await import("./pipeline");
-    expect(deploymentTxHash("AAAAAgAAAAA=")).toBe(Buffer.from("HASH").toString("hex"));
+    const { signedTransactionHash } = await import("./pipeline");
+    expect(signedTransactionHash("AAAAAgAAAAA=")).toBe(Buffer.from("HASH").toString("hex"));
   });
 
   it("recovers a confirmed deployment and its contract ID", async () => {
