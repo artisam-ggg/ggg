@@ -69,6 +69,13 @@ function parseRefundClaims(events: { payload: unknown }[]) {
   });
 }
 
+function sumRefundClaims(claims: { player: string; amount: string }[]) {
+  return [...new Map(claims.map((claim) => [claim.player, BigInt(claim.amount)])).values()].reduce(
+    (total, amount) => total + amount,
+    0n,
+  );
+}
+
 export async function createTournament(
   input: CreateTournamentInput,
   userId: string,
@@ -324,7 +331,7 @@ export async function listTournaments(userId: string, q: ListQueryInput) {
     const participants = new Set(participantAddresses);
     const totalCollected = t.entryFee * BigInt(t._count.participants);
     const totalPaidOut = (t.payouts ?? []).reduce((total, payout) => total + payout.amount, 0n);
-    const totalRefunded = refundClaims.reduce((total, claim) => total + BigInt(claim.amount), 0n);
+    const totalRefunded = sumRefundClaims(refundClaims);
     const distributed = totalPaidOut + totalRefunded;
     const pool = totalCollected > distributed ? totalCollected - distributed : 0n;
 
@@ -484,9 +491,11 @@ export async function getTournamentDetail(id: string) {
 
   const refundClaims = parseRefundClaims(t.events);
   const refundClaimedPlayers = [...new Set(refundClaims.map((claim) => claim.player))];
-  const refunded = refundClaims.reduce((total, claim) => total + BigInt(claim.amount), 0n);
+  const refunded = sumRefundClaims(refundClaims);
+  const paidOut = t.payouts.reduce((total, payout) => total + payout.amount, 0n);
   const grossPool = t.entryFee * BigInt(t.participants.length);
-  const pool = (grossPool > refunded ? grossPool - refunded : 0n).toString();
+  const distributed = paidOut + refunded;
+  const pool = (grossPool > distributed ? grossPool - distributed : 0n).toString();
   const confirmedSettlementDeadline = t.deadlineConfirmedAt ? t.settlementDeadline : null;
   const now = Date.now();
 

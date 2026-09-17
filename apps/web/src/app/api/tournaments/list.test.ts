@@ -284,6 +284,31 @@ describe("GET /api/tournaments", () => {
     });
   });
 
+  it("deduplicates valid refund claims by player", async () => {
+    findMany.mockResolvedValue([
+      {
+        id: "t_1",
+        name: "Refunded Cup",
+        gameTitle: "G",
+        status: "CANCELLED",
+        entryFee: 10n,
+        asset: "XLM",
+        payouts: [],
+        events: [
+          { payload: { player: "GA", amount: "10" } },
+          { payload: { player: "GA", amount: "10" } },
+          { payload: { player: "GB", amount: "0" } },
+        ],
+        _count: { participants: 2 },
+      },
+    ]);
+
+    const res = await GET(makeGetReq("http://localhost/api/tournaments?take=20"));
+    const json = await res.json();
+
+    expect(json.data.items[0]).toMatchObject({ pool: "10", totalRefunded: "10" });
+  });
+
   it("passes cursor to prisma for pagination", async () => {
     findMany.mockResolvedValue([]);
     const res = await GET(makeGetReq("http://localhost/api/tournaments?take=10&cursor=t_5"));

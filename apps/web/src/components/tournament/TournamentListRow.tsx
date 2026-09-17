@@ -26,12 +26,13 @@ function formatAmount(stroops: string) {
 }
 
 export function TournamentListRow({ t }: { t: ListItem }) {
-  const totals = [
-    ["Pool remaining", t.pool],
-    ["Total collected", t.totalCollected],
-    ["Total paid out", t.totalPaidOut],
-    ["Total refunded", t.totalRefunded],
-  ] as const;
+  const totals = (
+    [
+      ["Total collected", t.totalCollected],
+      ["Total paid out", t.totalPaidOut],
+      ["Total refunded", t.totalRefunded],
+    ] as const
+  ).filter(([, amount]) => amount !== "0");
 
   return (
     <Link
@@ -54,6 +55,12 @@ export function TournamentListRow({ t }: { t: ListItem }) {
           </span>
         )}
         <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-right">
+          <div>
+            <dt className="label-caps text-xs text-on-surface-variant">Pool remaining</dt>
+            <dd className="data-mono text-acid-yellow">
+              {formatAmount(t.pool)} {t.asset}
+            </dd>
+          </div>
           {totals.map(([label, amount]) => (
             <div key={label}>
               <dt className="label-caps text-xs text-on-surface-variant">{label}</dt>

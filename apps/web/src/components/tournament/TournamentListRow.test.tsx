@@ -96,7 +96,8 @@ describe("TournamentListRow", () => {
       />,
     );
 
-    expect(screen.getAllByText(/0\.0000000 USDC/)).toHaveLength(4);
+    expect(screen.getAllByText(/0\.0000000 USDC/)).toHaveLength(1);
+    expect(screen.queryByText("Total collected")).not.toBeInTheDocument();
     expect(screen.getByText("DRAFT")).toBeInTheDocument();
   });
 
@@ -163,8 +164,8 @@ describe("TournamentListRow", () => {
           entryFee: "10000000",
           pool: "0",
           totalCollected: "30000000",
-          totalPaidOut: "30000000",
-          totalRefunded: "0",
+          totalPaidOut: "29000000",
+          totalRefunded: "1000000",
           participantCount: 3,
           refundClaimedCount: 0,
         }}
