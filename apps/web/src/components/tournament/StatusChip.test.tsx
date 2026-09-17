@@ -30,6 +30,16 @@ describe("StatusChip", () => {
     expect(chip.className).toMatch(/outline-variant/);
   });
 
+  it("renders the refunds-open label with spaces", () => {
+    render(<StatusChip status="REFUNDS_OPEN" />);
+    expect(screen.getByText("REFUNDS OPEN")).toHaveAttribute("data-status", "REFUNDS_OPEN");
+  });
+
+  it("renders REFUNDED with muted styling", () => {
+    render(<StatusChip status="REFUNDED" />);
+    expect(screen.getByText("REFUNDED").className).toMatch(/outline-variant/);
+  });
+
   it("sets data-status attribute to the status value", () => {
     render(<StatusChip status="ACTIVE" />);
     const chip = screen.getByText("ACTIVE");

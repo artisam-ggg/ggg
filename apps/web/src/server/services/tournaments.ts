@@ -23,6 +23,52 @@ import type {
   SubmitInput,
 } from "@/lib/validation/tournament";
 
+export type TournamentDisplayStatus =
+  | "DRAFT"
+  | "ACTIVE"
+  | "REFUNDS_OPEN"
+  | "REFUNDED"
+  | "CANCELLED"
+  | "FINISHED";
+
+type PersistedStatus = "DRAFT" | "ACTIVE" | "CANCELLED" | "FINISHED";
+
+export function getTournamentDisplayStatus(
+  tournament: {
+    status: PersistedStatus;
+    settlementDeadline: Date | null;
+    deadlineConfirmedAt: Date | null;
+    participantAddresses: string[];
+    refundClaimedPlayers: string[];
+  },
+  now = Date.now(),
+): TournamentDisplayStatus {
+  if (tournament.status !== "ACTIVE") return tournament.status;
+  if (
+    !tournament.deadlineConfirmedAt ||
+    !tournament.settlementDeadline ||
+    tournament.settlementDeadline.getTime() > now
+  ) {
+    return "ACTIVE";
+  }
+  const claimedPlayers = new Set(tournament.refundClaimedPlayers);
+  return tournament.participantAddresses.length > 0 &&
+    tournament.participantAddresses.every((player) => claimedPlayers.has(player))
+    ? "REFUNDED"
+    : "REFUNDS_OPEN";
+}
+
+function parseRefundClaims(events: { payload: unknown }[]) {
+  return events.flatMap((event) => {
+    const payload = event.payload;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return [];
+    const { player, amount } = payload as Record<string, unknown>;
+    return typeof player === "string" && typeof amount === "string" && /^[1-9]\d*$/.test(amount)
+      ? [{ player, amount }]
+      : [];
+  });
+}
+
 export async function createTournament(
   input: CreateTournamentInput,
   userId: string,
@@ -255,22 +301,46 @@ export async function listTournaments(userId: string, q: ListQueryInput) {
       organizerId: userId,
       ...(q.status ? { status: q.status } : {}),
     },
-    include: { _count: { select: { participants: true } } },
+    include: {
+      _count: { select: { participants: true } },
+      participants: { select: { playerAddr: true } },
+      events: {
+        where: { type: "REFUND_CLAIMED" },
+        select: { payload: true },
+      },
+    },
     orderBy: { createdAt: "desc" },
     take: q.take + 1,
     ...(q.cursor ? { cursor: { id: q.cursor }, skip: 1 } : {}),
   });
 
-  const items = rows.slice(0, q.take).map((t) => ({
-    id: t.id,
-    name: t.name,
-    gameTitle: t.gameTitle,
-    status: t.status,
-    asset: t.asset,
-    entryFee: t.entryFee.toString(),
-    pool: (t.entryFee * BigInt(t._count.participants)).toString(),
-    participantCount: t._count.participants,
-  }));
+  const items = rows.slice(0, q.take).map((t) => {
+    const participantAddresses = (t.participants ?? []).map(
+      (participant) => participant.playerAddr,
+    );
+    const refundClaimedPlayers = [
+      ...new Set(parseRefundClaims(t.events ?? []).map((claim) => claim.player)),
+    ];
+    const participants = new Set(participantAddresses);
+    return {
+      id: t.id,
+      name: t.name,
+      gameTitle: t.gameTitle,
+      status: t.status,
+      displayStatus: getTournamentDisplayStatus({
+        status: t.status,
+        settlementDeadline: t.settlementDeadline,
+        deadlineConfirmedAt: t.deadlineConfirmedAt,
+        participantAddresses,
+        refundClaimedPlayers,
+      }),
+      asset: t.asset,
+      entryFee: t.entryFee.toString(),
+      pool: (t.entryFee * BigInt(t._count.participants)).toString(),
+      participantCount: t._count.participants,
+      refundClaimedCount: refundClaimedPlayers.filter((player) => participants.has(player)).length,
+    };
+  });
 
   const nextCursor = rows.length > q.take ? (rows[q.take]?.id ?? null) : null;
 
@@ -403,18 +473,13 @@ export async function getTournamentDetail(id: string) {
 
   if (!t) return null;
 
-  const refundClaims = t.events.flatMap((event) => {
-    const payload = event.payload;
-    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return [];
-    const { player, amount } = payload as Record<string, unknown>;
-    return typeof player === "string" && typeof amount === "string" && /^[1-9]\d*$/.test(amount)
-      ? [{ player, amount }]
-      : [];
-  });
+  const refundClaims = parseRefundClaims(t.events);
+  const refundClaimedPlayers = [...new Set(refundClaims.map((claim) => claim.player))];
   const refunded = refundClaims.reduce((total, claim) => total + BigInt(claim.amount), 0n);
   const grossPool = t.entryFee * BigInt(t.participants.length);
   const pool = (grossPool > refunded ? grossPool - refunded : 0n).toString();
   const confirmedSettlementDeadline = t.deadlineConfirmedAt ? t.settlementDeadline : null;
+  const now = Date.now();
 
   return {
     id: t.id,
@@ -422,6 +487,16 @@ export async function getTournamentDetail(id: string) {
     gameTitle: t.gameTitle,
     coverImageUrl: t.coverImageKey ? `/api/tournaments/${encodeURIComponent(t.id)}/cover` : null,
     status: t.status,
+    displayStatus: getTournamentDisplayStatus(
+      {
+        status: t.status,
+        settlementDeadline: t.settlementDeadline,
+        deadlineConfirmedAt: t.deadlineConfirmedAt,
+        participantAddresses: t.participants.map((participant) => participant.playerAddr),
+        refundClaimedPlayers,
+      },
+      now,
+    ),
     asset: t.asset,
     entryFee: t.entryFee.toString(),
     distributionBps: [t.firstBps, t.secondBps, t.thirdBps] as const,
@@ -440,7 +515,7 @@ export async function getTournamentDetail(id: string) {
     organizerAddr: t.organizerAddr,
     refereeAddr: t.refereeAddr,
     pool,
-    refundClaimedPlayers: refundClaims.map((claim) => claim.player),
+    refundClaimedPlayers,
     participants: t.participants.map((p) => ({
       playerAddr: p.playerAddr,
       joinedAt: p.joinedAt.toISOString(),
@@ -458,6 +533,6 @@ export async function getTournamentDetail(id: string) {
       (t.status === "ACTIVE" &&
         t.deadlineConfirmedAt != null &&
         t.settlementDeadline != null &&
-        t.settlementDeadline.getTime() <= Date.now()),
+        t.settlementDeadline.getTime() <= now),
   };
 }
