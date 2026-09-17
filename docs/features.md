@@ -208,3 +208,7 @@ Organizer tournament rows now subtract confirmed payouts and refunds from total 
 ## Issue #286 — Show participant app join times
 
 Confirmed joins now preserve the server timestamp from the signed app submission instead of using the later subscriber/event time. The participant log identifies these as app join times and renders them in the viewer's local timezone with a visible timezone indicator; exact ISO timestamps remain available to assistive technology.
+
+## Issue #292 — Public homepage analytics
+
+The static homepage includes an aggregate-only App pageviews metric for the last 30 days, defined as the number of PostHog `$pageview` events. It reads a rate-limited public endpoint hosted by the web app, cached for five minutes; that endpoint queries PostHog using server-only credentials and exposes neither a PostHog key nor user-level data. Cross-origin access is limited to `ggg.quest` and the dedicated `PUBLIC_ANALYTICS_ALLOWED_ORIGINS` setting, without expanding the app's CSRF trust list. Missing, delayed, empty, malformed, or unavailable upstream data is not cached and leaves the homepage working with a temporary-unavailability message.

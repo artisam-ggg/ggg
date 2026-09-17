@@ -543,6 +543,32 @@
         background: radial-gradient(circle at 30% 30%, rgba(247, 189, 72, 0.1), transparent 60%);
       }
 
+      /* ── Public analytics ── */
+      .analytics-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-lg);
+      }
+      .analytics-card {
+        background: var(--surface-container-low);
+        border: 1px solid var(--surface-variant);
+        border-radius: var(--radius-xl);
+        padding: var(--space-xl);
+      }
+      .analytics-value {
+        color: var(--primary);
+        font-family: "JetBrains Mono", monospace;
+        font-size: clamp(36px, 6vw, 64px);
+        font-weight: 700;
+        line-height: 1;
+        margin: 12px 0;
+      }
+      .analytics-status {
+        color: var(--on-surface-variant);
+        font-size: 14px;
+        margin: 18px 0 0;
+      }
+
       /* ── Contact ── */
       .contact {
         display: grid;
@@ -740,6 +766,9 @@
           grid-template-columns: repeat(2, 1fr);
         }
         .contact {
+          grid-template-columns: 1fr;
+        }
+        .analytics-grid {
           grid-template-columns: 1fr;
         }
         .footer-inner {
@@ -963,6 +992,25 @@
         </div>
       </section>
 
+      <!-- ── Public analytics ───────────────────────────────────────────────── -->
+      <section id="analytics" class="section-pad" aria-labelledby="analytics-title">
+        <div class="container">
+          <div class="section-head">
+            <span class="eyebrow">// Live analytics</span>
+            <h2 id="analytics-title">Built in the open.</h2>
+            <p>Aggregate, privacy-safe activity from the last 30 days.</p>
+          </div>
+          <div class="analytics-grid">
+            <article class="analytics-card">
+              <span class="eyebrow-muted">App pageviews</span>
+              <p class="analytics-value" id="analytics-pageviews" aria-live="polite">—</p>
+              <p class="eyebrow-muted">Last 30 days</p>
+            </article>
+          </div>
+          <p class="analytics-status" id="analytics-status" role="status">Loading live analytics…</p>
+        </div>
+      </section>
+
       <!-- ── Contact ────────────────────────────────────────────────────────── -->
       <section id="contact" class="section-pad" aria-labelledby="contact-title">
         <div class="container">
@@ -1126,6 +1174,26 @@
             toggle.setAttribute("aria-expanded", open ? "false" : "true");
           });
         }
+
+        // Homepage metrics are aggregate-only and fetched from the app's public endpoint.
+        var analyticsValue = document.getElementById("analytics-pageviews");
+        var analyticsStatus = document.getElementById("analytics-status");
+        fetch("https://beta.app.ggg.quest/api/public-analytics")
+          .then(function (response) {
+            if (!response.ok) throw new Error("Analytics unavailable");
+            return response.json();
+          })
+          .then(function (payload) {
+            var pageviews = payload && payload.data && payload.data.pageviewsLast30Days;
+            if (!Number.isSafeInteger(pageviews) || pageviews < 0)
+              throw new Error("Invalid analytics");
+            if (analyticsValue)
+              analyticsValue.textContent = new Intl.NumberFormat().format(pageviews);
+            if (analyticsStatus) analyticsStatus.textContent = "Updated from aggregate PostHog data.";
+          })
+          .catch(function () {
+            if (analyticsStatus) analyticsStatus.textContent = "Live analytics are temporarily unavailable.";
+          });
       })();
     </script>
   </body>
