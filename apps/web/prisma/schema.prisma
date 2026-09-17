@@ -62,6 +62,7 @@ model Tournament {
   status             TournamentStatus @default(DRAFT)
   coverImageKey      String?
   participants       Participant[]
+  joinSubmissions    JoinSubmission[]
   payouts            Payout[]
   events             ContractEvent[]
   deployTxHash       String?
@@ -83,6 +84,17 @@ model Participant {
   joinedAt     DateTime   @default(now())
 
   @@unique([tournamentId, playerAddr])
+}
+
+model JoinSubmission {
+  txHash       String     @id
+  tournament   Tournament @relation(fields: [tournamentId], references: [id])
+  tournamentId String
+  playerAddr   String
+  submittedAt  DateTime
+  createdAt    DateTime   @default(now())
+
+  @@index([tournamentId, playerAddr])
 }
 
 model Payout {

@@ -46,7 +46,7 @@ describe("GET /api/tournaments/[id]", () => {
     const json = await res.json();
 
     expect(json.ok).toBe(true);
-    expect(json.data.pool).toBe("10000000"); // 1 participant * 10000000 entryFee
+    expect(json.data.pool).toBe("4000000"); // collected entry fee minus confirmed payout
     expect(json.data.entryFee).toBe("10000000");
     expect(typeof json.data.entryFee).toBe("string");
     expect(json.data.contractUrl).toContain("stellar.expert");

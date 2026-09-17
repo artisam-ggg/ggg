@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const posthog = vi.hoisted(() => ({ capture: vi.fn() }));
+const posthog = vi.hoisted(() => ({
+  capture: vi.fn(),
+  identify: vi.fn(),
+  setPersonProperties: vi.fn(),
+}));
 
 vi.mock("posthog-js", () => ({ default: posthog }));
 
@@ -24,6 +28,11 @@ describe("captureWalletConnected", () => {
     expect(posthog.capture).toHaveBeenCalledWith("wallet_connected", {
       wallet_address: "GPLAYER",
     });
+    const properties = posthog.capture.mock.calls[0]?.[1];
+    expect(properties).not.toHaveProperty("$set");
+    expect(properties).not.toHaveProperty("$set_once");
+    expect(posthog.identify).not.toHaveBeenCalled();
+    expect(posthog.setPersonProperties).not.toHaveBeenCalled();
   });
 
   it.each([null, "declined"])("does not capture with consent %s", (consent) => {

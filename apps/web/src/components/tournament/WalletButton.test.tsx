@@ -116,6 +116,18 @@ describe("WalletButton", () => {
     expect(screen.getByRole("button", { name: /connect wallet/i })).toBeInTheDocument();
   });
 
+  it("captures a new connection after an explicit disconnect", async () => {
+    const onConnected = vi.fn();
+    render(<WalletButton onConnected={onConnected} expectedPassphrase="P" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await screen.findByRole("button", { name: /disconnect wallet/i });
+    fireEvent.click(screen.getByRole("button", { name: /disconnect wallet/i }));
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+
+    await waitFor(() => expect(captureWalletConnected).toHaveBeenCalledTimes(2));
+  });
+
   it("ignores a pending re-check after disconnecting", async () => {
     const onConnected = vi.fn();
     let resolveRecheck: (address: string) => void;

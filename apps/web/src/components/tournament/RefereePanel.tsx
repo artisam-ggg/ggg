@@ -16,14 +16,14 @@ export function RefereePanel({
   passphrase: string;
 }) {
   const [state, setState] = useState<State>("idle");
-  const connectedAddress = useRef<string | null>(null);
+  const lastCapturedAddress = useRef<string | null>(null);
 
   async function handleVerify() {
     setState("idle");
     try {
       const address = await ensureWallet(passphrase);
-      if (address !== connectedAddress.current) {
-        connectedAddress.current = address;
+      if (address !== lastCapturedAddress.current) {
+        lastCapturedAddress.current = address;
         captureWalletConnected(address);
       }
       // Stellar G-addresses are case-sensitive — exact match required

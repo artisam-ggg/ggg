@@ -1,3 +1,5 @@
+"use client";
+
 import posthog from "posthog-js";
 
 export const ANALYTICS_CONSENT_KEY = "ggg_cookie_consent";
