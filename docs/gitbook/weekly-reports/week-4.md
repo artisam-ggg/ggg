@@ -2,7 +2,7 @@
 
 ## Planned work
 
-Prepare a public demo video, integration guide, and a Testnet transaction-hash list. See the [Week 4 plan in the SOW](https://github.com/webnxt-2030/ggg/blob/675986512bda71c01218e05993ac8ea252a51dee/docs/Instawards_SOW.md).
+Prepare a public demo video, integration guide, and a Testnet transaction-hash list. See the [Week 4 plan in the SOW](https://github.com/artisam-ggg/ggg/blob/675986512bda71c01218e05993ac8ea252a51dee/docs/Instawards_SOW.md).
 
 ## Evidence status
 
