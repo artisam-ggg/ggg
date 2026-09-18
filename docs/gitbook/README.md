@@ -19,6 +19,7 @@ Start with the [Statement of Work](sow.md), which defines the sprint commitments
 Status labels are deliberately conservative:
 
 - **Completed** — all applicable SOW acceptance evidence is recorded and independently verifiable at the stated environment.
+- **Implementation complete** — the team has delivered the source and recorded test scope; independently verifiable public acceptance evidence may still be pending.
 - **Testnet verified** — public Testnet evidence is linked.
 - **Locally verified** — repository tests or reproducible local checks are recorded, but the required public/live proof is absent.
 - **Planned** — work scheduled in the SOW that has not reached Completed status.
@@ -29,8 +30,8 @@ Status labels are deliberately conservative:
 
 | Deliverable | Status | What is currently evidenced | What still needs public proof |
 | --- | --- | --- | --- |
-| [D1 — Deadline-enforced escrow](deliverables/d1.md) | Locally verified | Contract behavior and boundary tests are recorded | Deployed contract ID, pre-deadline failure, and post-deadline refund transaction |
-| [D2 — Single-sig, N-winner, and TTL](deliverables/d2.md) | Locally verified; Testnet code upload verified | Constructor/payout/TTL/read-helper records, regression snapshot, and WASM upload | Deploy-and-initialize transaction, contract ID, and live N-winner payout |
+| [D1 — Deadline-enforced escrow](deliverables/d1.md) | Testnet refund evidenced; pre-deadline boundary locally verified | Public contract and successful refund-claim transactions; contract behavior and boundary tests | Public pre-deadline rejection evidence |
+| [D2 — Single-sig, N-winner, and TTL](deliverables/d2.md) | Implementation complete; Testnet code upload verified | Constructor/payout/TTL/read-helper records, regression snapshot, and WASM upload | Deploy-and-initialize transaction, contract ID, and live N-winner payout |
 | [D3 — SDK extraction, npm, and live redeploy](deliverables/d3.md) | Planned | Approved SOW and required evidence checklist | Published package, example, matching redeploy, demo, health check, and E2E transactions |
 
 The [Evidence index](reference/evidence.md) is the single reference for every Testnet artifact currently recorded in the repository. It is not a claim that every SOW acceptance criterion is complete.
@@ -45,8 +46,8 @@ The project design keeps signing in the user's wallet. This documentation does n
 
 | Deliverable | Planned outcome | Current documentary status |
 | --- | --- | --- |
-| [D1 — Deadline-enforced escrow](deliverables/d1.md) | Permissionless refund after an unfinalized tournament reaches its settlement deadline | Test evidence is recorded; public refund-transaction proof must be checked against the deliverable acceptance criteria. |
-| [D2 — Single-sig, N-winner, and TTL](deliverables/d2.md) | Atomic deployment, configurable winner payouts, TTL lifecycle handling, and read helpers | Local verification and a Testnet WASM upload are recorded; a deployed instance and live payout proof are not asserted here. |
+| [D1 — Deadline-enforced escrow](deliverables/d1.md) | Permissionless refund after an unfinalized tournament reaches its settlement deadline | Public successful refund claims and local boundary-test evidence are recorded; public proof of the rejected pre-deadline path is still needed. |
+| [D2 — Single-sig, N-winner, and TTL](deliverables/d2.md) | Atomic deployment, configurable winner payouts, TTL lifecycle handling, and read helpers | Implementation is complete with local verification and a Testnet WASM upload recorded; deployed-instance and live-payout proof remain in the public evidence checklist. |
 | [D3 — SDK extraction, npm, and live redeploy](deliverables/d3.md) | Standalone SDK, npm publication, example, and live Testnet reference consumer | Planned in the SOW; this book does not claim publication or redeployment without public proof. |
 
 ## Boundaries
