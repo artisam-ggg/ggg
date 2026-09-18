@@ -1,6 +1,6 @@
 # Statement of Work
 
-The approved [GGG Instawards SOW](https://github.com/webnxt-2030/ggg/blob/develop/docs/Instawards_SOW.md) is the authoritative scope baseline. This page is a reader guide, not a replacement for that source.
+The approved [GGG Instawards SOW](https://github.com/webnxt-2030/ggg/blob/675986512bda71c01218e05993ac8ea252a51dee/docs/Instawards_SOW.md) is the authoritative scope baseline. This page is a reader guide, not a replacement for that source.
 
 ## Objective
 

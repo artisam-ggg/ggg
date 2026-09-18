@@ -10,7 +10,7 @@ GGG (Good Game Guild) is a trustless tournament prize-escrow and match-settlemen
 | Target network | Stellar Testnet |
 | Live application | [ggg.quest](https://ggg.quest/) |
 | Source repository | [webnxt-2030/ggg](https://github.com/webnxt-2030/ggg) |
-| Scope baseline | [Approved Instawards SOW](https://github.com/webnxt-2030/ggg/blob/develop/docs/Instawards_SOW.md) |
+| Scope baseline | [Approved Instawards SOW](https://github.com/webnxt-2030/ggg/blob/675986512bda71c01218e05993ac8ea252a51dee/docs/Instawards_SOW.md) |
 
 ## How to read this book
 
@@ -18,10 +18,12 @@ Start with the [Statement of Work](sow.md), which defines the sprint commitments
 
 Status labels are deliberately conservative:
 
+- **Completed** — all applicable SOW acceptance evidence is recorded and independently verifiable at the stated environment.
 - **Testnet verified** — public Testnet evidence is linked.
 - **Locally verified** — repository tests or reproducible local checks are recorded, but the required public/live proof is absent.
-- **Planned** — committed in the SOW but not demonstrated as delivered.
+- **Planned** — work scheduled in the SOW that has not reached Completed status.
 - **Blocked** — acceptance proof needs an approved deployment, credential, publication, or other external action.
+- **Not started** — SOW-committed work whose implementation has not begun.
 
 The [Evidence index](reference/evidence.md) is the single reference for the key Testnet artifact currently recorded in the repository. It is not a claim that every SOW acceptance criterion is complete.
 

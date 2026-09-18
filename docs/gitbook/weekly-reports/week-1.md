@@ -2,7 +2,7 @@
 
 ## Planned work
 
-Implement the deadline-based refund path, build the contract, and retain passing test evidence. See the [Week 1 plan in the SOW](https://github.com/webnxt-2030/ggg/blob/develop/docs/Instawards_SOW.md).
+Implement the deadline-based refund path, build the contract, and retain passing test evidence. See the [Week 1 plan in the SOW](https://github.com/webnxt-2030/ggg/blob/675986512bda71c01218e05993ac8ea252a51dee/docs/Instawards_SOW.md).
 
 ## Evidence status
 

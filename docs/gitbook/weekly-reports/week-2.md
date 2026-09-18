@@ -2,7 +2,7 @@
 
 ## Planned work
 
-Build a new WASM, perform single-transaction deploy-and-initialize on Testnet, update bindings, and verify configurable winner distribution. See the [Week 2 plan in the SOW](https://github.com/webnxt-2030/ggg/blob/develop/docs/Instawards_SOW.md).
+Build a new WASM, perform single-transaction deploy-and-initialize on Testnet, update bindings, and verify configurable winner distribution. See the [Week 2 plan in the SOW](https://github.com/webnxt-2030/ggg/blob/675986512bda71c01218e05993ac8ea252a51dee/docs/Instawards_SOW.md).
 
 ## Evidence status
 
