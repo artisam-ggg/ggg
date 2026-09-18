@@ -1,0 +1,17 @@
+# Summary
+
+- [GGG — Instawards Milestone Reports](README.md)
+- [Statement of Work](sow.md)
+- [Weekly Reports](weekly-reports/README.md)
+  - [Week 1 — Deadline-enforced escrow](weekly-reports/week-1.md)
+  - [Week 2 — Single-sig, N-winner, and TTL](weekly-reports/week-2.md)
+  - [Week 3 — SDK extraction and Testnet redeploy](weekly-reports/week-3.md)
+  - [Week 4 — Validation package](weekly-reports/week-4.md)
+- [Deliverables](deliverables/README.md)
+  - [D1 — Deadline-enforced escrow](deliverables/d1.md)
+  - [D2 — Single-sig, N-winner, and TTL](deliverables/d2.md)
+  - [D3 — SDK extraction, npm, and live redeploy](deliverables/d3.md)
+- [Reference](reference/README.md)
+  - [Evidence index](reference/evidence.md)
+  - [Metrics](reference/metrics.md)
+  - [Changelog](reference/changelog.md)
