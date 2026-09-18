@@ -1,5 +1,10 @@
 # Documentation Changelog
 
+## 18 September 2026 — D1 Testnet refund evidence
+
+- Added the public D1 Testnet contract and two successful `refund_claimed` transaction links.
+- Distinguished the supported deadline-route inference from the still-unproven public pre-deadline rejection path.
+
 ## 18 September 2026 — Initial structure
 
 - Added the GitBook navigation and evidence-first reporting conventions.

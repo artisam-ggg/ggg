@@ -29,7 +29,7 @@ Status labels are deliberately conservative:
 
 | Deliverable | Status | What is currently evidenced | What still needs public proof |
 | --- | --- | --- | --- |
-| [D1 — Deadline-enforced escrow](deliverables/d1.md) | Locally verified | Contract behavior and boundary tests are recorded | Deployed contract ID, pre-deadline failure, and post-deadline refund transaction |
+| [D1 — Deadline-enforced escrow](deliverables/d1.md) | Testnet refund evidenced; pre-deadline boundary locally verified | Public contract and successful refund-claim transactions; contract behavior and boundary tests | Public pre-deadline rejection evidence |
 | [D2 — Single-sig, N-winner, and TTL](deliverables/d2.md) | Locally verified; Testnet code upload verified | Constructor/payout/TTL/read-helper records, regression snapshot, and WASM upload | Deploy-and-initialize transaction, contract ID, and live N-winner payout |
 | [D3 — SDK extraction, npm, and live redeploy](deliverables/d3.md) | Planned | Approved SOW and required evidence checklist | Published package, example, matching redeploy, demo, health check, and E2E transactions |
 
@@ -45,7 +45,7 @@ The project design keeps signing in the user's wallet. This documentation does n
 
 | Deliverable | Planned outcome | Current documentary status |
 | --- | --- | --- |
-| [D1 — Deadline-enforced escrow](deliverables/d1.md) | Permissionless refund after an unfinalized tournament reaches its settlement deadline | Test evidence is recorded; public refund-transaction proof must be checked against the deliverable acceptance criteria. |
+| [D1 — Deadline-enforced escrow](deliverables/d1.md) | Permissionless refund after an unfinalized tournament reaches its settlement deadline | Public successful refund claims and local boundary-test evidence are recorded; public proof of the rejected pre-deadline path is still needed. |
 | [D2 — Single-sig, N-winner, and TTL](deliverables/d2.md) | Atomic deployment, configurable winner payouts, TTL lifecycle handling, and read helpers | Local verification and a Testnet WASM upload are recorded; a deployed instance and live payout proof are not asserted here. |
 | [D3 — SDK extraction, npm, and live redeploy](deliverables/d3.md) | Standalone SDK, npm publication, example, and live Testnet reference consumer | Planned in the SOW; this book does not claim publication or redeployment without public proof. |
 
