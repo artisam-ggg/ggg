@@ -1,6 +1,6 @@
-# Metrics
+# Verification Metrics
 
-This milestone report uses evidence quality rather than vanity metrics as its primary measure.
+This Testnet milestone report uses evidence quality rather than product or adoption metrics as its primary measure. Product metrics such as tournament count, active users, or payout volume are not recorded in this book.
 
 | Measure | Meaning | Current reporting rule |
 | --- | --- | --- |

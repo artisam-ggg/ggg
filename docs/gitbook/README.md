@@ -25,17 +25,21 @@ Status labels are deliberately conservative:
 - **Blocked** — acceptance proof needs an approved deployment, credential, publication, or other external action.
 - **Not started** — SOW-committed work whose implementation has not begun.
 
-The [Evidence index](reference/evidence.md) is the single reference for the key Testnet artifact currently recorded in the repository. It is not a claim that every SOW acceptance criterion is complete.
+## Current milestone status
+
+| Deliverable | Status | What is currently evidenced | What still needs public proof |
+| --- | --- | --- | --- |
+| [D1 — Deadline-enforced escrow](deliverables/d1.md) | Locally verified | Contract behavior and boundary tests are recorded | Deployed contract ID, pre-deadline failure, and post-deadline refund transaction |
+| [D2 — Single-sig, N-winner, and TTL](deliverables/d2.md) | Locally verified; Testnet code upload verified | Constructor/payout/TTL/read-helper records, regression snapshot, and WASM upload | Deploy-and-initialize transaction, contract ID, and live N-winner payout |
+| [D3 — SDK extraction, npm, and live redeploy](deliverables/d3.md) | Planned | Approved SOW and required evidence checklist | Published package, example, matching redeploy, demo, health check, and E2E transactions |
+
+The [Evidence index](reference/evidence.md) is the single reference for every Testnet artifact currently recorded in the repository. It is not a claim that every SOW acceptance criterion is complete.
 
 ## Project model
 
 GGG uses a per-tournament Soroban escrow. An organizer supplies the tournament configuration at contract construction, players register by paying the entry fee into escrow, and a referee finalizes the winner ordering. The contract supports cancellation and refunds, including a deadline-based route for an active tournament that was not finalized. The current public source exposes the configuration and status through `get_tournament()` and returns registration-ordered players through `get_players()`.
 
 The project design keeps signing in the user's wallet. This documentation does not represent the website, a WASM upload, or repository source as proof that a particular tournament instance has completed the full live flow; that proof requires the relevant Testnet transaction trail.
-
-## Public endpoints
-
-The primary and beta URLs above are public project endpoints. An unauthenticated availability check of `beta.ggg.quest` returned HTTP 200 on 18 September 2026. Endpoint availability alone does not prove a deployment uses a particular escrow artifact or that the end-to-end SOW flow has run.
 
 ## Sprint deliverables
 
@@ -48,3 +52,7 @@ The primary and beta URLs above are public project endpoints. An unauthenticated
 ## Boundaries
 
 This is a Testnet milestone record, not a Mainnet readiness statement or a substitute for an independent security audit. Both Mainnet deployment and a third-party audit are explicitly out of scope in the SOW.
+
+## Reviewer path
+
+For a short, repeatable review sequence, see [Reviewer quick verification](reference/reviewer-quick-verification.md). The [Escrow flow and evidence map](reference/escrow-flow.md) provides a visual overview of the on-chain paths and the proof still needed for each one.
