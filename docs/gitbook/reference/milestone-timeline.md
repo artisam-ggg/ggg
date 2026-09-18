@@ -17,7 +17,7 @@ timeline
            : No public completion evidence recorded as of 18 September 2026
 ```
 
-**Text alternative:** The SOW schedules D1 in Week 1, D2 in Week 2, D3 in Week 3, and a validation package in Week 4. Public evidence records code uploads and local/reproducible tests for the earlier contract work, plus a D1 contract with two successful refund claims. It does not record the planned SDK/redeploy package or final demo/transaction package.
+**Text alternative:** The SOW schedules D1 in Week 1, D2 in Week 2, D3 in Week 3, and a validation package in Week 4. Public evidence records code uploads and local/reproducible tests for the earlier contract work, plus a D1 contract with two successful refund claims; public proof of a rejected pre-deadline D1 call is still absent. It does not record the planned SDK/redeploy package or final demo/transaction package.
 
 ## Evidence chronology
 
