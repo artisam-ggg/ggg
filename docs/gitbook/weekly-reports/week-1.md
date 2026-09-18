@@ -6,7 +6,7 @@ Implement the deadline-based refund path, build the contract, and retain passing
 
 ## Evidence status
 
-Repository evidence for the deadline/refund work is recorded in [issue #218 Testnet evidence](https://github.com/artisam-ggg/ggg/blob/develop/docs/verification/issue-218-testnet-evidence.md) and the [#221 regression matrix](https://github.com/artisam-ggg/ggg/blob/develop/docs/verification/issue-221-regression-evidence.md). The regression record names tests for the inclusive deadline boundary, rejection before deadline, authorization, cancellation/finalization races, and failed transfer rollback.
+Repository evidence for the deadline/refund work is recorded in [#218 constructor-upload evidence](https://github.com/artisam-ggg/ggg/blob/ee1cb8e53624c31465cae20124f3790e9083a886/docs/verification/issue-218-testnet-evidence.md) and the [#221 regression matrix](https://github.com/artisam-ggg/ggg/blob/33c8d68ed28f1a4cdce17d2a513c136106f27347/docs/verification/issue-221-regression-evidence.md). The regression record names tests for the inclusive deadline boundary, rejection before deadline, authorization, cancellation/finalization races, and failed transfer rollback.
 
 The #218 report records a constructor-WASM upload at source commit `98b8619`, but it explicitly says no Testnet constructor deployment or live join was performed. The D1 acceptance criterion still requires a Testnet explorer link showing a post-deadline refund, pre-deadline failure evidence, and retained passing test evidence.
 

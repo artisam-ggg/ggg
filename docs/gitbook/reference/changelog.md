@@ -9,7 +9,7 @@
 
 Future entries should be dated and link to the repository change, GitHub issue, or Testnet proof that caused the documentation update.
 
-## Detailed evidence expansion
+## 18 September 2026 — Detailed evidence expansion
 
 - Switched public source links to [artisam-ggg/ggg](https://github.com/artisam-ggg/ggg).
 - Added primary and beta application links, while keeping endpoint availability distinct from a proven live milestone flow.

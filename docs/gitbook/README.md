@@ -8,7 +8,7 @@ GGG (Good Game Guild) is a trustless tournament prize-escrow and match-settlemen
 | Builder | Neil John Rivera / Artisam Labs |
 | Ambassador chapter | Philippines |
 | Target network | Stellar Testnet |
-| Live applications | Primary: [ggg.quest](https://ggg.quest/) · Beta: [beta.ggg.quest](https://beta.ggg.quest/) |
+| Public application endpoints | Primary: [ggg.quest](https://ggg.quest/) · Beta: [beta.ggg.quest](https://beta.ggg.quest/) |
 | Public source repository | [artisam-ggg/ggg](https://github.com/artisam-ggg/ggg) |
 | Scope baseline | [Approved Instawards SOW](https://github.com/artisam-ggg/ggg/blob/675986512bda71c01218e05993ac8ea252a51dee/docs/Instawards_SOW.md) |
 
