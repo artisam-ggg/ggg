@@ -13,5 +13,7 @@
   - [D3 — SDK extraction, npm, and live redeploy](deliverables/d3.md)
 - [Reference](reference/README.md)
   - [Evidence index](reference/evidence.md)
-  - [Metrics](reference/metrics.md)
+  - [Verification metrics](reference/metrics.md)
+  - [Reviewer quick verification](reference/reviewer-quick-verification.md)
+  - [Escrow flow and evidence map](reference/escrow-flow.md)
   - [Changelog](reference/changelog.md)

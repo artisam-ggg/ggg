@@ -6,7 +6,15 @@ Extract the SDK, publish `@ggg/escrow-sdk@0.1.0`, provide a Node.js example, and
 
 ## Evidence status
 
-This book does not claim that the package, example, or redeployment is complete. The acceptance evidence must include a public npm package, public source and usage documentation, a successful example, a live health endpoint, and an end-to-end Testnet flow.
+**Evidence state as of 18 September 2026: Not started.** No public npm package, runnable Node.js example, matching Testnet redeploy, health-check record, or end-to-end transaction trail is recorded in the linked public evidence.
+
+| Required proof | Recorded in this book? |
+| --- | --- |
+| `@ggg/escrow-sdk@0.1.0` public package and installed version | No |
+| Public SDK source and usage documentation | No |
+| Successful Node.js example result | No |
+| Redeployed Testnet app and health response | No |
+| Create → join → settle → payout transaction trail | No |
 
 ## Reviewer path
 

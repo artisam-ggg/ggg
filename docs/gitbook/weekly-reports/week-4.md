@@ -6,4 +6,11 @@ Prepare a public demo video, integration guide, and a Testnet transaction-hash l
 
 ## Evidence status
 
-This page is a validation checklist, not an assertion that the package has been delivered. Before a final completion report, link the public demo, guide, and the transactions that prove the required live flow.
+**Evidence state as of 18 September 2026: Not started.** This validation package has no recorded public demo, integration guide, or complete Testnet transaction list in the evidence linked by this book.
+
+| Required validation artifact | Recorded in this book? |
+| --- | --- |
+| Public demo video showing the live flow | No |
+| Public integration guide | No |
+| Contract ID and Testnet transaction list | No |
+| Create, join, settle, payout, and refund proof trail | No |
