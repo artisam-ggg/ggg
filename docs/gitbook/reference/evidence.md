@@ -10,7 +10,7 @@
 
 ## Public endpoint observation
 
-The book lists [ggg.quest](https://ggg.quest/) and [beta.ggg.quest](https://beta.ggg.quest/) as public endpoints. An unauthenticated check of the beta endpoint returned HTTP 200 on 18 September 2026. This is an availability observation only; it does not establish which contract artifact is configured or that an SOW acceptance flow has completed.
+The book lists [ggg.quest](https://ggg.quest/) and [beta.ggg.quest](https://beta.ggg.quest/) as public endpoints. An unauthenticated check of the beta root URL, [`https://beta.ggg.quest/`](https://beta.ggg.quest/), returned HTTP 200 on 18 September 2026. The `/health` endpoint was not checked. This is an availability observation only; it does not establish which contract artifact is configured or that an SOW acceptance flow has completed.
 
 ## Evidence at a glance
 
@@ -23,6 +23,8 @@ flowchart LR
 ```
 
 The three public uploads independently verify code artifacts. They do not replace the live transaction trail required to verify an escrow instance's behavior.
+
+**Text alternative:** Three separate public Testnet uploads (#218 constructor, #219 N-winner, and #220 TTL) establish code artifacts. A separate deploy, join, payout, and refund transaction trail is still required to prove live instance behavior.
 
 ## Evidence sources
 

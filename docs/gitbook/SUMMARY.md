@@ -16,4 +16,5 @@
   - [Verification metrics](reference/metrics.md)
   - [Reviewer quick verification](reference/reviewer-quick-verification.md)
   - [Escrow flow and evidence map](reference/escrow-flow.md)
+  - [Milestone and evidence timeline](reference/milestone-timeline.md)
   - [Changelog](reference/changelog.md)

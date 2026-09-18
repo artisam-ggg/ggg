@@ -22,8 +22,10 @@ Use this page to review the milestone record without needing access to a private
 
 ## Evidence not yet recorded
 
-- D1 post-deadline refund transaction and deployed contract ID
+- D1 deployed contract ID, pre-deadline failure evidence, and post-deadline refund transaction
 - D2 atomic deploy-and-initialize transaction, contract ID, and live N-winner payout
 - D3 public npm release, runnable example, matching redeploy/health proof, demo video, and end-to-end Testnet transaction trail
 
 Those missing items are not failures hidden by the book; they are the specific proof required before the corresponding deliverable can become Completed.
+
+The public [end-to-end acceptance procedure](https://github.com/artisam-ggg/ggg/blob/89f831993f9a4a75eb7b30fbf1c481666bbb3c73/docs/verification/e2e-acceptance.md) describes the supporting verification workflow. It is a procedure, not executed D3 evidence; D3 still requires the public results and artifacts listed above.
