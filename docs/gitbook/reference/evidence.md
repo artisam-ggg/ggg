@@ -12,6 +12,18 @@
 
 The book lists [ggg.quest](https://ggg.quest/) and [beta.ggg.quest](https://beta.ggg.quest/) as public endpoints. An unauthenticated check of the beta endpoint returned HTTP 200 on 18 September 2026. This is an availability observation only; it does not establish which contract artifact is configured or that an SOW acceptance flow has completed.
 
+## Evidence at a glance
+
+```mermaid
+flowchart LR
+    A[#218 constructor WASM upload] --> D[Public Testnet ContractCode artifacts]
+    B[#219 N-winner WASM upload] --> D
+    C[#220 TTL WASM upload] --> D
+    D -. missing live proof .-> E[Deploy, join, payout, and refund transaction trail]
+```
+
+The three public uploads independently verify code artifacts. They do not replace the live transaction trail required to verify an escrow instance's behavior.
+
 ## Evidence sources
 
 - [Constructor WASM-upload evidence — #218](https://github.com/artisam-ggg/ggg/blob/ee1cb8e53624c31465cae20124f3790e9083a886/docs/verification/issue-218-testnet-evidence.md) — does not prove a refund.
