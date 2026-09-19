@@ -58,4 +58,26 @@ describe("parseEnv", () => {
     const env = parseEnv(valid);
     expect(env.ALLOWED_ORIGINS).toBe("https://app.example.com,https://admin.example.com");
   });
+
+  it("treats blank optional PostHog server credentials as unconfigured", () => {
+    const env = parseEnv({
+      ...valid,
+      POSTHOG_PERSONAL_API_KEY: "",
+      POSTHOG_PROJECT_ID: "",
+    });
+    expect(env.POSTHOG_PERSONAL_API_KEY).toBeUndefined();
+    expect(env.POSTHOG_PROJECT_ID).toBeUndefined();
+  });
+
+  it("rejects an insecure PostHog API host", () => {
+    expect(() =>
+      parseEnv({ ...valid, POSTHOG_API_HOST: "http://posthog.example.com" }),
+    ).toThrowError(/POSTHOG_API_HOST/);
+  });
+
+  it("normalizes a blank public analytics origin allowlist", () => {
+    expect(
+      parseEnv({ ...valid, PUBLIC_ANALYTICS_ALLOWED_ORIGINS: "" }).PUBLIC_ANALYTICS_ALLOWED_ORIGINS,
+    ).toBeUndefined();
+  });
 });

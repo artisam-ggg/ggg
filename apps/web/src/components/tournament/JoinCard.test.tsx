@@ -49,26 +49,12 @@ describe("JoinCard", () => {
     );
   });
 
-  it("shows a tournament identifier without rendering the full URL", async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.assign(navigator, { clipboard: { writeText } });
+  it("shows a tournament identifier without rendering the full URL", () => {
     render(<JoinCard {...baseProps} tournamentId="tournament-1234567890" />);
 
     expect(screen.queryByText(baseProps.joinUrl)).not.toBeInTheDocument();
     expect(screen.getByText("Tournament: tourna…567890")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /copy link/i }));
-
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(baseProps.joinUrl));
-  });
-
-  it("shows an inline error when copying the link fails", async () => {
-    const writeText = vi.fn().mockRejectedValue(new Error("Clipboard unavailable"));
-    Object.assign(navigator, { clipboard: { writeText } });
-    render(<JoinCard {...baseProps} />);
-
-    fireEvent.click(screen.getByRole("button", { name: /copy link/i }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent("Could not copy tournament link");
+    expect(screen.queryByRole("button", { name: /copy.*link/i })).not.toBeInTheDocument();
   });
 
   it("QR tile has accessible aria-label", () => {

@@ -16,6 +16,10 @@ const TOPIC_TO_TYPE: Record<string, EventType> = {
 };
 
 const amountSchema = z.bigint().nonnegative();
+const finalizedValueSchema = z.tuple([
+  z.array(stellarAddressSchema).length(3),
+  z.array(amountSchema).length(3),
+]);
 
 // How many ledgers behind the reported tip to keep the cursor, so freshly-closed
 // ledgers whose events aren't queryable yet get re-scanned on later polls rather
@@ -47,13 +51,10 @@ function decodeEvent(raw: {
       const poolAfter = amountSchema.parse(value);
       data = { player, poolAfter: poolAfter.toString() };
     } else if (type === "FINALIZED") {
-      // Topic is `(symbol "finalized", first, second, third)`; the value is the
-      // `Vec<i128>` of payout amounts. Winners come from the topic, amounts from
-      // the value.
-      const first = stellarAddressSchema.parse(String(decodeScVal(raw.topic[1]!)));
-      const second = stellarAddressSchema.parse(String(decodeScVal(raw.topic[2]!)));
-      const third = stellarAddressSchema.parse(String(decodeScVal(raw.topic[3]!)));
-      const amounts = z.array(amountSchema).length(3).parse(value);
+      // The contract publishes `(winners, amounts)` as the value under the
+      // single `finalized` topic.
+      const [winners, amounts] = finalizedValueSchema.parse(value);
+      const [first, second, third] = winners;
       data = { first, second, third, amounts: amounts.map((a) => a.toString()) };
     } else if (type === "CANCELLED") {
       data = { claimableCount: z.coerce.number().int().nonnegative().parse(value) };

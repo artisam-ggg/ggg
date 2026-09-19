@@ -9,7 +9,18 @@ interface EventRow {
   payload: unknown;
 }
 const events: EventRow[] = [];
-const participants: { tournamentId: string; playerAddr: string; joinTxHash: string }[] = [];
+const participants: {
+  tournamentId: string;
+  playerAddr: string;
+  joinTxHash: string;
+  joinedAt?: Date;
+}[] = [];
+const joinSubmissions: {
+  txHash: string;
+  tournamentId: string;
+  playerAddr: string;
+  submittedAt: Date;
+}[] = [];
 const payouts: { rank: number; playerAddr: string; amount: bigint; txHash: string }[] = [];
 const tournaments: Record<string, Record<string, unknown>> = {
   t1: { id: "t1", status: "ACTIVE" },
@@ -50,6 +61,27 @@ const txClient = {
       return create;
     }),
   },
+  joinSubmission: {
+    findUnique: vi.fn(async ({ where }: { where: { txHash: string } }) => {
+      return joinSubmissions.find((submission) => submission.txHash === where.txHash) ?? null;
+    }),
+    deleteMany: vi.fn(
+      async ({
+        where,
+      }: {
+        where: { txHash: string; tournamentId: string; playerAddr: string };
+      }) => {
+        const index = joinSubmissions.findIndex(
+          (submission) =>
+            submission.txHash === where.txHash &&
+            submission.tournamentId === where.tournamentId &&
+            submission.playerAddr === where.playerAddr,
+        );
+        if (index >= 0) joinSubmissions.splice(index, 1);
+        return { count: index >= 0 ? 1 : 0 };
+      },
+    ),
+  },
   payout: {
     create: vi.fn(async ({ data }: { data: (typeof payouts)[number] }) => {
       payouts.push(data);
@@ -85,6 +117,7 @@ const tournament = {
 beforeEach(() => {
   events.length = 0;
   participants.length = 0;
+  joinSubmissions.length = 0;
   payouts.length = 0;
   tournaments.t1 = { id: "t1", status: "ACTIVE" };
 });
@@ -107,6 +140,26 @@ describe("applyEvent", () => {
       txHash: "tx-reg-1",
       data: { player: "GPLAYER1", poolAfter: "10000000" },
     });
+  });
+
+  it("reconciles a confirmed join with its original app submission time", async () => {
+    joinSubmissions.push({
+      txHash: "tx-reg-pending",
+      tournamentId: "t1",
+      playerAddr: "GPLAYER1",
+      submittedAt: new Date("2026-09-17T14:00:00.000Z"),
+    });
+
+    await applyEvent(tournament, {
+      type: "REGISTERED",
+      ledger: 10,
+      txHash: "tx-reg-pending",
+      eventId: "event-reg-pending",
+      data: { player: "GPLAYER1", poolAfter: "10000000" },
+    });
+
+    expect(participants[0]?.joinedAt).toEqual(new Date("2026-09-17T14:00:00.000Z"));
+    expect(joinSubmissions).toHaveLength(0);
   });
 
   it("is idempotent on replay (same txHash → no second write, returns null)", async () => {

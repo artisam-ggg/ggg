@@ -120,9 +120,8 @@ export function SettlementConsole({
           className="brutalist-border rounded-none p-8 lg:col-span-8"
           aria-label="Settlement console"
         >
-          {/* 👇 Added BackButton */}
           <div className="mb-6">
-            <BackButton />
+            <BackButton href={`/tournaments/${tournamentId}`} />
           </div>
 
           <h1 className="text-[32px] font-bold italic -tracking-[0.02em] text-on-surface">

@@ -18,5 +18,6 @@ describe("RefundList", () => {
 
     expect(screen.getByText("Claimed")).toBeInTheDocument();
     expect(screen.getByText("1.0000000 XLM")).toBeInTheDocument();
+    expect(screen.getByText("Refund progress: 1 of 2 claimed")).toBeInTheDocument();
   });
 });

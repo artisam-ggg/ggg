@@ -1,13 +1,20 @@
-// SERVER COMPONENT — no "use client" directive.
-// Pure server render from props; no polling, no client hooks.
+"use client";
 
-type Participant = { playerAddr: string; joinedAt: string };
+import { useSyncExternalStore } from "react";
+
+export type Participant = { playerAddr: string; joinedAt: string | null };
 
 function trunc(addr: string) {
   return `${addr.slice(0, 6)}…${addr.slice(-6)}`;
 }
 
+const subscribe = () => () => {};
+const getSnapshot = () => true;
+const getServerSnapshot = () => false;
+
 export function ParticipantList({ participants }: { participants: Participant[] }) {
+  const isBrowser = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+
   if (participants.length === 0) {
     return <p className="text-on-surface-variant">No players have joined yet.</p>;
   }
@@ -15,10 +22,15 @@ export function ParticipantList({ participants }: { participants: Participant[] 
   return (
     <section>
       <h2 className="label-caps text-on-surface-variant">Participants</h2>
+      <p className="mt-1 text-sm text-on-surface-variant">
+        {isBrowser
+          ? "App join times shown in your local timezone."
+          : "App join times shown in UTC until your local timezone loads."}
+      </p>
       <ul className="mt-4 divide-y divide-outline-variant">
         {participants.map((p) => {
-          const joinedAt = new Date(p.joinedAt);
-          const validTimestamp = !Number.isNaN(joinedAt.getTime());
+          const joinedAt = p.joinedAt ? new Date(p.joinedAt) : null;
+          const validTimestamp = joinedAt !== null && !Number.isNaN(joinedAt.getTime());
           return (
             <li
               key={p.playerAddr}
@@ -31,15 +43,20 @@ export function ParticipantList({ participants }: { participants: Participant[] 
                 dateTime={validTimestamp ? joinedAt.toISOString() : undefined}
                 aria-label={
                   validTimestamp
-                    ? `Joined at ${joinedAt.toISOString()} UTC`
+                    ? `App join time ${joinedAt.toISOString()}`
                     : "Registration time unavailable"
                 }
               >
                 {validTimestamp
-                  ? joinedAt.toLocaleTimeString("en-US", {
-                      timeZone: "UTC",
+                  ? new Intl.DateTimeFormat("en-US", {
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                      hour: "numeric",
+                      minute: "2-digit",
+                      ...(isBrowser ? {} : { timeZone: "UTC" }),
                       timeZoneName: "short",
-                    })
+                    }).format(joinedAt)
                   : "Time unavailable"}
               </time>
             </li>

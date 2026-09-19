@@ -1,0 +1,11 @@
+$schema: https://api.gitbook.com/gitbook-docs.yaml
+site:
+  title: GGG — Instawards Milestone Reports
+  structure:
+    - type: space
+      key: ggg-instawards-milestones
+      title: GGG — Instawards Milestone Reports
+      path: milestone-reports
+      default: true
+      content:
+        directory: ./docs/gitbook

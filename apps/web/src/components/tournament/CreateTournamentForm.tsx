@@ -111,7 +111,7 @@ function transactionExplorerUrl(txHash: string, passphrase: string) {
   return `https://stellar.expert/explorer/${network}/tx/${encodeURIComponent(txHash)}`;
 }
 
-type Phase = "idle" | "signing" | "submitting" | "initializing" | "success" | "error";
+type Phase = "idle" | "signing" | "submitting" | "success" | "error";
 type CoverUploadStatus = "idle" | "uploading" | "failed" | "complete";
 type PendingDeployment = { tournamentId: string; unsignedXdr: string };
 
@@ -254,17 +254,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   async function submitDeployment(pending: PendingDeployment) {
     setPhase("signing");
     const submitUrl = `/api/tournaments/${pending.tournamentId}/submit`;
-    const deployRes = await signAndSubmit(
-      pending.unsignedXdr,
-      "deploy",
-      submitUrl,
-      expectedPassphrase,
-    );
-
-    if (deployRes.initializeXdr) {
-      setPhase("initializing");
-      await signAndSubmit(deployRes.initializeXdr, "initialize", submitUrl, expectedPassphrase);
-    }
+    await signAndSubmit(pending.unsignedXdr, "deploy", submitUrl, expectedPassphrase);
 
     setPendingDeployment(null);
     removeStoredDraft();
@@ -278,7 +268,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     setErrorTxHash(e instanceof SubmissionError ? (e.details.txHash ?? null) : null);
   }
 
-  async function retryInitialization() {
+  async function retryDeployment() {
     if (!pendingDeployment) return;
     setError(null);
     setErrorTxHash(null);
@@ -311,6 +301,19 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       const deadlineMs = Date.parse(settlementDeadline);
       if (!Number.isFinite(deadlineMs)) {
         setError("Settlement deadline is required");
+        return;
+      }
+      const localMinute = (ms: number) =>
+        new Date(ms - new Date(ms).getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+      const selectedMinute = settlementDeadline.slice(0, 16);
+      const offset = new Date(deadlineMs).getTimezoneOffset();
+      const ambiguous = [-86_400_000, 86_400_000].some((delta) => {
+        const otherOffset = new Date(deadlineMs + delta).getTimezoneOffset();
+        const alternative = deadlineMs + (otherOffset - offset) * 60_000;
+        return otherOffset !== offset && localMinute(alternative) === selectedMinute;
+      });
+      if (localMinute(deadlineMs) !== selectedMinute || ambiguous) {
+        setError("Choose a local time that is not skipped or repeated by daylight saving.");
         return;
       }
 
@@ -503,7 +506,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       {/* Settlement Deadline */}
       <div className="mt-6">
         <label className={labelClass} htmlFor="settlementDeadline">
-          Settlement Deadline
+          Settlement Deadline (your local time)
         </label>
         <input
           id="settlementDeadline"
@@ -515,8 +518,8 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
           aria-describedby="settlement-deadline-help"
         />
         <p id="settlement-deadline-help" className="mt-1 text-sm text-on-surface-variant">
-          Choose a time at least one hour and no more than 90 days away. It is stored on-chain as
-          UTC.
+          Enter the date and time in your local timezone. The matching UTC instant is stored
+          on-chain. Choose a time at least one hour and no more than 90 days away.
         </p>
       </div>
 
@@ -631,10 +634,10 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
           {pendingDeployment && (
             <button
               type="button"
-              onClick={() => void retryInitialization()}
+              onClick={() => void retryDeployment()}
               className="label-caps mt-2 block text-sm underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
             >
-              Retry initialization
+              Retry deployment
             </button>
           )}
         </div>
@@ -642,12 +645,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
 
       {/* Progress modal */}
       <SubmitStateModal
-        open={
-          phase === "signing" ||
-          phase === "submitting" ||
-          phase === "initializing" ||
-          phase === "error"
-        }
+        open={phase === "signing" || phase === "submitting" || phase === "error"}
         phase={phase}
         {...(phase === "error" && error != null ? { message: error } : {})}
         {...(phase === "error"

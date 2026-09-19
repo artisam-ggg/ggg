@@ -4,6 +4,7 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import posthog from "posthog-js";
 import { credentialsSchema } from "@/lib/auth-schemas";
 
 export default function LoginPage() {
@@ -46,7 +47,22 @@ export default function LoginPage() {
 
       try {
         const meRes = await fetch("/api/auth/me");
-        const me = (await meRes.json()) as { ok: boolean; data?: { role: string } };
+        const me = (await meRes.json()) as {
+          ok: boolean;
+          data?: { id: string; username: string; role: string };
+        };
+        if (
+          process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN &&
+          me.ok &&
+          me.data &&
+          localStorage.getItem("ggg_cookie_consent") === "accepted"
+        ) {
+          posthog.identify(me.data.id, {
+            username: me.data.username,
+            role: me.data.role,
+          });
+          posthog.capture("user_signed_in", { role: me.data.role });
+        }
         const destination = me.ok && me.data?.role === "ADMIN" ? "/admin" : "/tournaments";
         router.push(destination);
       } catch {

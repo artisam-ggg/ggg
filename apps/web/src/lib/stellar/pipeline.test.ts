@@ -1,7 +1,10 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Address, Keypair, nativeToScVal, TransactionBuilder } from "@stellar/stellar-sdk";
+import { createHash } from "node:crypto";
 import { makeFakeRpc, errorSim, txStatus } from "./__mocks__/rpc";
+
+vi.mock("@/lib/env", () => ({ env: { ESCROW_WASM_HASH: "01".repeat(32) } }));
 
 const rpcRef: { current: ReturnType<typeof makeFakeRpc> } = { current: makeFakeRpc() };
 vi.mock("./client", () => ({
@@ -72,6 +75,9 @@ describe("simulateAndAssemble", () => {
 
 describe("submitSignedXdr", () => {
   it("submits and polls until SUCCESS, returning hash", async () => {
+    vi.mocked(TransactionBuilder.fromXDR).mockReturnValue({
+      hash: () => Buffer.from("HASH"),
+    } as never);
     rpcRef.current = makeFakeRpc({
       sendTransaction: vi.fn().mockResolvedValue({ status: "PENDING", hash: "HASH" }),
       getTransaction: txStatus("SUCCESS"),
@@ -137,14 +143,14 @@ describe("submitSignedXdr", () => {
       }),
     });
     const { submitSignedXdr } = await import("./pipeline");
-    await expect(submitSignedXdr("AAAAAgAAAAA=", "initialize")).rejects.toMatchObject({
+    await expect(submitSignedXdr("AAAAAgAAAAA=", "deploy")).rejects.toMatchObject({
       code: "TX_MALFORMED",
       message:
         "Transaction was rejected as malformed. Refresh the page and sign a newly generated transaction.",
       retryable: false,
     });
     expect(logMalformed).toHaveBeenCalledWith("Stellar transaction rejected as malformed", {
-      intent: "initialize",
+      intent: "deploy",
       result: "txMalformed",
     });
     logMalformed.mockRestore();
@@ -167,7 +173,7 @@ describe("submitSignedXdr", () => {
       sendTransaction: vi.fn().mockResolvedValue({ status: "ERROR", errorResult }),
     });
     const { submitSignedXdr } = await import("./pipeline");
-    await expect(submitSignedXdr("AAAAAgAAAAA=", "initialize")).rejects.toMatchObject({
+    await expect(submitSignedXdr("AAAAAgAAAAA=", "deploy")).rejects.toMatchObject({
       code: "TX_MALFORMED",
     });
     logMalformed.mockRestore();
@@ -181,7 +187,7 @@ describe("submitSignedXdr", () => {
       }),
     });
     const { submitSignedXdr } = await import("./pipeline");
-    await expect(submitSignedXdr("AAAAAgAAAAA=", "initialize")).rejects.toMatchObject({
+    await expect(submitSignedXdr("AAAAAgAAAAA=", "deploy")).rejects.toMatchObject({
       code: "TX_MALFORMED",
     });
     logMalformed.mockRestore();
@@ -197,7 +203,7 @@ describe("submitSignedXdr", () => {
       }),
     });
     const { submitSignedXdr } = await import("./pipeline");
-    await expect(submitSignedXdr("AAAAAgAAAAA=", "initialize")).rejects.toMatchObject({
+    await expect(submitSignedXdr("AAAAAgAAAAA=", "deploy")).rejects.toMatchObject({
       code: "TX_MALFORMED",
     });
     logMalformed.mockRestore();
@@ -264,37 +270,90 @@ describe("submitSignedXdr", () => {
   });
 });
 
-describe("validateInitializeXdr", () => {
+describe("deployment retry reconciliation", () => {
   const contractId = "CCJZ5DGASBWQXR5MPFCJXMBI333XE5U3FSJTNQU7RIKE3P5GN2K2WYD5";
+
+  it("derives the same hash from the signed XDR", async () => {
+    const { signedTransactionHash } = await import("./pipeline");
+    expect(signedTransactionHash("AAAAAgAAAAA=")).toBe(Buffer.from("HASH").toString("hex"));
+  });
+
+  it("recovers a confirmed deployment and its contract ID", async () => {
+    rpcRef.current = makeFakeRpc({
+      getTransaction: vi.fn().mockResolvedValue({
+        status: "SUCCESS",
+        returnValue: Address.fromString(contractId).toScVal(),
+      }),
+    });
+    const { lookupDeployment } = await import("./pipeline");
+    await expect(lookupDeployment("hash")).resolves.toEqual({
+      hash: "hash",
+      status: "SUCCESS",
+      contractId,
+    });
+  });
+
+  it("distinguishes a failed deployment from an unconfirmed one", async () => {
+    const { lookupDeployment } = await import("./pipeline");
+    rpcRef.current = makeFakeRpc({ getTransaction: txStatus("FAILED") });
+    await expect(lookupDeployment("hash")).resolves.toEqual({ hash: "hash", status: "FAILED" });
+    rpcRef.current = makeFakeRpc({ getTransaction: txStatus("NOT_FOUND") });
+    await expect(lookupDeployment("hash")).resolves.toBeNull();
+  });
+
+  it("fails closed when the retry lookup cannot reach RPC", async () => {
+    rpcRef.current = makeFakeRpc({
+      getTransaction: vi.fn().mockRejectedValue(new Error("RPC unavailable")),
+    });
+    const { lookupDeployment } = await import("./pipeline");
+    await expect(lookupDeployment("hash")).rejects.toMatchObject({
+      code: "SUBMIT_FAILED",
+      txHash: "hash",
+      retryable: true,
+    });
+  });
+});
+
+describe("validateDeployXdr", () => {
+  const tokenAddr = "CCJZ5DGASBWQXR5MPFCJXMBI333XE5U3FSJTNQU7RIKE3P5GN2K2WYD5";
   const terms = {
-    contractId,
+    tournamentId: "t_1",
     organizerAddress: Keypair.random().publicKey(),
     refereeAddress: Keypair.random().publicKey(),
-    tokenAddr: contractId,
+    tokenAddr,
     entryFee: 10n,
     distributionBps: [6000, 3000, 1000] as [number, number, number],
     settlementDeadline: 1_800_000_000n,
   };
 
-  function initializeOperation(entryFee = terms.entryFee) {
-    const args = [
-      nativeToScVal(terms.organizerAddress, { type: "address" }),
-      nativeToScVal(terms.refereeAddress, { type: "address" }),
-      nativeToScVal(terms.tokenAddr, { type: "address" }),
-      nativeToScVal(entryFee, { type: "i128" }),
-      nativeToScVal(terms.distributionBps, { type: ["u32"] }),
-      nativeToScVal(terms.settlementDeadline, { type: "u64" }),
-    ];
+  function deployment(entryFee = terms.entryFee) {
     return {
+      source: terms.organizerAddress,
       operations: [
         {
           type: "invokeHostFunction",
           func: {
-            switch: () => ({ name: "hostFunctionTypeInvokeContract" }),
+            switch: () => ({ name: "hostFunctionTypeCreateContractV2" }),
             value: () => ({
-              contractAddress: () => Address.fromString(contractId).toScVal().address(),
-              functionName: () => ({ toString: () => "initialize" }),
-              args: () => args,
+              contractIdPreimage: () => ({
+                switch: () => ({ name: "contractIdPreimageFromAddress" }),
+                value: () => ({
+                  address: () => Address.fromString(terms.organizerAddress).toScVal().address(),
+                  salt: () => createHash("sha256").update(terms.tournamentId).digest(),
+                }),
+              }),
+              executable: () => ({
+                switch: () => ({ name: "contractExecutableWasm" }),
+                value: () => Buffer.alloc(32, 1),
+              }),
+              constructorArgs: () => [
+                nativeToScVal(terms.organizerAddress, { type: "address" }),
+                nativeToScVal(terms.refereeAddress, { type: "address" }),
+                nativeToScVal(terms.tokenAddr, { type: "address" }),
+                nativeToScVal(entryFee, { type: "i128" }),
+                nativeToScVal(terms.distributionBps, { type: ["u32"] }),
+                nativeToScVal(terms.settlementDeadline, { type: "u64" }),
+              ],
             }),
           },
         },
@@ -302,19 +361,137 @@ describe("validateInitializeXdr", () => {
     };
   }
 
-  it("rejects initialize terms that differ from the persisted tournament", async () => {
-    vi.mocked(TransactionBuilder.fromXDR).mockReturnValue(initializeOperation(11n) as never);
-    const { validateInitializeXdr } = await import("./pipeline");
+  it("accepts a matching constructor deployment", async () => {
+    vi.mocked(TransactionBuilder.fromXDR).mockReturnValue(deployment() as never);
+    const { validateDeployXdr } = await import("./pipeline");
+    expect(() => validateDeployXdr("AAAAAgAAAAA=", terms)).not.toThrow();
+  });
 
-    expect(() => validateInitializeXdr("AAAAAgAAAAA=", terms)).toThrow(
-      "Initialize transaction must target this tournament's escrow contract",
+  it("accepts the SDK's real createContractV2 XDR shape", async () => {
+    const sdk =
+      await vi.importActual<typeof import("@stellar/stellar-sdk")>("@stellar/stellar-sdk");
+    const args = [
+      sdk.nativeToScVal(terms.organizerAddress, { type: "address" }),
+      sdk.nativeToScVal(terms.refereeAddress, { type: "address" }),
+      sdk.nativeToScVal(terms.tokenAddr, { type: "address" }),
+      sdk.nativeToScVal(terms.entryFee, { type: "i128" }),
+      sdk.nativeToScVal(terms.distributionBps, { type: ["u32"] }),
+      sdk.nativeToScVal(terms.settlementDeadline, { type: "u64" }),
+    ];
+    const tx = new sdk.TransactionBuilder(new sdk.Account(terms.organizerAddress, "1"), {
+      fee: "100",
+      networkPassphrase: "Test SDF Network ; September 2015",
+    })
+      .addOperation(
+        sdk.Operation.createCustomContract({
+          address: new sdk.Address(terms.organizerAddress),
+          wasmHash: Buffer.alloc(32, 1),
+          salt: createHash("sha256").update(terms.tournamentId).digest(),
+          constructorArgs: args,
+        }),
+      )
+      .setTimeout(0)
+      .build();
+    vi.mocked(TransactionBuilder.fromXDR).mockReturnValue(
+      sdk.TransactionBuilder.fromXDR(tx.toXDR(), "Test SDF Network ; September 2015") as never,
+    );
+    const { validateDeployXdr } = await import("./pipeline");
+    expect(() => validateDeployXdr(tx.toXDR(), terms)).not.toThrow();
+  });
+
+  it("rejects a substituted constructor fee", async () => {
+    vi.mocked(TransactionBuilder.fromXDR).mockReturnValue(deployment(11n) as never);
+    const { validateDeployXdr } = await import("./pipeline");
+    expect(() => validateDeployXdr("AAAAAgAAAAA=", terms)).toThrow(
+      "Deployment must use this tournament's constructor terms and escrow Wasm",
     );
   });
 
-  it("accepts an initialize transaction with the persisted terms", async () => {
-    vi.mocked(TransactionBuilder.fromXDR).mockReturnValue(initializeOperation() as never);
-    const { validateInitializeXdr } = await import("./pipeline");
+  it("rejects a salt from another tournament", async () => {
+    vi.mocked(TransactionBuilder.fromXDR).mockReturnValue(deployment() as never);
+    const { validateDeployXdr } = await import("./pipeline");
+    expect(() => validateDeployXdr("AAAAAgAAAAA=", { ...terms, tournamentId: "other" })).toThrow(
+      "Deployment must use this tournament's constructor terms and escrow Wasm",
+    );
+  });
+});
 
-    expect(() => validateInitializeXdr("AAAAAgAAAAA=", terms)).not.toThrow();
+describe("validateJoinXdr", () => {
+  const contractId = "CCJZ5DGASBWQXR5MPFCJXMBI333XE5U3FSJTNQU7RIKE3P5GN2K2WYD5";
+  const player = Keypair.random().publicKey();
+
+  async function invocation(targetContract = contractId, functionName = "join_tournament") {
+    const sdk =
+      await vi.importActual<typeof import("@stellar/stellar-sdk")>("@stellar/stellar-sdk");
+    const source = sdk.Keypair.random().publicKey();
+    return new sdk.TransactionBuilder(new sdk.Account(source, "1"), {
+      fee: "100",
+      networkPassphrase: "Test SDF Network ; September 2015",
+    })
+      .addOperation(
+        new sdk.Contract(targetContract).call(
+          functionName,
+          sdk.nativeToScVal(player, { type: "address" }),
+        ),
+      )
+      .setTimeout(0)
+      .build();
+  }
+
+  it("extracts the player argument instead of the transaction source", async () => {
+    const tx = await invocation();
+    vi.mocked(TransactionBuilder.fromXDR).mockReturnValue(tx as never);
+    const { validateJoinXdr } = await import("./pipeline");
+
+    expect(validateJoinXdr("AAAAAgAAAAA=", { contractId })).toBe(player);
+    expect(tx.source).not.toBe(player);
+  });
+
+  it("rejects a join for another contract", async () => {
+    const otherContract = Address.contract(Buffer.alloc(32, 2)).toString();
+    vi.mocked(TransactionBuilder.fromXDR).mockReturnValue(
+      (await invocation(otherContract)) as never,
+    );
+    const { validateJoinXdr } = await import("./pipeline");
+
+    expect(() => validateJoinXdr("AAAAAgAAAAA=", { contractId })).toThrow(
+      "Join must invoke this tournament's join_tournament function",
+    );
+  });
+
+  it("rejects another contract function", async () => {
+    vi.mocked(TransactionBuilder.fromXDR).mockReturnValue(
+      (await invocation(contractId, "get_players")) as never,
+    );
+    const { validateJoinXdr } = await import("./pipeline");
+
+    expect(() => validateJoinXdr("AAAAAgAAAAA=", { contractId })).toThrow(
+      "Join must invoke this tournament's join_tournament function",
+    );
+  });
+
+  it("rejects an unrelated successful transaction", async () => {
+    const sdk =
+      await vi.importActual<typeof import("@stellar/stellar-sdk")>("@stellar/stellar-sdk");
+    const source = sdk.Keypair.random().publicKey();
+    const tx = new sdk.TransactionBuilder(new sdk.Account(source, "1"), {
+      fee: "100",
+      networkPassphrase: "Test SDF Network ; September 2015",
+    })
+      .addOperation(
+        sdk.Operation.payment({
+          destination: sdk.Keypair.random().publicKey(),
+          asset: sdk.Asset.native(),
+          amount: "0.0000001",
+        }),
+      )
+      .setTimeout(0)
+      .build();
+    vi.mocked(TransactionBuilder.fromXDR).mockReturnValue(tx as never);
+    const { validateJoinXdr } = await import("./pipeline");
+
+    expect(() => validateJoinXdr("AAAAAgAAAAA=", { contractId })).toThrow(
+      "Join must invoke this tournament's join_tournament function",
+    );
   });
 });
