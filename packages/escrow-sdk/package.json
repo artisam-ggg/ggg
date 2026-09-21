@@ -34,6 +34,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src/index.ts test",
     "test": "vitest run",
     "prepack": "pnpm build"
   },
@@ -42,7 +43,9 @@
     "buffer": "6.0.3"
   },
   "devDependencies": {
+    "eslint": "^9.39.4",
     "typescript": "^6.0.3",
+    "typescript-eslint": "^8.70.0",
     "vitest": "^4.1.9"
   }
 }
