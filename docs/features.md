@@ -2,6 +2,10 @@
 
 Running log of shipped features (append one entry per change), per the auto-dev workflow.
 
+## Issue #223 — Reusable escrow transaction APIs
+
+The `@ggg/escrow-sdk` package now exposes explicit RPC/network configuration, keyless build and simulation for constructor deployment, join, 1–10 winner settlement, cancellation, and refund claims, plus typed contract reads and explicit SAC resolution. Signed-XDR submission compares the signed body with the simulated build and checks the wallet-reported network before RPC; confirmed, failed, pending, and uncertain transactions can be reconciled by hash. Public errors use stable safe codes and omit RPC bodies and signed XDR. Mocked-RPC tests and a standalone packed-package consumer cover the exported surface. App authorization and persistence remain in the web app for #224.
+
 ## Issue #245 — Clear duplicate tournament participation
 
 The join endpoint now checks the persisted participant record before building an unsigned join transaction. A wallet already recorded for the tournament receives a clear `409 CONFLICT` response (`You are already a participant in this tournament.`), avoiding an unnecessary signature and generic submission error. The Soroban contract remains the source of truth for races or subscriber lag.
