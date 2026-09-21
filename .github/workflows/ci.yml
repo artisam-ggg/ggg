@@ -63,6 +63,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build escrow SDK
+        run: pnpm --filter @ggg/escrow-sdk build
+
       - name: Generate Prisma client
         run: pnpm --filter web db:generate
 
@@ -164,11 +167,9 @@ jobs:
             --wasm contracts/escrow/target/wasm32v1-none/release/ggg_escrow.wasm \
             --output-dir /tmp/ggg-escrow-bindings \
             --overwrite
-          sed -i '1i// @ts-nocheck -- Stellar CLI generated binding includes unused SDK template imports.' \
-            /tmp/ggg-escrow-bindings/src/index.ts
           diff -u \
-            apps/web/src/contract-client/src/index.ts \
-            /tmp/ggg-escrow-bindings/src/index.ts
+            <(awk 'NR > 1' packages/escrow-sdk/src/contract/index.ts) \
+            <(awk '1' /tmp/ggg-escrow-bindings/src/index.ts)
 
       - name: Contract tests
         run: cd contracts/escrow && cargo test

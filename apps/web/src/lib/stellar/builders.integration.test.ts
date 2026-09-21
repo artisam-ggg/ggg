@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Asset, Keypair, scValToNative, TransactionBuilder, xdr } from "@stellar/stellar-sdk";
-import { Client } from "@/contract-client";
+import { EscrowClient as Client } from "@ggg/escrow-sdk";
 import { env } from "@/lib/env";
 
 const PASSPHRASE = "Test SDF Network ; September 2015";

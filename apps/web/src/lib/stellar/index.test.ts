@@ -10,7 +10,7 @@ vi.mock("@/lib/env", () => ({
     ESCROW_WASM_HASH: "abc",
   },
 }));
-vi.mock("@/contract-client", () => ({ Client: vi.fn() }));
+vi.mock("@ggg/escrow-sdk", () => ({ EscrowClient: vi.fn() }));
 
 describe("public barrel", () => {
   it("exports the Phase-4 contract surface", async () => {
