@@ -54,6 +54,8 @@ console.log(tournament.winners);
 
 The generated binding accepts an ordered `winners: string[]` vector for `finalize_results` (1–10 winners, matching the contract's distribution). `EscrowClient.deploy` takes `organizer`, `referee`, `token`, `entry_fee: bigint`, `distribution_bps: number[]`, and `settlement_deadline: bigint` as constructor terms. `get_players`, `get_tournament`, `get_settlement_deadline`, and `claim_refund({ player })` reflect the current ABI. A refund always pays the registered player named in the call. The low-level binding leaves signing and confirmation to its caller; the higher-level `EscrowSdk` above handles submission and confirmation after an external wallet signs. Older deployed contracts may have a different ABI and should be identified before using these bindings.
 
+The new WASM also exposes `claim_refund_after_deadline({ player })` through `EscrowClient`. It is permissionless for the caller, pays only that registered player, and works only at or after the inclusive deadline while the tournament is neither cancelled nor finalized. `claim_refund({ player })` remains available for the app's cancellation and deadline claims; both entrypoints share the same one-claim record and `refund_claimed` event. Existing instances keep the ABI of the WASM they were deployed with, so call the new method only on instances deployed with this version.
+
 ## Build and regenerate
 
 From the repository root, use Node 22, pnpm 10.6.4, Rust, and Stellar CLI 27.0.0:

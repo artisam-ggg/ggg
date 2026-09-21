@@ -2,6 +2,10 @@
 
 Running log of shipped features (append one entry per change), per the auto-dev workflow.
 
+## SOW deadline-refund entrypoint
+
+The escrow contract now exposes `claim_refund_after_deadline(player)` for active, unfinished tournaments at or after the inclusive deadline, matching the SOW's named entrypoint while preserving the existing `claim_refund(player)` ABI used by the app. Both paths pay only the registered player and share the same one-claim storage key and `refund_claimed` event. The generated SDK binding includes both methods; existing deployed instances retain their original WASM ABI. Contract tests cover the deadline boundary, permissionless caller, cancellation/finalization rejection, payout, event, and cross-entrypoint double-claim prevention. A fresh Testnet instance records a successful invocation of the named method in [transaction `813ec5f…325a6`](https://stellar.expert/explorer/testnet/tx/813ec5f5703a6e0504cae3d19fa602ba24e89420fab6c4f675eb49bb127325a6); the complete evidence is in the [verification record](verification/sow-deadline-refund-entrypoint.md).
+
 ## Issue #223 — Reusable escrow transaction APIs
 
 The `@ggg/escrow-sdk` package now exposes explicit RPC/network configuration, keyless build and simulation for constructor deployment, join, 1–10 winner settlement, cancellation, and refund claims, plus typed contract reads and explicit SAC resolution. Signed-XDR submission compares the signed body with the simulated build and checks the wallet-reported network before RPC; confirmed, failed, pending, and uncertain transactions can be reconciled by hash. Public errors use stable safe codes and omit RPC bodies and signed XDR. Mocked-RPC tests and a standalone packed-package consumer cover the exported surface. App authorization and persistence remain in the web app for #224.

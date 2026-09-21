@@ -135,6 +135,12 @@ export interface Client {
    */
   get_settlement_deadline: (options?: MethodOptions) => Promise<AssembledTransaction<Option<u64>>>
 
+  /**
+   * Construct and simulate a claim_refund_after_deadline transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Deadline-only entry point for active escrows; preserves claim_refund for cancellation.
+   */
+  claim_refund_after_deadline: ({player}: {player: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
 }
 export class Client extends ContractClient {
   static async deploy<T = Client>(
@@ -169,7 +175,8 @@ export class Client extends ContractClient {
         "AAAAAAAAAAAAAAAPam9pbl90b3VybmFtZW50AAAAAAEAAAAAAAAABnBsYXllcgAAAAAAEwAAAAA=",
         "AAAAAAAAAAAAAAAQZmluYWxpemVfcmVzdWx0cwAAAAEAAAAAAAAAB3dpbm5lcnMAAAAD6gAAABMAAAAA",
         "AAAAAAAAAAAAAAARY2FuY2VsX3RvdXJuYW1lbnQAAAAAAAAAAAAAAA==",
-        "AAAAAAAAAE5SZXR1cm5zIHRoZSBpbml0aWFsaXplZCBVVEMgVW5peCBzZXR0bGVtZW50IGRlYWRsaW5lIGZvciBzdGF0ZSByZWNvbmNpbGlhdGlvbi4AAAAAABdnZXRfc2V0dGxlbWVudF9kZWFkbGluZQAAAAAAAAAAAQAAA+gAAAAG" ]),
+        "AAAAAAAAAE5SZXR1cm5zIHRoZSBpbml0aWFsaXplZCBVVEMgVW5peCBzZXR0bGVtZW50IGRlYWRsaW5lIGZvciBzdGF0ZSByZWNvbmNpbGlhdGlvbi4AAAAAABdnZXRfc2V0dGxlbWVudF9kZWFkbGluZQAAAAAAAAAAAQAAA+gAAAAG",
+        "AAAAAAAAAFZEZWFkbGluZS1vbmx5IGVudHJ5IHBvaW50IGZvciBhY3RpdmUgZXNjcm93czsgcHJlc2VydmVzIGNsYWltX3JlZnVuZCBmb3IgY2FuY2VsbGF0aW9uLgAAAAAAG2NsYWltX3JlZnVuZF9hZnRlcl9kZWFkbGluZQAAAAABAAAAAAAAAAZwbGF5ZXIAAAAAABMAAAAA" ]),
       options
     )
   }
@@ -183,6 +190,7 @@ export class Client extends ContractClient {
         join_tournament: this.txFromJSON<null>,
         finalize_results: this.txFromJSON<null>,
         cancel_tournament: this.txFromJSON<null>,
-        get_settlement_deadline: this.txFromJSON<Option<u64>>
+        get_settlement_deadline: this.txFromJSON<Option<u64>>,
+        claim_refund_after_deadline: this.txFromJSON<null>
   }
 }
