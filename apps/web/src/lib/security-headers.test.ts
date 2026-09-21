@@ -55,4 +55,13 @@ describe("buildSecurityHeaders", () => {
     const productionCsp = new Map(buildSecurityHeaders()).get("Content-Security-Policy") ?? "";
     expect(productionCsp).not.toContain("'unsafe-eval'");
   });
+
+  it("allows PostHog analytics and session replay resources", () => {
+    const csp = new Map(buildSecurityHeaders()).get("Content-Security-Policy") ?? "";
+    expect(csp).toContain("script-src 'self' 'unsafe-inline' https://*.posthog.com");
+    expect(csp).toContain(
+      "connect-src 'self' https://*.stellar.org https://stellar.expert https://*.posthog.com",
+    );
+    expect(csp).toContain("worker-src 'self' blob: data:");
+  });
 });

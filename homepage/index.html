@@ -543,6 +543,32 @@
         background: radial-gradient(circle at 30% 30%, rgba(247, 189, 72, 0.1), transparent 60%);
       }
 
+      /* ── Public analytics ── */
+      .analytics-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-lg);
+      }
+      .analytics-card {
+        background: var(--surface-container-low);
+        border: 1px solid var(--surface-variant);
+        border-radius: var(--radius-xl);
+        padding: var(--space-xl);
+      }
+      .analytics-value {
+        color: var(--primary);
+        font-family: "JetBrains Mono", monospace;
+        font-size: clamp(36px, 6vw, 64px);
+        font-weight: 700;
+        line-height: 1;
+        margin: 12px 0;
+      }
+      .analytics-status {
+        color: var(--on-surface-variant);
+        font-size: 14px;
+        margin: 18px 0 0;
+      }
+
       /* ── Contact ── */
       .contact {
         display: grid;
@@ -742,6 +768,9 @@
         .contact {
           grid-template-columns: 1fr;
         }
+        .analytics-grid {
+          grid-template-columns: 1fr;
+        }
         .footer-inner {
           grid-template-columns: 1fr 1fr;
         }
@@ -841,7 +870,7 @@
         </nav>
 
         <div class="nav-cta">
-          <a class="btn btn-primary" href="https://app.ggg.quest" target="_blank" rel="noopener">
+          <a class="btn btn-primary" href="https://beta.app.ggg.quest" target="_blank" rel="noopener">
             <span class="mat fill" aria-hidden="true">open_in_new</span>
             <span class="lbl">Open the app</span>
           </a>
@@ -869,7 +898,7 @@
           </p>
 
           <div class="hero-actions">
-            <a class="btn btn-primary" href="https://app.ggg.quest" target="_blank" rel="noopener">
+            <a class="btn btn-primary" href="https://beta.app.ggg.quest" target="_blank" rel="noopener">
               <span class="mat fill" aria-hidden="true">open_in_new</span>
               Open the app
             </a>
@@ -952,7 +981,7 @@
                   podium, and the contract settles. Three transactions appear on the Stellar
                   explorer before you've finished the sentence.
                 </p>
-                <a class="btn btn-primary" href="https://app.ggg.quest" target="_blank" rel="noopener">
+                <a class="btn btn-primary" href="https://beta.app.ggg.quest" target="_blank" rel="noopener">
                   <span class="mat fill" aria-hidden="true">rocket_launch</span>
                   Launch the app
                 </a>
@@ -960,6 +989,25 @@
               <div class="img-box" role="img" aria-label="GGG dashboard showing a live tournament prize pool"></div>
             </article>
           </div>
+        </div>
+      </section>
+
+      <!-- ── Public analytics ───────────────────────────────────────────────── -->
+      <section id="analytics" class="section-pad" aria-labelledby="analytics-title">
+        <div class="container">
+          <div class="section-head">
+            <span class="eyebrow">// Live analytics</span>
+            <h2 id="analytics-title">Built in the open.</h2>
+            <p>Aggregate, privacy-safe activity from the last 30 days.</p>
+          </div>
+          <div class="analytics-grid">
+            <article class="analytics-card">
+              <span class="eyebrow-muted">App pageviews</span>
+              <p class="analytics-value" id="analytics-pageviews" aria-live="polite">—</p>
+              <p class="eyebrow-muted">Last 30 days</p>
+            </article>
+          </div>
+          <p class="analytics-status" id="analytics-status" role="status">Loading live analytics…</p>
         </div>
       </section>
 
@@ -996,7 +1044,7 @@
               <div style="display: flex; align-items: center; gap: 12px">
                 <span class="mat" style="color: var(--primary)" aria-hidden="true">open_in_new</span>
                 <span style="color: var(--on-surface-variant); font-size: 15px">
-                  <a href="https://app.ggg.quest" target="_blank" rel="noopener">Open the app</a>
+                  <a href="https://beta.app.ggg.quest" target="_blank" rel="noopener">Open the app</a>
                 </span>
               </div>
             </div>
@@ -1044,7 +1092,7 @@
             <ul>
               <li><a href="https://artisam.xyz" target="_blank" rel="noopener">Artisam Labs ↗</a></li>
               <li><a href="mailto:hello@artisam.xyz">Contact Us ↗</a></li>
-              <li><a href="https://app.ggg.quest" target="_blank" rel="noopener">Open the app ↗</a></li>
+              <li><a href="https://beta.app.ggg.quest" target="_blank" rel="noopener">Open the app ↗</a></li>
             </ul>
           </div>
         </div>
@@ -1054,7 +1102,7 @@
           <div class="links">
             <a href="privacy.html">Privacy</a>
             <a href="terms.html">Terms</a>
-            <a href="https://app.ggg.quest" target="_blank" rel="noopener">app.ggg.quest</a>
+            <a href="https://beta.app.ggg.quest" target="_blank" rel="noopener">beta.app.ggg.quest</a>
           </div>
         </div>
       </div>
@@ -1126,6 +1174,26 @@
             toggle.setAttribute("aria-expanded", open ? "false" : "true");
           });
         }
+
+        // Homepage metrics are aggregate-only and fetched from the app's public endpoint.
+        var analyticsValue = document.getElementById("analytics-pageviews");
+        var analyticsStatus = document.getElementById("analytics-status");
+        fetch("https://beta.app.ggg.quest/api/public-analytics")
+          .then(function (response) {
+            if (!response.ok) throw new Error("Analytics unavailable");
+            return response.json();
+          })
+          .then(function (payload) {
+            var pageviews = payload && payload.data && payload.data.pageviewsLast30Days;
+            if (!Number.isSafeInteger(pageviews) || pageviews < 0)
+              throw new Error("Invalid analytics");
+            if (analyticsValue)
+              analyticsValue.textContent = new Intl.NumberFormat().format(pageviews);
+            if (analyticsStatus) analyticsStatus.textContent = "Updated from aggregate PostHog data.";
+          })
+          .catch(function () {
+            if (analyticsStatus) analyticsStatus.textContent = "Live analytics are temporarily unavailable.";
+          });
       })();
     </script>
   </body>

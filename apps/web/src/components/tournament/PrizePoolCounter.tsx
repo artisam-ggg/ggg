@@ -1,6 +1,6 @@
 "use client";
 import { useMemo } from "react";
-import { useTournamentEvents } from "@/hooks/use-tournament-events";
+import { useTournamentEventContext } from "./TournamentEventsProvider";
 import { formatStroops } from "@/lib/format-stroops";
 
 const EMPTY_PLAYERS: string[] = [];
@@ -14,7 +14,6 @@ const EMPTY_PLAYERS: string[] = [];
  * prefers-reduced-motion (BRAND §6).
  */
 export function PrizePoolCounter({
-  tournamentId,
   initialPool,
   asset,
   participantCount,
@@ -22,7 +21,6 @@ export function PrizePoolCounter({
   initialParticipants = EMPTY_PLAYERS, // new prop
   initialRefundPlayers = EMPTY_PLAYERS,
 }: {
-  tournamentId: string;
   initialPool: string;
   asset: "XLM" | "USDC";
   participantCount: number;
@@ -30,7 +28,7 @@ export function PrizePoolCounter({
   initialParticipants?: string[]; // addresses already counted
   initialRefundPlayers?: string[];
 }) {
-  const { events } = useTournamentEvents(tournamentId);
+  const { events } = useTournamentEventContext();
 
   // Build a Set of initial participant addresses for quick lookup
   const initialSet = useMemo(() => new Set(initialParticipants), [initialParticipants]);
