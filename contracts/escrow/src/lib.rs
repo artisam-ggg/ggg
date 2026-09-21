@@ -430,6 +430,24 @@ impl Escrow {
         }
         .publish(&env);
     }
+
+    /// Deadline-only entry point for active escrows; preserves claim_refund for cancellation.
+    pub fn claim_refund_after_deadline(env: Env, player: Address) {
+        let storage = env.storage().instance();
+        if !storage.has(&DataKey::Organizer) {
+            panic_with_error!(&env, Error::NotInitialized);
+        }
+        if storage.get(&DataKey::Finished).unwrap_or(false) {
+            panic_with_error!(&env, Error::AlreadyFinished);
+        }
+        if storage.get(&DataKey::Cancelled).unwrap_or(false) {
+            panic_with_error!(&env, Error::AlreadyCancelled);
+        }
+        if !deadline_reached(&env, storage.get(&DataKey::SettlementDeadline).unwrap()) {
+            panic_with_error!(&env, Error::DeadlineNotReached);
+        }
+        Self::claim_refund(env, player);
+    }
 }
 
 #[cfg(test)]

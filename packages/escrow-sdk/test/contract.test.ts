@@ -37,6 +37,9 @@ it("exports the finalized read, vector settlement, and refund ABI", () => {
     winners: ["G1", "G2", "G3", "G4"],
   };
   const refund: Parameters<EscrowClient["claim_refund"]>[0] = { player: "G1" };
+  const deadlineRefund: Parameters<EscrowClient["claim_refund_after_deadline"]>[0] = {
+    player: "G1",
+  };
   const tournament: TournamentInfo = {
     cancelled: false,
     distribution_bps: [4000, 3000, 2000, 1000],
@@ -61,9 +64,11 @@ it("exports the finalized read, vector settlement, and refund ABI", () => {
       "finalize_results",
       "cancel_tournament",
       "claim_refund",
+      "claim_refund_after_deadline",
     ]),
   );
   expect(client.fromJSON).not.toHaveProperty("initialize");
   expect(tournament.distribution_bps).toHaveLength(4);
   expect(refund.player).toBe("G1");
+  expect(deadlineRefund.player).toBe("G1");
 });
