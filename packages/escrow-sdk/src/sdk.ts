@@ -142,7 +142,7 @@ export class EscrowSdk {
     if (config.wasmHash !== undefined)
       input(HASH.test(config.wasmHash), "WASM hash must be 32 bytes of hex");
     this.config = Object.freeze({ ...config });
-    this.server = new rpc.Server(config.rpcUrl, { allowHttp: config.rpcUrl.startsWith("http:") });
+    this.server = new rpc.Server(config.rpcUrl, { allowHttp: url.protocol === "http:" });
   }
 
   private id(): string {
@@ -475,6 +475,12 @@ export class EscrowSdk {
     }
     if (sent.status === "ERROR")
       throw new EscrowSdkError("SUBMIT_REJECTED", "Stellar rejected the transaction", hash);
+    if (sent.status === "TRY_AGAIN_LATER")
+      throw new EscrowSdkError(
+        "SUBMIT_REJECTED",
+        "RPC asked to retry later; the same signed transaction may be resubmitted",
+        hash,
+      );
     if (sent.hash !== hash)
       throw new EscrowSdkError(
         "CONFIRMATION_FAILED",

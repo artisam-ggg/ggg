@@ -124,6 +124,7 @@ describe("configuration and validation", () => {
     expect(
       () => new EscrowSdk({ ...config, rpcUrl: "https://user:pass@rpc.example" }),
     ).toThrowError(expect.objectContaining({ code: "INVALID_INPUT" }));
+    expect(() => new EscrowSdk({ ...config, rpcUrl: "HTTP://rpc.example" })).not.toThrow();
   });
   it("resolves SACs only from explicit addresses and network", () => {
     expect(resolveSacAddress("XLM", network, { nativeSacAddress: contract })).toBe(contract);
@@ -312,6 +313,13 @@ describe("signed transaction submission", () => {
       code: "SUBMIT_REJECTED",
       message: "Stellar rejected the transaction",
     });
+    rpcCalls.send.mockResolvedValue({ status: "TRY_AGAIN_LATER" });
+    await expect(sdk.submit(signed(built.xdr), built, network)).rejects.toMatchObject({
+      code: "SUBMIT_REJECTED",
+      message: "RPC asked to retry later; the same signed transaction may be resubmitted",
+      hash: built.hash,
+    });
+    expect(rpcCalls.get).not.toHaveBeenCalled();
     rpcCalls.get.mockRejectedValue(new Error("credential=private"));
     await expect(sdk.lookup(built.hash)).rejects.toMatchObject({
       code: "CONFIRMATION_FAILED",
