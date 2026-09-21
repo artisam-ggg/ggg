@@ -7,7 +7,7 @@ pnpm-lock.yaml
 target
 apps/web/prisma/migrations
 apps/web/src/generated
-apps/web/src/contract-client
+packages/escrow-sdk/src/contract
 
 # Authoritative project docs/specs — content is canonical, not Prettier-managed
 *.md

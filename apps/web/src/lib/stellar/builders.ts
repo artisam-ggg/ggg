@@ -1,4 +1,4 @@
-import { Client } from "@/contract-client";
+import { EscrowClient as Client } from "@ggg/escrow-sdk";
 import { createHash } from "node:crypto";
 import { Contract, TransactionBuilder, type Transaction } from "@stellar/stellar-sdk";
 import { env } from "@/lib/env";

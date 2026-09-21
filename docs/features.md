@@ -214,3 +214,7 @@ Confirmed joins now preserve the server timestamp from the signed app submission
 ## Issue #292 — Public homepage analytics
 
 The static homepage includes an aggregate-only App pageviews metric for the last 30 days, defined as the number of PostHog `$pageview` events. It reads a rate-limited public endpoint hosted by the web app, cached for five minutes; that endpoint queries PostHog using server-only credentials and exposes neither a PostHog key nor user-level data. Cross-origin access is limited to `ggg.quest` and the dedicated `PUBLIC_ANALYTICS_ALLOWED_ORIGINS` setting, without expanding the app's CSRF trust list. Missing, delayed, empty, malformed, or unavailable upstream data is not cached and leaves the homepage working with a temporary-unavailability message.
+
+## Issue #222 — Publishable escrow SDK package and bindings
+
+Added `@ggg/escrow-sdk@0.1.0` as a public MIT-licensed workspace package with a built root entry point, a separate generated-contract export, declarations, and a restricted publication tarball. The finalized constructor, 1–10 winner vector, read helpers, deadline, and refund ABI now live in the SDK; the web app imports those bindings from the workspace package. CI checks the binding against freshly built contract WASM, and package tests cover the current ABI. Higher-level transaction APIs and app migration remain tracked in #223 and #224; npm publication remains in #226.

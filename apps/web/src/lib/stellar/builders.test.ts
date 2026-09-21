@@ -28,7 +28,7 @@ const ClientCtor = vi.fn().mockImplementation(function () {
 });
 (ClientCtor as unknown as { deploy: typeof deployFn }).deploy = deployFn;
 
-vi.mock("@/contract-client", () => ({ Client: ClientCtor }));
+vi.mock("@ggg/escrow-sdk", () => ({ EscrowClient: ClientCtor }));
 vi.mock("./legacy-escrow-client", () => ({ legacyEscrowClient: legacyEscrowClientFn }));
 vi.mock("./pipeline", () => pipeline);
 vi.mock("./client", () => ({
