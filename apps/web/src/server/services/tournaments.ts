@@ -252,7 +252,8 @@ export async function submitTournamentTx(
       const landed = await sdk.lookup(currentHash, "deploy");
       if (landed.status === "SUCCESS") {
         result = landed;
-      } else if (landed.status === "FAILED") {
+      } else if (landed.status === "FAILED" || tournament.pendingDeployTxHash !== currentHash) {
+        // The fetched row is pre-submit: only an existing same-hash retry stays pending.
         await prisma.tournament.update({ where: { id }, data: { pendingDeployTxHash: null } });
         await forgetPrepared(currentHash);
         throw error;

@@ -341,13 +341,29 @@ describe("SDK-backed tournament routes", () => {
     Object.assign(mocks.row!, {
       status: "DRAFT",
       contractId: null,
+      pendingDeployTxHash: "hash",
       settlementDeadline: new Date(Date.now() + 60_000),
     });
     mocks.submit.mockRejectedValueOnce(new EscrowSdkError("SUBMIT_REJECTED", "Rejected", "hash"));
     const response = await deployOrSubmit(request(`/${tournamentId}/submit`, signed), ctx);
     expect(response.status).toBe(504);
+    expect(await response.json()).toMatchObject({ error: { code: "TX_TIMEOUT" } });
     expect(mocks.row?.pendingDeployTxHash).toBe("hash");
     expect(mocks.forgetPrepared).not.toHaveBeenCalled();
+  });
+
+  it("clears a rejected first deployment so a new hash can be submitted", async () => {
+    Object.assign(mocks.row!, {
+      status: "DRAFT",
+      contractId: null,
+      settlementDeadline: new Date(Date.now() + 60_000),
+    });
+    mocks.submit.mockRejectedValueOnce(new EscrowSdkError("SUBMIT_REJECTED", "Rejected", "hash"));
+    const response = await deployOrSubmit(request(`/${tournamentId}/submit`, signed), ctx);
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({ error: { code: "SUBMIT_REJECTED" } });
+    expect(mocks.row?.pendingDeployTxHash).toBeNull();
+    expect(mocks.forgetPrepared).toHaveBeenCalledWith("hash");
   });
 
   it("rejects an expired unsubmitted deployment", async () => {
