@@ -2,6 +2,10 @@
 
 Running log of shipped features (append one entry per change), per the auto-dev workflow.
 
+## Issue #225 — Standalone Node escrow consumer
+
+Added a package-only Node example that demonstrates Testnet constructor deployment, registration, 1–10 winner settlement with confirmed payout reads, and separate deadline-delegated and cancellation refund instances. Its external signer contract keeps account secrets outside the repository. The documented pack/install path and isolated mocked-RPC smoke exercise the SDK as a third-party consumer. An approved live Testnet run confirmed the one-winner settlement, delegated deadline refund, and cancellation/refund paths on separate instances; public hashes and on-chain read results are recorded in [the verification record](verification/issue-225-node-example-testnet.md).
+
 ## SOW deadline-refund entrypoint
 
 The escrow contract now exposes `claim_refund_after_deadline(player)` for active, unfinished tournaments at or after the inclusive deadline, matching the SOW's named entrypoint while preserving the existing `claim_refund(player)` ABI used by the app. Both paths pay only the registered player and share the same one-claim storage key and `refund_claimed` event. The generated SDK binding includes both methods; existing deployed instances retain their original WASM ABI. Contract tests cover the deadline boundary, permissionless caller, cancellation/finalization rejection, payout, event, and cross-entrypoint double-claim prevention. A fresh Testnet instance records a successful invocation of the named method in [transaction `813ec5f…325a6`](https://stellar.expert/explorer/testnet/tx/813ec5f5703a6e0504cae3d19fa602ba24e89420fab6c4f675eb49bb127325a6); the complete evidence is in the [verification record](verification/sow-deadline-refund-entrypoint.md).
