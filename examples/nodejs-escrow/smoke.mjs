@@ -1,4 +1,4 @@
-import { copyFileSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,6 +20,14 @@ try {
   const tarball = readdirSync(isolated).find((name) => name.endsWith(".tgz"));
   if (!tarball) throw new Error("SDK pack produced no tarball");
   // The isolated project has no workspace aliases. Its Stellar SDK dependency is fixture-only.
+  writeFileSync(
+    join(isolated, "package.json"),
+    JSON.stringify({
+      name: "ggg-sdk-smoke",
+      private: true,
+      pnpm: { overrides: { "@stellar/stellar-sdk": "15.1.0" } },
+    }),
+  );
   run("pnpm", ["add", join(isolated, tarball), "@stellar/stellar-sdk@15.1.0"], isolated);
   copyFileSync(join(here, "smoke-client.mjs"), join(isolated, "smoke-client.mjs"));
   run("node", ["smoke-client.mjs"], isolated);

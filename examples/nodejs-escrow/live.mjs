@@ -30,6 +30,14 @@ async function main() {
   if (!Number.isSafeInteger(windowSeconds) || windowSeconds < 90 || windowSeconds > 90 * 86400) {
     throw new Error("SETTLEMENT_WINDOW_SECONDS must be 90 through 7776000");
   }
+  const refundWindowSeconds = Number(process.env.REFUND_WINDOW_SECONDS?.trim() || "90");
+  if (
+    !Number.isSafeInteger(refundWindowSeconds) ||
+    refundWindowSeconds < 90 ||
+    refundWindowSeconds > 90 * 86400
+  ) {
+    throw new Error("REFUND_WINDOW_SECONDS must be 90 through 7776000");
+  }
   if (players.length !== distributionBps.length || new Set(players).size !== players.length) {
     throw new Error("PLAYERS must be distinct and match DISTRIBUTION_BPS length");
   }
@@ -131,7 +139,7 @@ async function main() {
   console.log(`confirmed payouts (stroops): ${payouts.join(", ")}`);
 
   // Terminal outcomes are alternatives, so refunds use fresh contract instances.
-  const refundDeadline = now() + 90;
+  const refundDeadline = now() + refundWindowSeconds;
   const expired = await newTournament("deadline refund", refundDeadline, [10000]);
   await join(expired, players[0]);
   console.log(`Waiting for deadline ${refundDeadline} UTC Unix seconds on the deadline instance`);

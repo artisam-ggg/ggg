@@ -3,6 +3,7 @@ import { ok, err } from "@/lib/api";
 import { assertSameOrigin, CsrfError } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
 import { StellarError } from "@/lib/stellar";
+import { EscrowSdkError } from "@ggg/escrow-sdk";
 import { joinSchema } from "@/lib/validation/tournament";
 import { buildJoin } from "@/server/services/tournaments";
 
@@ -44,7 +45,7 @@ export async function POST(
     const data = await buildJoin(id, parsed.data.playerAddress);
     return ok(data);
   } catch (e) {
-    if (e instanceof StellarError) {
+    if (e instanceof StellarError || e instanceof EscrowSdkError) {
       return err("STELLAR_ERROR", e.message, 422);
     }
     const status = (e as { status?: number }).status;

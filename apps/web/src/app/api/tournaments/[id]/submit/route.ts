@@ -4,6 +4,7 @@ import { requireUser, AuthError } from "@/lib/auth-guards";
 import { assertSameOrigin, CsrfError } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
 import { StellarError } from "@/lib/stellar";
+import { EscrowSdkError } from "@ggg/escrow-sdk";
 import { submitSchema } from "@/lib/validation/tournament";
 import { submitTournamentTx } from "@/server/services/tournaments";
 import { withIdempotency } from "@/server/services/idempotency";
@@ -69,11 +70,27 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   // 7. Submit with idempotency guarantee.
   try {
     const data = await withIdempotency(
-      parsed.data.intent === "deploy" ? `${id}:${user.id}:deploy` : `${id}:${idemKey}`,
+      parsed.data.intent === "deploy"
+        ? `${id}:${user.id}:deploy`
+        : `${id}:${user.id}:${parsed.data.intent}:${idemKey}`,
       () => submitTournamentTx(id, parsed.data, user.id),
     );
     return ok(data);
   } catch (e) {
+    if (e instanceof EscrowSdkError) {
+      const status =
+        e.code === "TX_TIMEOUT"
+          ? 504
+          : e.code === "CONFIRMATION_FAILED"
+            ? 503
+            : e.code === "INVALID_INPUT" || e.code === "NETWORK_MISMATCH"
+              ? 400
+              : 422;
+      return err(e.code, e.message, status, {
+        ...(e.hash ? { txHash: e.hash } : {}),
+        retryable: e.code === "TX_TIMEOUT" || e.code === "CONFIRMATION_FAILED",
+      });
+    }
     if (e instanceof StellarError) {
       const stellarStatus =
         e.code === "TX_TIMEOUT"

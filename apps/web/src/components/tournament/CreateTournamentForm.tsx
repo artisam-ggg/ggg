@@ -36,11 +36,7 @@ const draftSchema = z.object({
   asset: z.enum(["XLM", "USDC"]),
   refereeAddress: z.string().max(56),
   settlementDeadline: z.string().max(32),
-  splits: z.tuple([
-    z.number().int().min(0).max(100),
-    z.number().int().min(0).max(100),
-    z.number().int().min(0).max(100),
-  ]),
+  splits: z.array(z.number().min(0.01).max(100)).min(1).max(10),
 });
 
 type TournamentDraft = z.infer<typeof draftSchema>;
@@ -130,7 +126,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   const [refereeAddress, setRefereeAddress] = useState("");
   const [organizerAddress, setOrganizerAddress] = useState("");
   const [settlementDeadline, setSettlementDeadline] = useState("");
-  const [splits, setSplits] = useState<[number, number, number]>([60, 30, 10]);
+  const [splits, setSplits] = useState<number[]>([60, 30, 10]);
   const [coverImageKey, setCoverImageKey] = useState<string | undefined>();
   const [coverUploadStatus, setCoverUploadStatus] = useState<CoverUploadStatus>("idle");
   const coverUploadRequest = useRef(0);
@@ -204,9 +200,11 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   }
 
   // Derived values
-  const bps = splits.map((s) => s * 100) as [number, number, number];
-  const splitSum = splits[0] + splits[1] + splits[2];
-  const splitValid = splitSum === 100;
+  const bps = splits.map((s) => Math.round(s * 100));
+  const splitSum = bps.reduce((sum, value) => sum + value, 0) / 100;
+  const splitValid =
+    splitSum === 100 &&
+    splits.every((value) => value > 0 && Math.abs(value * 100 - Math.round(value * 100)) < 1e-6);
 
   async function handleCoverUpload(file: File) {
     const request = ++coverUploadRequest.current;
@@ -526,21 +524,22 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       {/* Prize Split */}
       <fieldset className="mt-6">
         <legend className={labelClass}>Prize Split (%)</legend>
-        <div className="grid grid-cols-3 gap-4">
-          {(["1st", "2nd", "3rd"] as const).map((rank, i) => (
-            <div key={rank}>
+        <div className="grid gap-4 sm:grid-cols-3">
+          {splits.map((split, i) => (
+            <div key={i}>
               <label className={labelClass} htmlFor={`split-${i}`}>
-                {rank} %
+                {["1st", "2nd", "3rd"][i] ?? `Rank ${i + 1}`} %
               </label>
               <input
                 id={`split-${i}`}
                 type="number"
-                min={0}
+                min={0.01}
                 max={100}
+                step={0.01}
                 className={monoFieldClass}
-                value={splits[i]}
+                value={split}
                 onChange={(e) => {
-                  const next = [...splits] as [number, number, number];
+                  const next = [...splits];
                   next[i] = Number(e.target.value);
                   setSplits(next);
                 }}
@@ -549,12 +548,28 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
             </div>
           ))}
         </div>
+        <div className="mt-3 flex gap-3">
+          <button
+            type="button"
+            disabled={splits.length >= 10}
+            onClick={() => setSplits([...splits, 1])}
+          >
+            Add payout rank
+          </button>
+          <button
+            type="button"
+            disabled={splits.length <= 1}
+            onClick={() => setSplits(splits.slice(0, -1))}
+          >
+            Remove last rank
+          </button>
+        </div>
         <p className="data-mono mt-3 text-sm text-on-surface-variant" aria-live="polite">
-          {bps[0]} / {bps[1]} / {bps[2]} bps
+          {bps.join(" / ")} bps
         </p>
         {!splitValid && (
           <p id="split-error" role="alert" className="mt-1 text-sm text-error">
-            Split must sum to 100 (currently {splitSum})
+            Split must sum to 100 using hundredths of a percent (currently {splitSum})
           </p>
         )}
       </fieldset>

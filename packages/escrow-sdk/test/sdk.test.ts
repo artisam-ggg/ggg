@@ -11,7 +11,7 @@ import {
   rpc,
   xdr,
 } from "@stellar/stellar-sdk";
-import { EscrowSdk, resolveSacAddress } from "../src/sdk.js";
+import { EscrowSdk, getEscrowWasmHash, resolveSacAddress } from "../src/sdk.js";
 
 const fakes = vi.hoisted(() => ({
   deploy: vi.fn(),
@@ -62,6 +62,18 @@ const config = {
   contractId: contract,
   wasmHash: "01".repeat(32),
 };
+const tournamentResult = {
+  cancelled: false,
+  distribution_bps: [10000],
+  entry_fee: 1n,
+  finished: false,
+  organizer: key.publicKey(),
+  player_count: 0,
+  referee: other.publicKey(),
+  settlement_deadline: 1_800_000_000n,
+  token: contract,
+  winners: [],
+};
 const rpcCalls = { simulate: vi.fn(), send: vi.fn(), get: vi.fn() };
 
 function tx(method: string, args: ReturnType<Address["toScVal"]>[] = []) {
@@ -99,7 +111,7 @@ beforeEach(() => {
     assembled("claim_refund", [Address.fromString(other.publicKey()).toScVal()]),
   );
   fakes.deploy.mockResolvedValue(assembled("join_tournament"));
-  fakes.tournament.mockResolvedValue({ result: { distribution_bps: [10000] } });
+  fakes.tournament.mockResolvedValue({ result: tournamentResult });
   fakes.pool.mockResolvedValue({ result: 123n });
   fakes.reward.mockResolvedValue({ result: 5n });
   fakes.players.mockResolvedValue({ result: [key.publicKey()] });
@@ -108,6 +120,59 @@ beforeEach(() => {
 });
 
 describe("configuration and validation", () => {
+  it("reads the instance executable hash before selecting an ABI", async () => {
+    const hash = Buffer.from("ab".repeat(32), "hex");
+    vi.spyOn(rpc.Server.prototype, "getLedgerEntries").mockResolvedValue({
+      entries: [
+        {
+          val: {
+            contractData: () => ({
+              val: () => ({
+                instance: () => ({
+                  executable: () => ({
+                    switch: () => ({ name: "contractExecutableWasm" }),
+                    wasmHash: () => hash,
+                  }),
+                }),
+              }),
+            }),
+          },
+        },
+      ],
+    } as never);
+    await expect(getEscrowWasmHash(config.rpcUrl, contract)).resolves.toBe("ab".repeat(32));
+  });
+
+  it("rejects malformed executable ledger entries", async () => {
+    vi.spyOn(rpc.Server.prototype, "getLedgerEntries").mockResolvedValueOnce({
+      entries: [],
+    } as never);
+    await expect(getEscrowWasmHash(config.rpcUrl, contract)).rejects.toMatchObject({
+      code: "CONFIRMATION_FAILED",
+    });
+    vi.spyOn(rpc.Server.prototype, "getLedgerEntries").mockResolvedValueOnce({
+      entries: [
+        {
+          val: {
+            contractData: () => ({
+              val: () => ({
+                instance: () => ({
+                  executable: () => ({
+                    switch: () => ({ name: "contractExecutableWasm" }),
+                    wasmHash: () => new Uint8Array(31),
+                  }),
+                }),
+              }),
+            }),
+          },
+        },
+      ],
+    } as never);
+    await expect(getEscrowWasmHash(config.rpcUrl, contract)).rejects.toMatchObject({
+      code: "CONFIRMATION_FAILED",
+    });
+  });
+
   it("requires explicit, valid network and destination", () => {
     expect(() => new EscrowSdk({ rpcUrl: "", networkPassphrase: network })).toThrowError(
       expect.objectContaining({ code: "INVALID_INPUT" }),
@@ -166,7 +231,9 @@ describe("configuration and validation", () => {
   it("accepts ten winners when the on-chain distribution has ten entries", async () => {
     const sdk = new EscrowSdk(config);
     const winners = Array.from({ length: 10 }, () => Keypair.random().publicKey());
-    fakes.tournament.mockResolvedValue({ result: { distribution_bps: Array(10).fill(1000) } });
+    fakes.tournament.mockResolvedValue({
+      result: { ...tournamentResult, distribution_bps: Array(10).fill(1000) },
+    });
     await expect(sdk.buildFinalize(key.publicKey(), winners)).resolves.toMatchObject({
       intent: "finalize",
     });
@@ -256,6 +323,29 @@ describe("public transaction and read paths", () => {
     expect(await sdk.readSettlementDeadline(key.publicKey())).toBe(1_800_000_000n);
     expect((await sdk.readTournament(key.publicKey())).distribution_bps).toEqual([10000]);
     await expect(sdk.readPool("bad")).rejects.toMatchObject({ code: "INVALID_INPUT" });
+  });
+  it("rejects malformed generated-client reads before returning them or building finalize", async () => {
+    const sdk = new EscrowSdk(config);
+    fakes.tournament.mockResolvedValue({ result: { ...tournamentResult, entry_fee: "1" } });
+    await expect(sdk.readTournament(key.publicKey())).rejects.toMatchObject({
+      code: "SIMULATION_FAILED",
+    });
+    await expect(sdk.buildFinalize(key.publicKey(), [other.publicKey()])).rejects.toMatchObject({
+      code: "SIMULATION_FAILED",
+    });
+    expect(fakes.finalize).not.toHaveBeenCalled();
+    fakes.pool.mockResolvedValue({ result: "123" });
+    await expect(sdk.readPool(key.publicKey())).rejects.toMatchObject({
+      code: "SIMULATION_FAILED",
+    });
+    fakes.players.mockResolvedValue({ result: ["bad"] });
+    await expect(sdk.readPlayers(key.publicKey())).rejects.toMatchObject({
+      code: "SIMULATION_FAILED",
+    });
+    fakes.deadline.mockResolvedValue({ result: 1n << 64n });
+    await expect(sdk.readSettlementDeadline(key.publicKey())).rejects.toMatchObject({
+      code: "SIMULATION_FAILED",
+    });
   });
   it("redacts simulation failure details", async () => {
     rpcCalls.simulate.mockRejectedValue(new Error("secret RPC body"));
