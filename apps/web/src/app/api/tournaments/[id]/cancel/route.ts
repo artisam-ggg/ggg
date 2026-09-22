@@ -4,6 +4,7 @@ import { requireUser, AuthError } from "@/lib/auth-guards";
 import { assertSameOrigin, CsrfError } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
 import { StellarError } from "@/lib/stellar";
+import { EscrowSdkError } from "@ggg/escrow-sdk";
 import { buildCancel } from "@/server/services/tournaments";
 
 export async function POST(
@@ -42,7 +43,7 @@ export async function POST(
     const data = await buildCancel(id, user.id);
     return ok(data);
   } catch (e) {
-    if (e instanceof StellarError) {
+    if (e instanceof StellarError || e instanceof EscrowSdkError) {
       return err("STELLAR_ERROR", e.message, 422);
     }
     const status = (e as { status?: number }).status;

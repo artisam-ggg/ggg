@@ -216,6 +216,17 @@ describe("CreateTournamentForm", () => {
     expect(screen.getByText(/6000 \/ 3000 \/ 1000 bps/i)).toBeInTheDocument();
   });
 
+  it("accepts hundredth-percent splits and preserves exact basis points", () => {
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/1st %/i), { target: { value: "33.34" } });
+    fireEvent.change(screen.getByLabelText(/2nd %/i), { target: { value: "33.33" } });
+    fireEvent.change(screen.getByLabelText(/3rd %/i), { target: { value: "33.33" } });
+    expect(screen.getByText(/3334 \/ 3333 \/ 3333 bps/i)).toBeInTheDocument();
+    expect(screen.queryByText(/must sum to 100/i)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/3rd %/i), { target: { value: "33.333" } });
+    expect(screen.getByText(/hundredths of a percent/i)).toBeInTheDocument();
+  });
+
   it("explains that the deadline input is local and the saved instant is UTC", () => {
     render(<CreateTournamentForm expectedPassphrase="P" />);
     expect(screen.getByLabelText(/settlement deadline \(your local time\)/i)).toHaveAttribute(

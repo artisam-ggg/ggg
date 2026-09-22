@@ -52,6 +52,7 @@ export function WinnersPanel({ winners, asset }: { winners: Winner[]; asset: "XL
             <span className="flex items-center gap-3">
               {/* Renders clean, standalone inline SVG directly without custom stylesheets */}
               {renderRankIcon(w.rank)}
+              <span className="label-caps text-on-surface-variant">Rank {w.rank}</span>
 
               <span className="data-mono text-on-surface">
                 {w.playerAddr.slice(0, 6)}…{w.playerAddr.slice(-6)}

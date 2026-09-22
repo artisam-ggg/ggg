@@ -19,6 +19,7 @@ interface SettlementConsoleProps {
   refereeAddr: string;
   participants: Participant[];
   passphrase: string;
+  distributionBps?: number[];
 }
 
 export function SettlementConsole({
@@ -26,34 +27,27 @@ export function SettlementConsole({
   refereeAddr,
   participants,
   passphrase,
+  distributionBps = [6000, 3000, 1000],
 }: SettlementConsoleProps) {
   const router = useRouter();
   const [wallet, setWallet] = useState<string | null>(null);
-  const [slots, setSlots] = useState<[string | null, string | null, string | null]>([
-    null,
-    null,
-    null,
-  ]);
+  const [slots, setSlots] = useState<(string | null)[]>(() => distributionBps.map(() => null));
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
 
   const assignedSet = new Set(slots.filter((s): s is string => s !== null));
 
-  function assign(rank: 1 | 2 | 3, addr: string) {
+  function assign(rank: number, addr: string) {
     setSlots((prev) => {
-      const next = prev.map((s) => (s === addr ? null : s)) as [
-        string | null,
-        string | null,
-        string | null,
-      ];
+      const next = prev.map((s) => (s === addr ? null : s));
       next[rank - 1] = addr;
       return next;
     });
   }
 
-  function clear(rank: 1 | 2 | 3) {
+  function clear(rank: number) {
     setSlots((prev) => {
-      const next = [...prev] as [string | null, string | null, string | null];
+      const next = [...prev];
       next[rank - 1] = null;
       return next;
     });
@@ -61,7 +55,7 @@ export function SettlementConsole({
 
   const isReferee = wallet !== null && wallet === refereeAddr;
   const allFilled = slots.every((s) => s !== null);
-  const allDistinct = new Set(slots).size === 3;
+  const allDistinct = new Set(slots).size === slots.length;
   const ready = isReferee && allFilled && allDistinct;
 
   async function finalize() {
@@ -74,11 +68,7 @@ export function SettlementConsole({
           "content-type": "application/json",
           "x-wallet-address": wallet!,
         },
-        body: JSON.stringify({
-          first: slots[0],
-          second: slots[1],
-          third: slots[2],
-        }),
+        body: JSON.stringify({ winners: slots }),
       });
       const built = (await res.json()) as {
         ok: boolean;
@@ -128,20 +118,26 @@ export function SettlementConsole({
             Referee Settlement Console
           </h1>
           <p className="mt-2 text-sm text-on-surface-variant">
-            Referee-only: drag or use keyboard buttons to assign 1st, 2nd, and 3rd place.
+            Referee-only: drag or use keyboard buttons to assign {slots.length} ranked winners.
           </p>
 
           {/* Podium slots */}
-          <div className="mt-6 grid grid-cols-3 gap-4" aria-label="Podium positions">
-            {([1, 2, 3] as const).map((r) => (
-              <PodiumSlot
-                key={r}
-                rank={r}
-                addr={slots[r - 1] ?? null}
-                onAssign={(addr) => assign(r, addr)}
-                onClear={() => clear(r)}
-              />
-            ))}
+          <div
+            className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
+            aria-label="Payout ranks"
+          >
+            {slots.map((_, index) => {
+              const r = index + 1;
+              return (
+                <PodiumSlot
+                  key={r}
+                  rank={r}
+                  addr={slots[r - 1] ?? null}
+                  onAssign={(addr) => assign(r, addr)}
+                  onClear={() => clear(r)}
+                />
+              );
+            })}
           </div>
 
           {/* Wallet connect + finalize */}
@@ -166,7 +162,7 @@ export function SettlementConsole({
               {wallet &&
                 isReferee &&
                 (!allFilled || !allDistinct) &&
-                "Assign 3 distinct participants to all podium slots to enable finalization."}
+                `Assign ${slots.length} distinct participants to all payout ranks to enable finalization.`}
             </p>
           )}
 
@@ -198,6 +194,7 @@ export function SettlementConsole({
                 <CandidateCard
                   addr={p.playerAddr}
                   used={assignedSet.has(p.playerAddr)}
+                  ranks={slots.map((_, index) => index + 1)}
                   onAssign={(rank) => assign(rank, p.playerAddr)}
                 />
               </div>

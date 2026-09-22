@@ -4,7 +4,18 @@ export {
   type DataKey as EscrowDataKey,
   type TournamentInfo,
 } from "./contract/index.js";
-export { EscrowSdk, EscrowSdkError, resolveSacAddress } from "./sdk.js";
+export {
+  EscrowSdk,
+  EscrowSdkError,
+  resolveSacAddress,
+  isValidEscrowPublicKey,
+  isValidEscrowContractId,
+  isValidEscrowAmount,
+  isValidEscrowDistribution,
+  escrowTransactionHash,
+  getEscrowWasmHash,
+  CURRENT_ESCROW_WASM_HASH,
+} from "./sdk.js";
 export type {
   EscrowSdkConfig,
   BuiltEscrowTransaction,

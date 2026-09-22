@@ -1,10 +1,10 @@
 import { z } from "zod";
 import {
-  stellarPublicKey,
-  stellarContractId,
-  i128Amount,
-  signedXdr as signedXdrSchema,
-} from "@/lib/stellar";
+  isValidEscrowPublicKey,
+  isValidEscrowContractId,
+  isValidEscrowAmount,
+  isValidEscrowDistribution,
+} from "@ggg/escrow-sdk";
 import { Asset, TournamentStatus } from "@/generated/prisma/enums";
 
 /** Conservative, uniform maximum settlement window for every supported network. */
@@ -12,9 +12,15 @@ export const MIN_SETTLEMENT_LEAD_TIME_SECS = 60 * 60;
 /** Matches the Testnet-safe horizon enforced by the escrow contract (#215). */
 export const MAX_SETTLEMENT_HORIZON_SECS = 90 * 24 * 60 * 60;
 
-// Re-export Phase 2 Stellar validators for convenience
-export { stellarPublicKey, stellarContractId, i128Amount };
-export { signedXdrSchema as signedXdr };
+export const stellarPublicKey = z
+  .string()
+  .refine(isValidEscrowPublicKey, "Invalid Stellar public key");
+export const stellarContractId = z.string().refine(isValidEscrowContractId, "Invalid contract ID");
+export const i128Amount = z.bigint().refine(isValidEscrowAmount, "Amount must be a positive i128");
+export const signedXdr = z
+  .string()
+  .min(1)
+  .regex(/^[A-Za-z0-9+/]+={0,2}$/);
 
 // --- Enums ---
 
@@ -55,16 +61,10 @@ export const createTournamentSchema = z
     organizerAddress: stellarPublicKey,
     // An integer UTC Unix timestamp is unambiguous and can be passed to Soroban unchanged.
     settlementDeadline: z.coerce.number().int().nonnegative(),
-    distributionBps: z.tuple([
-      z.number().int().min(0).max(10000),
-      z.number().int().min(0).max(10000),
-      z.number().int().min(0).max(10000),
-    ]),
+    distributionBps: z.array(z.number()).min(1).max(10).refine(isValidEscrowDistribution, {
+      message: "Split must contain 1–10 positive ranks totaling 10000 basis points",
+    }),
     coverImageKey: coverImageKeySchema.optional(),
-  })
-  .refine((v) => v.distributionBps[0] + v.distributionBps[1] + v.distributionBps[2] === 10000, {
-    message: "Split must sum to 10000 basis points",
-    path: ["distributionBps"],
   })
   .refine((v) => v.organizerAddress !== v.refereeAddress, {
     message: "Organizer and referee must differ",
@@ -98,7 +98,7 @@ export type CreateTournamentInput = z.infer<typeof createTournamentSchema>;
 // --- submitSchema ---
 
 export const submitSchema = z.object({
-  signedXdr: signedXdrSchema,
+  signedXdr,
   intent: z.enum(["deploy", "join", "claim_refund", "finalize", "cancel"]),
 });
 export type SubmitInput = z.infer<typeof submitSchema>;
@@ -119,12 +119,8 @@ export const tournamentParamsSchema = z.object({ id: z.string().cuid() });
 // --- finalizeSchema ---
 
 export const finalizeSchema = z
-  .object({
-    first: stellarPublicKey,
-    second: stellarPublicKey,
-    third: stellarPublicKey,
-  })
-  .refine((v) => new Set([v.first, v.second, v.third]).size === 3, {
+  .object({ winners: z.array(stellarPublicKey).min(1).max(10) })
+  .refine((v) => new Set(v.winners).size === v.winners.length, {
     message: "Winners must be distinct",
   });
 export type FinalizeInput = z.infer<typeof finalizeSchema>;

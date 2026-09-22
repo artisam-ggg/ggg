@@ -1,6 +1,7 @@
 import {
   Asset,
   Address,
+  Contract,
   StrKey,
   Transaction,
   TransactionBuilder,
@@ -13,6 +14,8 @@ import { Client, type TournamentInfo } from "./contract/index.js";
 const I128_MAX = (1n << 127n) - 1n;
 const U64_MAX = (1n << 64n) - 1n;
 const HASH = /^[a-fA-F0-9]{64}$/;
+export const CURRENT_ESCROW_WASM_HASH =
+  "b704f577f1715d965f9ba24f2cebf49df52735d42c9a4cd2a93781d612a46dd9";
 
 export type EscrowIntent = "deploy" | "join" | "finalize" | "cancel" | "claim_refund";
 export type EscrowErrorCode =
@@ -63,20 +66,51 @@ function input(ok: boolean, message: string): asserts ok {
   if (!ok) throw new EscrowSdkError("INVALID_INPUT", message);
 }
 
+export const isValidEscrowPublicKey = (value: unknown): value is string =>
+  typeof value === "string" && StrKey.isValidEd25519PublicKey(value);
+export const isValidEscrowContractId = (value: unknown): value is string =>
+  typeof value === "string" && StrKey.isValidContract(value);
+export const isValidEscrowAmount = (value: unknown): value is bigint =>
+  typeof value === "bigint" && value > 0n && value <= I128_MAX;
+export const isValidEscrowDistribution = (values: unknown): values is number[] =>
+  Array.isArray(values) &&
+  values.length >= 1 &&
+  values.length <= 10 &&
+  values.every((v) => Number.isInteger(v) && v > 0 && v <= 10000) &&
+  values.reduce((a, b) => a + b, 0) === 10000;
+
+export function escrowTransactionHash(xdr: string, networkPassphrase: string): string {
+  input(typeof xdr === "string" && xdr.length > 0, "Malformed transaction XDR");
+  try {
+    return TransactionBuilder.fromXDR(xdr, networkPassphrase).hash().toString("hex");
+  } catch {
+    throw new EscrowSdkError("INVALID_INPUT", "Malformed transaction XDR");
+  }
+}
+
+/** Read the executable hash before a consumer selects an ABI for an instance. */
+export async function getEscrowWasmHash(rpcUrl: string, id: string): Promise<string> {
+  contractId(id);
+  try {
+    const server = new rpc.Server(rpcUrl, { allowHttp: new URL(rpcUrl).protocol === "http:" });
+    const { entries } = await server.getLedgerEntries(new Contract(id).getFootprint());
+    input(entries.length === 1, "Escrow instance was not found");
+    const executable = entries[0]!.val.contractData().val().instance().executable();
+    input(executable.switch().name === "contractExecutableWasm", "Escrow is not WASM-backed");
+    return Buffer.from(executable.wasmHash()).toString("hex");
+  } catch {
+    throw new EscrowSdkError("CONFIRMATION_FAILED", "Escrow version could not be determined");
+  }
+}
+
 function publicKey(value: string): void {
-  input(
-    typeof value === "string" && StrKey.isValidEd25519PublicKey(value),
-    "Invalid source or account address",
-  );
+  input(isValidEscrowPublicKey(value), "Invalid source or account address");
 }
 function contractId(value: string): void {
-  input(typeof value === "string" && StrKey.isValidContract(value), "Invalid contract ID");
+  input(isValidEscrowContractId(value), "Invalid contract ID");
 }
 function amount(value: bigint): void {
-  input(
-    typeof value === "bigint" && value > 0n && value <= I128_MAX,
-    "Amount must be a positive i128 in stroops",
-  );
+  input(isValidEscrowAmount(value), "Amount must be a positive i128 in stroops");
 }
 function deadline(value: bigint): void {
   input(
@@ -87,11 +121,7 @@ function deadline(value: bigint): void {
 
 function distribution(values: number[]): void {
   input(
-    Array.isArray(values) &&
-      values.length >= 1 &&
-      values.length <= 10 &&
-      values.every((v) => Number.isInteger(v) && v > 0 && v <= 10000) &&
-      values.reduce((a, b) => a + b, 0) === 10000,
+    isValidEscrowDistribution(values),
     "Distribution must contain 1–10 positive basis points totaling 10000",
   );
 }

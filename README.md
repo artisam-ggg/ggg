@@ -31,7 +31,7 @@ For the Stellar ecosystem, GGG is a concrete use case for Soroban: it turns paid
 - **Version:** `0.0.0` (workspace manifests) · contract crate `ggg-escrow` `0.1.0`
 - **Status:** Live on Stellar Testnet at https://ggg.quest
 - **Default network:** Stellar Testnet (`STELLAR_NETWORK=testnet`)
-- **Current uploaded escrow WASM hash (#220):** `2dcfb4c3ed77863269a347308156021de08427f5e6aa77ba15a08d9476c03f77` (recorded in `apps/web/.env.example`). It includes the atomic constructor, 1–10 winners, read helpers, and bounded TTL lifecycle; see `docs/verification/issue-220-ttl-evidence.md` for Testnet upload verification. Set a Railway environment to this hash only after its deployed code includes the matching binding and #224 subscriber support.
+- **Current uploaded escrow WASM hash (#313):** `b704f577f1715d965f9ba24f2cebf49df52735d42c9a4cd2a93781d612a46dd9` (recorded in `apps/web/.env.example`). It includes the atomic constructor, 1–10 winner vectors, bounded TTL lifecycle, and the named deadline refund method. The app accepts this hash for new SDK-backed escrows; older instances are displayed read-only. See `docs/verification/issue-224-reference-consumer.md` before changing a deployed environment.
 - **License:** Released under the MIT License. Copyright © 2026 Artisam Labs.
 
 ---
@@ -69,7 +69,7 @@ GGG removes the custodian: **no party holds the funds — the contract does.** M
 ## Features
 
 **Tournaments**
-- Create a tournament with entry fee, asset (XLM or USDC), referee address, and a 1st/2nd/3rd split stored as basis points that must sum to 10000.
+- Create a tournament with entry fee, asset (XLM or USDC), referee address, and an ordered 1–10 rank split stored as basis points that must sum to 10000.
 - Public tournament detail page: live prize-pool counter, participant list, winners panel with explorer links.
 - Organiser dashboard (list with status chips), referee **settlement console**, admin dashboard.
 - Consistent back-navigation (`BackButton`) across tournament, settlement, and admin detail pages.
@@ -110,7 +110,7 @@ flowchart TD
 
     subgraph Web["apps/web — Next.js 16 (Railway)"]
         RH["Route Handlers /api/*<br/>auth · tournaments · admin · uploads · SSE"]
-        TX["Stellar tx-builder<br/>@stellar/stellar-sdk 15"]
+        TX["Escrow transaction adapter<br/>@ggg/escrow-sdk"]
         MW["Middleware<br/>auth · CSRF · security headers"]
     end
 
@@ -153,7 +153,7 @@ flowchart TD
 
 ### 1. Hero flow — create tournament (organiser)
 
-Tournament creation uses one deployment transaction whose `__constructor` receives all escrow configuration. The organiser signs once in Freighter. The server stores the contract ID and activates the tournament only after the deployment is confirmed. See [`apps/web/src/lib/stellar/builders.ts`](./apps/web/src/lib/stellar/builders.ts) (`buildDeployInitializeTx`) and [`apps/web/src/server/services/tournaments.ts`](./apps/web/src/server/services/tournaments.ts).
+Tournament creation uses one deployment transaction whose `__constructor` receives all escrow configuration. The organiser signs once in Freighter. The server stores the exact SDK-prepared transaction for signature validation, then activates the tournament only after deployment confirmation. See [`packages/escrow-sdk/src/sdk.ts`](./packages/escrow-sdk/src/sdk.ts) and [`apps/web/src/server/services/tournaments.ts`](./apps/web/src/server/services/tournaments.ts).
 
 ```mermaid
 sequenceDiagram

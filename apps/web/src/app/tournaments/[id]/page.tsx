@@ -90,10 +90,12 @@ export default async function TournamentDetailPage({
       <p className="data-mono mt-3 text-sm text-on-surface-variant">
         {t.settlementDeadline ? (
           <SettlementDeadline seconds={t.settlementDeadline} />
-        ) : t.contractVersion === "LEGACY" ? (
-          "Legacy contract: no settlement deadline was recorded."
+        ) : t.contractVersion === "UNSUPPORTED" ? (
+          "Legacy escrow ABI: on-chain deadline unavailable here. This tournament is read-only."
+        ) : t.contractVersion === "UNAVAILABLE" ? (
+          "Escrow state is temporarily unavailable. Wallet actions are paused."
         ) : (
-          "Settlement deadline pending contract initialization."
+          "Settlement deadline pending contract deployment."
         )}
       </p>
 
@@ -117,7 +119,7 @@ export default async function TournamentDetailPage({
             asset={t.asset}
             claimedPlayers={t.refundClaimedPlayers}
           />
-          {t.contractId && hasUnclaimedRefunds && (
+          {t.contractId && t.contractVersion === "CURRENT" && hasUnclaimedRefunds && (
             <ClaimRefundButton
               tournamentId={t.id}
               passphrase={passphrase}
@@ -141,15 +143,18 @@ export default async function TournamentDetailPage({
               initialRefundPlayers={t.refundClaimedPlayers}
             />
 
-            {t.status === "ACTIVE" && !t.refundsClaimable && t.contractId && (
-              <JoinCard
-                tournamentId={t.id}
-                contractId={t.contractId}
-                entryFee={t.entryFee}
-                joinUrl={joinUrl}
-                passphrase={passphrase}
-              />
-            )}
+            {t.status === "ACTIVE" &&
+              !t.refundsClaimable &&
+              t.contractId &&
+              t.contractVersion === "CURRENT" && (
+                <JoinCard
+                  tournamentId={t.id}
+                  contractId={t.contractId}
+                  entryFee={t.entryFee}
+                  joinUrl={joinUrl}
+                  passphrase={passphrase}
+                />
+              )}
 
             {t.status === "FINISHED" && t.winners.length > 0 && (
               <WinnersPanel winners={t.winners} asset={t.asset} />
@@ -165,14 +170,14 @@ export default async function TournamentDetailPage({
 
           <aside aria-label="Tournament tools" className="flex flex-col gap-8 lg:col-span-4">
             <LiveFeed />
-            {t.status === "ACTIVE" && !t.refundsClaimable && (
+            {t.status === "ACTIVE" && !t.refundsClaimable && t.contractVersion === "CURRENT" && (
               <RefereePanel
                 tournamentId={t.id}
                 refereeAddr={t.refereeAddr}
                 passphrase={passphrase}
               />
             )}
-            {canCancel && (
+            {canCancel && t.contractVersion === "CURRENT" && (
               <section
                 aria-label="Organiser actions"
                 className="rounded-xl bg-surface-container p-4"

@@ -11,7 +11,7 @@ import {
   rpc,
   xdr,
 } from "@stellar/stellar-sdk";
-import { EscrowSdk, resolveSacAddress } from "../src/sdk.js";
+import { EscrowSdk, getEscrowWasmHash, resolveSacAddress } from "../src/sdk.js";
 
 const fakes = vi.hoisted(() => ({
   deploy: vi.fn(),
@@ -108,6 +108,29 @@ beforeEach(() => {
 });
 
 describe("configuration and validation", () => {
+  it("reads the instance executable hash before selecting an ABI", async () => {
+    const hash = Buffer.from("ab".repeat(32), "hex");
+    vi.spyOn(rpc.Server.prototype, "getLedgerEntries").mockResolvedValue({
+      entries: [
+        {
+          val: {
+            contractData: () => ({
+              val: () => ({
+                instance: () => ({
+                  executable: () => ({
+                    switch: () => ({ name: "contractExecutableWasm" }),
+                    wasmHash: () => hash,
+                  }),
+                }),
+              }),
+            }),
+          },
+        },
+      ],
+    } as never);
+    await expect(getEscrowWasmHash(config.rpcUrl, contract)).resolves.toBe("ab".repeat(32));
+  });
+
   it("requires explicit, valid network and destination", () => {
     expect(() => new EscrowSdk({ rpcUrl: "", networkPassphrase: network })).toThrowError(
       expect.objectContaining({ code: "INVALID_INPUT" }),
