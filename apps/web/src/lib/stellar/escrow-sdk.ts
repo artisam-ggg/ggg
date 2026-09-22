@@ -53,6 +53,13 @@ export async function savePrepared(
   tournamentId: string,
   built: BuiltEscrowTransaction,
 ): Promise<{ unsignedXdr: string; network: string }> {
+  // Keep uncertain deployments for recovery; all other prepared XDRs expire.
+  await prisma.preparedEscrowTransaction.deleteMany({
+    where: {
+      createdAt: { lt: new Date(Date.now() - 60 * 60 * 1000) },
+      OR: [{ intent: { not: "deploy" } }, { tournament: { pendingDeployTxHash: null } }],
+    },
+  });
   await prisma.preparedEscrowTransaction.upsert({
     where: { hash: built.hash },
     create: {
@@ -65,6 +72,15 @@ export async function savePrepared(
     update: {},
   });
   return { unsignedXdr: built.xdr, network: env.STELLAR_NETWORK };
+}
+
+export async function forgetPrepared(hash: string): Promise<void> {
+  try {
+    await prisma.preparedEscrowTransaction.deleteMany({ where: { hash } });
+  } catch (error) {
+    // A confirmed chain outcome must not become an API failure due to housekeeping.
+    console.error("Confirmed prepared transaction cleanup deferred", { hash, error });
+  }
 }
 
 export async function findPrepared(tournamentId: string, signedXdr: string, intent: EscrowIntent) {

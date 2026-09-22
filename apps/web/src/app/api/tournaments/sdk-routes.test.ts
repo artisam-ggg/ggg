@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   validate: vi.fn(),
   saved: vi.fn(),
   prepared: vi.fn(),
+  forgetPrepared: vi.fn(),
   participantUpsert: vi.fn(),
   requireCurrent: vi.fn(),
   readTournament: vi.fn(),
@@ -121,6 +122,7 @@ vi.mock("@/lib/stellar/escrow-sdk", () => {
     requireCurrentEscrow: mocks.requireCurrent,
     savePrepared: mocks.saved,
     findPrepared: mocks.prepared,
+    forgetPrepared: mocks.forgetPrepared,
     deploymentSalt: vi.fn(() => new Uint8Array(32)),
   };
 });
@@ -154,6 +156,9 @@ import { POST as refund } from "./[id]/refund/route";
 import { requireUser, AuthError } from "@/lib/auth-guards";
 import { EscrowSdkError } from "@ggg/escrow-sdk";
 import { withIdempotency } from "@/server/services/idempotency";
+import { assertSameOrigin, CsrfError } from "@/lib/csrf";
+import { rateLimit } from "@/lib/rate-limit";
+import { getTournamentDisplayStatus } from "@/server/services/tournaments";
 
 const ctx = { params: Promise.resolve({ id: tournamentId }) };
 const deadline = Math.floor(Date.now() / 1000) + 2 * 60 * 60;
@@ -234,6 +239,7 @@ describe("SDK-backed tournament routes", () => {
     expect(result.status).toBe(200);
     expect(mocks.validate).toHaveBeenCalledOnce();
     expect(mocks.row?.status).toBe("ACTIVE");
+    expect(mocks.forgetPrepared).toHaveBeenCalledWith("hash");
   });
 
   it("builds a join and records a participant only after confirmation", async () => {
@@ -270,6 +276,100 @@ describe("SDK-backed tournament routes", () => {
     expect(response.status).toBe(504);
     expect(mocks.row?.status).toBe("DRAFT");
     expect(mocks.row?.pendingDeployTxHash).toBe("hash");
+    expect(mocks.forgetPrepared).not.toHaveBeenCalled();
+  });
+
+  it("recovers a late successful deployment before checking an expired deadline", async () => {
+    Object.assign(mocks.row!, {
+      status: "DRAFT",
+      contractId: null,
+      pendingDeployTxHash: "old-hash",
+    });
+    mocks.lookup.mockResolvedValueOnce({ hash: "old-hash", status: "SUCCESS", contractId: "COLD" });
+    const response = await deployOrSubmit(request(`/${tournamentId}/submit`, signed), ctx);
+    expect(response.status).toBe(200);
+    expect(mocks.row).toMatchObject({
+      status: "ACTIVE",
+      contractId: "COLD",
+      pendingDeployTxHash: null,
+    });
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
+
+  it("does not replace a different deployment while its outcome is pending", async () => {
+    Object.assign(mocks.row!, {
+      status: "DRAFT",
+      contractId: null,
+      pendingDeployTxHash: "old-hash",
+      settlementDeadline: new Date(Date.now() + 60_000),
+    });
+    const response = await deployOrSubmit(request(`/${tournamentId}/submit`, signed), ctx);
+    expect(response.status).toBe(504);
+    expect(mocks.row?.pendingDeployTxHash).toBe("old-hash");
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
+
+  it("clears a confirmed failed deployment of the same hash", async () => {
+    Object.assign(mocks.row!, {
+      status: "DRAFT",
+      contractId: null,
+      pendingDeployTxHash: "hash",
+      settlementDeadline: new Date(Date.now() + 60_000),
+    });
+    mocks.lookup.mockResolvedValueOnce({ hash: "hash", status: "FAILED" });
+    const response = await deployOrSubmit(request(`/${tournamentId}/submit`, signed), ctx);
+    expect(response.status).toBe(422);
+    expect(mocks.row?.pendingDeployTxHash).toBeNull();
+    expect(mocks.submit).not.toHaveBeenCalled();
+    expect(mocks.forgetPrepared).toHaveBeenCalledWith("hash");
+  });
+
+  it("recovers a rejected submission that landed successfully", async () => {
+    Object.assign(mocks.row!, {
+      status: "DRAFT",
+      contractId: null,
+      settlementDeadline: new Date(Date.now() + 60_000),
+    });
+    mocks.submit.mockRejectedValueOnce(new EscrowSdkError("SUBMIT_REJECTED", "Rejected", "hash"));
+    mocks.lookup.mockResolvedValueOnce({ hash: "hash", status: "SUCCESS", contractId: "CRECOVER" });
+    const response = await deployOrSubmit(request(`/${tournamentId}/submit`, signed), ctx);
+    expect(response.status).toBe(200);
+    expect(mocks.row).toMatchObject({ status: "ACTIVE", contractId: "CRECOVER" });
+  });
+
+  it("keeps a rejected submission pending when lookup remains uncertain", async () => {
+    Object.assign(mocks.row!, {
+      status: "DRAFT",
+      contractId: null,
+      settlementDeadline: new Date(Date.now() + 60_000),
+    });
+    mocks.submit.mockRejectedValueOnce(new EscrowSdkError("SUBMIT_REJECTED", "Rejected", "hash"));
+    const response = await deployOrSubmit(request(`/${tournamentId}/submit`, signed), ctx);
+    expect(response.status).toBe(504);
+    expect(mocks.row?.pendingDeployTxHash).toBe("hash");
+    expect(mocks.forgetPrepared).not.toHaveBeenCalled();
+  });
+
+  it("rejects an expired unsubmitted deployment", async () => {
+    Object.assign(mocks.row!, { status: "DRAFT", contractId: null });
+    const response = await deployOrSubmit(request(`/${tournamentId}/submit`, signed), ctx);
+    expect(response.status).toBe(409);
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
+
+  it("derives refund display status only after a confirmed deadline", () => {
+    const base = {
+      status: "ACTIVE" as const,
+      settlementDeadline: new Date(0),
+      deadlineConfirmedAt: new Date(0),
+      participantAddresses: [players[0]!],
+      refundClaimedPlayers: [] as string[],
+    };
+    expect(getTournamentDisplayStatus(base, 1)).toBe("REFUNDS_OPEN");
+    expect(getTournamentDisplayStatus({ ...base, refundClaimedPlayers: [players[0]!] }, 1)).toBe(
+      "REFUNDED",
+    );
+    expect(getTournamentDisplayStatus({ ...base, deadlineConfirmedAt: null }, 1)).toBe("ACTIVE");
   });
 
   it.each([[players[0]!], [players[0]!, players[1]!, players[2]!]])(
@@ -468,5 +568,82 @@ describe("SDK-backed tournament routes", () => {
     expect(await unsafe.json()).toMatchObject({
       data: { settlementDeadline: null, contractVersion: "UNAVAILABLE" },
     });
+  });
+
+  const guardedRoutes = [
+    [
+      "submit",
+      () => deployOrSubmit(request(`/${tournamentId}/submit`, { ...signed, intent: "join" }), ctx),
+    ],
+    ["join", () => join(request(`/${tournamentId}/join`, { playerAddress: players[0] }), ctx)],
+    [
+      "finalize",
+      () =>
+        finalize(
+          request(
+            `/${tournamentId}/finalize`,
+            { winners: [players[0]] },
+            { "x-wallet-address": referee },
+          ),
+          ctx,
+        ),
+    ],
+  ] as const;
+
+  it.each(guardedRoutes)("returns 403 for %s CSRF failures", async (_name, run) => {
+    vi.mocked(assertSameOrigin).mockImplementationOnce(() => {
+      throw new CsrfError();
+    });
+    const response = await run();
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ ok: false, error: { code: "CSRF_VIOLATION" } });
+  });
+
+  it.each(guardedRoutes)("returns 429 for rate-limited %s requests", async (_name, run) => {
+    vi.mocked(rateLimit).mockResolvedValueOnce({ ok: false, remaining: 0 } as never);
+    const response = await run();
+    expect(response.status).toBe(429);
+    expect(await response.json()).toMatchObject({
+      ok: false,
+      error: { code: "TOO_MANY_REQUESTS" },
+    });
+  });
+
+  it.each(guardedRoutes)("returns 404 for missing %s tournaments", async (_name, run) => {
+    mocks.row = null;
+    const response = await run();
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+  });
+
+  it("rejects finalize without a wallet address", async () => {
+    const response = await finalize(
+      request(`/${tournamentId}/finalize`, { winners: [players[0]] }),
+      ctx,
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ ok: false, error: { code: "INVALID_REQUEST" } });
+  });
+
+  it.each([
+    ["submit", deployOrSubmit],
+    ["join", join],
+    ["finalize", finalize],
+  ] as const)("rejects malformed JSON for %s", async (name, route) => {
+    const response = await route(
+      new Request(`http://localhost:3000/api/tournaments/${tournamentId}/${name}`, {
+        method: "POST",
+        headers: {
+          origin: "http://localhost:3000",
+          "content-type": "application/json",
+          "idempotency-key": "key",
+          "x-wallet-address": referee,
+        },
+        body: "{",
+      }) as never,
+      ctx,
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ ok: false, error: { code: "INVALID_REQUEST" } });
   });
 });
