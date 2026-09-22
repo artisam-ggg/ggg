@@ -1,4 +1,5 @@
 import { type NextRequest } from "next/server";
+import { createHash } from "node:crypto";
 import { ok, err } from "@/lib/api";
 import { requireUser, AuthError } from "@/lib/auth-guards";
 import { assertSameOrigin, CsrfError } from "@/lib/csrf";
@@ -29,30 +30,13 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
     throw e;
   }
 
-  // 2. Auth: must be an authenticated user. requireUser redirects (NEXT_REDIRECT)
-  // when unauthenticated and throws AuthError(403) when wrong role.
-  let user: { id: string; username: string; role: string };
-  try {
-    user = await requireUser(undefined, false);
-  } catch (e) {
-    if (e instanceof AuthError) {
-      const code = e.status === 403 ? "FORBIDDEN" : "UNAUTHORIZED";
-      return err(code, e.message, e.status);
-    }
-    throw e; // re-throw NEXT_REDIRECT and any other non-auth errors
-  }
-
-  // 3. Idempotency key is required for all submit mutations.
+  // 2. Idempotency key is required for all submit mutations.
   const idemKey = req.headers.get("idempotency-key");
   if (!idemKey) {
     return err("MISSING_IDEMPOTENCY_KEY", "Idempotency-Key header is required", 400);
   }
 
-  // 4. Rate-limit per user.
-  const rl = await rateLimit(`submit:${user.id}`, { limit: 20, windowSec: 60 });
-  if (!rl.ok) return err("TOO_MANY_REQUESTS", "Too many requests. Try again later.", 429);
-
-  // 5. Parse + validate body.
+  // 3. Parse + validate body before deciding whether this intent needs an app session.
   let body: unknown;
   try {
     body = await req.json();
@@ -64,16 +48,39 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
     return err("INVALID_REQUEST", parsed.error.issues[0]?.message ?? "Invalid input", 400);
   }
 
-  // 6. Resolve route param (Next 16: params is a Promise).
+  // 4. A player authorizes a join with their wallet, not a GGG account.
+  let userId: string | null = null;
+  if (parsed.data.intent !== "join") {
+    try {
+      userId = (await requireUser(undefined, false)).id;
+    } catch (e) {
+      if (e instanceof AuthError) {
+        const code = e.status === 403 ? "FORBIDDEN" : "UNAUTHORIZED";
+        return err(code, e.message, e.status);
+      }
+      throw e;
+    }
+  }
+
+  // 5. Resolve route param (Next 16: params is a Promise).
   const { id } = await ctx.params;
+
+  // 6. Public joins are limited per tournament and caller IP; other intents per user.
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-real-ip") || "unknown";
+  const limitKey = userId === null ? `submit:join:${id}:${ip}` : `submit:${userId}`;
+  const rl = await rateLimit(limitKey, { limit: 20, windowSec: 60 });
+  if (!rl.ok) return err("TOO_MANY_REQUESTS", "Too many requests. Try again later.", 429);
 
   // 7. Submit with idempotency guarantee.
   try {
     const data = await withIdempotency(
-      parsed.data.intent === "deploy"
-        ? `${id}:${user.id}:deploy`
-        : `${id}:${user.id}:${parsed.data.intent}:${idemKey}`,
-      () => submitTournamentTx(id, parsed.data, user.id),
+      parsed.data.intent === "join"
+        ? `${id}:join:${createHash("sha256").update(parsed.data.signedXdr).digest("hex")}`
+        : parsed.data.intent === "deploy"
+          ? `${id}:${userId}:deploy`
+          : `${id}:${userId}:${parsed.data.intent}:${idemKey}`,
+      () => submitTournamentTx(id, parsed.data, userId),
     );
     return ok(data);
   } catch (e) {

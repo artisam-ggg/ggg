@@ -143,7 +143,7 @@ function requireFutureSettlementDeadline(deadline: Date | null): Date {
 export async function submitTournamentTx(
   id: string,
   input: SubmitInput,
-  userId: string,
+  userId: string | null,
 ): Promise<SubmitTxResult> {
   const submittedAt = new Date();
   const tournament = await prisma.tournament.findUnique({ where: { id } });

@@ -145,6 +145,7 @@ import { POST as finalize } from "./[id]/finalize/route";
 import { POST as cancel } from "./[id]/cancel/route";
 import { POST as refund } from "./[id]/refund/route";
 import { requireUser, AuthError } from "@/lib/auth-guards";
+import { rateLimit } from "@/lib/rate-limit";
 import { EscrowSdkError } from "@ggg/escrow-sdk";
 import { withIdempotency } from "@/server/services/idempotency";
 
@@ -436,14 +437,48 @@ describe("SDK-backed tournament routes", () => {
     expect(mocks.submit).not.toHaveBeenCalled();
   });
 
+  it("submits a wallet-signed join without an app session, but still requires one for deploy", async () => {
+    vi.mocked(requireUser).mockRejectedValueOnce(new AuthError("Authentication required", 401));
+    const joined = await deployOrSubmit(
+      request(`/${tournamentId}/submit`, { ...signed, intent: "join" }, {
+        "x-forwarded-for": "203.0.113.10",
+      }),
+      ctx,
+    );
+    expect(joined.status).toBe(200);
+    expect(requireUser).not.toHaveBeenCalled();
+    expect(rateLimit).toHaveBeenCalledWith(`submit:join:${tournamentId}:203.0.113.10`, {
+      limit: 20,
+      windowSec: 60,
+    });
+    expect(mocks.validate).toHaveBeenCalledOnce();
+    expect(mocks.participantUpsert).toHaveBeenCalledOnce();
+
+    const deployed = await deployOrSubmit(request(`/${tournamentId}/submit`, signed), ctx);
+    expect(deployed.status).toBe(401);
+    expect(mocks.submit).toHaveBeenCalledOnce();
+  });
+
+  it("scopes public join idempotency to the signed transaction", async () => {
+    await deployOrSubmit(request(`/${tournamentId}/submit`, { ...signed, intent: "join" }), ctx);
+    await deployOrSubmit(request(`/${tournamentId}/submit`, { ...signed, intent: "join" }), ctx);
+    await deployOrSubmit(
+      request(`/${tournamentId}/submit`, { signedXdr: "AAAAAgAAAAB=", intent: "join" }),
+      ctx,
+    );
+    const keys = vi.mocked(withIdempotency).mock.calls.map(([key]) => key);
+    expect(keys[0]).toBe(keys[1]);
+    expect(keys[2]).not.toBe(keys[0]);
+  });
+
   it("scopes non-deployment idempotency results to the user and intent", async () => {
-    const body = { ...signed, intent: "join" };
+    const body = { ...signed, intent: "claim_refund" };
     await deployOrSubmit(request(`/${tournamentId}/submit`, body), ctx);
     mocks.userId = "other";
     await deployOrSubmit(request(`/${tournamentId}/submit`, body), ctx);
     expect(vi.mocked(withIdempotency).mock.calls.map(([key]) => key)).toEqual([
-      `${tournamentId}:owner:join:key`,
-      `${tournamentId}:other:join:key`,
+      `${tournamentId}:owner:claim_refund:key`,
+      `${tournamentId}:other:claim_refund:key`,
     ]);
   });
 });
