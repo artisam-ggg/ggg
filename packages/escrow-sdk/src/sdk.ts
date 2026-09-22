@@ -9,6 +9,7 @@ import {
   scValToNative,
 } from "@stellar/stellar-sdk";
 import { Buffer } from "buffer";
+import { z } from "zod";
 import { Client, type TournamentInfo } from "./contract/index.js";
 
 const I128_MAX = (1n << 127n) - 1n;
@@ -79,6 +80,40 @@ export const isValidEscrowDistribution = (values: unknown): values is number[] =
   values.every((v) => Number.isInteger(v) && v > 0 && v <= 10000) &&
   values.reduce((a, b) => a + b, 0) === 10000;
 
+const publicKeySchema = z.string().refine(isValidEscrowPublicKey);
+const contractIdSchema = z.string().refine(isValidEscrowContractId);
+const amountSchema = z.bigint().min(0n).max(I128_MAX);
+const deadlineSchema = z.bigint().min(1n).max(U64_MAX);
+const distributionSchema = z.array(z.number()).refine(isValidEscrowDistribution);
+const tournamentSchema: z.ZodType<TournamentInfo> = z.object({
+  cancelled: z.boolean(),
+  distribution_bps: distributionSchema,
+  entry_fee: amountSchema.positive(),
+  finished: z.boolean(),
+  organizer: publicKeySchema,
+  player_count: z.number().int().min(0).max(0xffffffff),
+  referee: publicKeySchema,
+  settlement_deadline: deadlineSchema,
+  token: contractIdSchema,
+  winners: z.array(publicKeySchema).max(10),
+});
+const ledgerEntriesSchema = z.object({
+  entries: z
+    .array(
+      z.object({
+        val: z
+          .unknown()
+          .refine(
+            (value) =>
+              value !== null &&
+              typeof value === "object" &&
+              typeof (value as { contractData?: unknown }).contractData === "function",
+          ),
+      }),
+    )
+    .length(1),
+});
+
 export function escrowTransactionHash(xdr: string, networkPassphrase: string): string {
   input(typeof xdr === "string" && xdr.length > 0, "Malformed transaction XDR");
   try {
@@ -93,11 +128,15 @@ export async function getEscrowWasmHash(rpcUrl: string, id: string): Promise<str
   contractId(id);
   try {
     const server = new rpc.Server(rpcUrl, { allowHttp: new URL(rpcUrl).protocol === "http:" });
-    const { entries } = await server.getLedgerEntries(new Contract(id).getFootprint());
-    input(entries.length === 1, "Escrow instance was not found");
-    const executable = entries[0]!.val.contractData().val().instance().executable();
-    input(executable.switch().name === "contractExecutableWasm", "Escrow is not WASM-backed");
-    return Buffer.from(executable.wasmHash()).toString("hex");
+    const response = await server.getLedgerEntries(new Contract(id).getFootprint());
+    ledgerEntriesSchema.parse(response);
+    const executable = response.entries[0]!.val.contractData().val().instance().executable();
+    z.literal("contractExecutableWasm").parse(executable.switch().name);
+    const hash = z
+      .instanceof(Uint8Array)
+      .refine((value) => value.length === 32)
+      .parse(executable.wasmHash());
+    return Buffer.from(hash).toString("hex");
   } catch {
     throw new EscrowSdkError("CONFIRMATION_FAILED", "Escrow version could not be determined");
   }
@@ -287,10 +326,9 @@ export class EscrowSdk {
     winners.forEach(publicKey);
     input(new Set(winners).size === winners.length, "Winners must be distinct");
     try {
-      const tournament = await client.get_tournament();
-      distribution(tournament.result.distribution_bps);
+      const tournament = await this.read(() => client.get_tournament(), tournamentSchema);
       input(
-        winners.length === tournament.result.distribution_bps.length,
+        winners.length === tournament.distribution_bps.length,
         "Winner count must match the contract distribution",
       );
       return await this.prepare(
@@ -330,35 +368,39 @@ export class EscrowSdk {
 
   async readTournament(source: string): Promise<TournamentInfo> {
     const client = this.client(source);
-    return this.read(() => client.get_tournament());
+    return this.read(() => client.get_tournament(), tournamentSchema);
   }
   async readPool(source: string): Promise<bigint> {
     const client = this.client(source);
-    return this.read(() => client.get_pool());
+    return this.read(() => client.get_pool(), amountSchema);
   }
   async readReward(source: string, player: string): Promise<bigint> {
     publicKey(player);
     const client = this.client(source);
-    return this.read(() => client.get_reward({ player }));
+    return this.read(() => client.get_reward({ player }), amountSchema);
   }
   async readPlayers(source: string): Promise<string[]> {
     const client = this.client(source);
-    return this.read(() => client.get_players());
+    return this.read(() => client.get_players(), z.array(publicKeySchema));
   }
   async readFinished(source: string): Promise<boolean> {
     const client = this.client(source);
-    return this.read(() => client.is_finished());
+    return this.read(() => client.is_finished(), z.boolean());
   }
   async readSettlementDeadline(source: string): Promise<bigint | undefined> {
     const client = this.client(source);
-    return this.read(() =>
-      client.get_settlement_deadline().then((v) => ({ result: v.result ?? undefined })),
+    return this.read(
+      () => client.get_settlement_deadline().then((v) => ({ result: v.result ?? undefined })),
+      deadlineSchema.optional(),
     );
   }
 
-  private async read<T>(call: () => Promise<{ result: T }>): Promise<T> {
+  private async read<T>(
+    call: () => Promise<{ result: unknown }>,
+    schema: z.ZodType<T>,
+  ): Promise<T> {
     try {
-      return (await call()).result;
+      return schema.parse((await call()).result);
     } catch {
       throw new EscrowSdkError("SIMULATION_FAILED", "Escrow read could not be completed");
     }

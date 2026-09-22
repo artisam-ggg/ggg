@@ -8,6 +8,7 @@ import {
   requireCurrentEscrow,
   savePrepared,
   findPrepared,
+  forgetPrepared,
   deploymentSalt,
   CURRENT_ESCROW_WASM_HASH,
 } from "@/lib/stellar/escrow-sdk";
@@ -192,6 +193,7 @@ export async function submitTournamentTx(
         recoveredDeployment = prior;
       } else if (prior.status === "FAILED" && pendingHash === currentHash) {
         await prisma.tournament.update({ where: { id }, data: { pendingDeployTxHash: null } });
+        await forgetPrepared(pendingHash);
         throw new StellarError("TX_FAILED", "Transaction failed on-chain", {
           txHash: pendingHash,
           retryable: false,
@@ -251,7 +253,9 @@ export async function submitTournamentTx(
       if (landed.status === "SUCCESS") {
         result = landed;
       } else if (landed.status === "FAILED" || tournament.pendingDeployTxHash !== currentHash) {
+        // The fetched row is pre-submit: only an existing same-hash retry stays pending.
         await prisma.tournament.update({ where: { id }, data: { pendingDeployTxHash: null } });
+        await forgetPrepared(currentHash);
         throw error;
       } else {
         throw new StellarError("TX_TIMEOUT", "Deployment result is still unconfirmed", {
@@ -271,6 +275,7 @@ export async function submitTournamentTx(
     if (input.intent === "deploy") {
       await prisma.tournament.update({ where: { id }, data: { pendingDeployTxHash: null } });
     }
+    await forgetPrepared(built.hash);
     // Do NOT mutate tournament to any success state.
     throw new StellarError("TX_FAILED", "Transaction failed on-chain", {
       txHash: result.hash,
@@ -293,6 +298,8 @@ export async function submitTournamentTx(
         deadlineConfirmedAt: new Date(),
       },
     });
+    await forgetPrepared(built.hash);
+    if (result.hash !== built.hash) await forgetPrepared(result.hash);
     return {
       txHash: result.hash,
       contractId: updated.contractId,
@@ -306,6 +313,7 @@ export async function submitTournamentTx(
       where: { id },
       data: { status: "CANCELLED", cancelledAt: new Date() },
     });
+    await forgetPrepared(built.hash);
     return {
       txHash: result.hash,
       status: updated.status,
@@ -318,6 +326,7 @@ export async function submitTournamentTx(
       where: { id },
       data: { status: "FINISHED", finalizedAt: new Date() },
     });
+    await forgetPrepared(built.hash);
     return {
       txHash: result.hash,
       status: updated.status,
@@ -349,6 +358,7 @@ export async function submitTournamentTx(
     }
   }
 
+  await forgetPrepared(built.hash);
   return {
     txHash: result.hash,
     status: tournament.status,
@@ -547,7 +557,11 @@ export async function getTournamentDetail(id: string) {
       contractVersion = await escrowVersion(t.contractId);
       if (contractVersion === "CURRENT") {
         const state = await escrowSdk(t.contractId).readTournament(t.organizerAddr);
-        onChainDeadline = Number(state.settlement_deadline);
+        const deadline = state.settlement_deadline;
+        if (deadline <= 0n || deadline > 8_640_000_000_000n) {
+          throw new Error("Escrow deadline is outside the supported Date range");
+        }
+        onChainDeadline = Number(deadline);
       }
     } catch {
       contractVersion = "UNAVAILABLE";

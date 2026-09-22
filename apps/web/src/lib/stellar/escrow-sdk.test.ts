@@ -7,6 +7,7 @@ const fakes = vi.hoisted(() => ({
   findPrepared: vi.fn(),
   findTournament: vi.fn(),
   upsertPrepared: vi.fn(),
+  deletePrepared: vi.fn(),
 }));
 
 vi.mock("@ggg/escrow-sdk", async (original) => {
@@ -27,7 +28,11 @@ vi.mock("@/lib/env", () => ({
 }));
 vi.mock("@/lib/db", () => ({
   prisma: {
-    preparedEscrowTransaction: { findUnique: fakes.findPrepared, upsert: fakes.upsertPrepared },
+    preparedEscrowTransaction: {
+      findUnique: fakes.findPrepared,
+      upsert: fakes.upsertPrepared,
+      deleteMany: fakes.deletePrepared,
+    },
     tournament: { findUnique: fakes.findTournament },
   },
 }));
@@ -38,6 +43,7 @@ import {
   findPrepared,
   requireCurrentEscrow,
   savePrepared,
+  forgetPrepared,
 } from "./escrow-sdk";
 
 const contractId = StrKey.encodeContract(Buffer.alloc(32, 8));
@@ -100,4 +106,15 @@ it("stores the exact SDK-prepared XDR before returning it", async () => {
       create: expect.objectContaining({ tournamentId: "t1", intent: "join", xdr: "PREPARED" }),
     }),
   );
+  expect(fakes.deletePrepared).toHaveBeenCalledWith({
+    where: {
+      createdAt: { lt: expect.any(Date) },
+      OR: [{ intent: { not: "deploy" } }, { tournament: { pendingDeployTxHash: null } }],
+    },
+  });
+});
+
+it("removes a confirmed prepared transaction by hash", async () => {
+  await forgetPrepared("prepared-hash");
+  expect(fakes.deletePrepared).toHaveBeenCalledWith({ where: { hash: "prepared-hash" } });
 });

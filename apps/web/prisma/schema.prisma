@@ -84,6 +84,7 @@ model PreparedEscrowTransaction {
   createdAt    DateTime   @default(now())
 
   @@index([tournamentId, intent])
+  @@index([createdAt])
 }
 
 model Participant {
