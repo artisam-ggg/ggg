@@ -76,3 +76,5 @@ stellar contract bindings typescript \
 Copy `/tmp/ggg-escrow-bindings/src/index.ts` to `packages/escrow-sdk/src/contract/index.ts` and prepend the existing `// @ts-nocheck` generator note. Do not copy the generated package metadata: the SDK package has its own exports and build settings. The CI contract job builds the current WASM and diffs the regenerated binding against the checked-in file. A changed contract interface requires regenerating the binding and updating the ABI smoke test.
 
 `pnpm --filter @ggg/escrow-sdk pack` builds a publication tarball containing only `dist/`, this README, the license, and package metadata. The package has no runtime dependency on any GGG workspace package.
+
+For a complete standalone Node consumer, including exact local pack/install and offline/live commands, external signing, three terminal paths, payout confirmation, and Testnet reset recovery, see `examples/nodejs-escrow/README.md` in the repository. The package tarball itself remains independent of that example.

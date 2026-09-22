@@ -2,6 +2,10 @@
 
 Running log of shipped features (append one entry per change), per the auto-dev workflow.
 
+## Issue #225 — Standalone Node escrow consumer
+
+Added a package-only Node example that demonstrates Testnet constructor deployment, registration, 1–10 winner settlement with confirmed payout reads, and separate deadline-delegated and cancellation refund instances. Its external signer contract keeps account secrets outside the repository. The documented pack/install path and isolated mocked-RPC smoke exercise the SDK as a third-party consumer. An approved live Testnet run confirmed the one-winner settlement, delegated deadline refund, and cancellation/refund paths on separate instances; public hashes and on-chain read results are recorded in [the verification record](verification/issue-225-node-example-testnet.md).
+
 ## Issue #224 — SDK-backed reference app and ranked payouts
 
 Tournament creation, joining, settlement, cancellation, refunds, reads, and signed submission now use `@ggg/escrow-sdk`. The app retains its session, role and owner checks, prepared-transaction persistence, event reconciliation, and UI. New tournaments store ordered 1–10 positive payout shares, and a forward migration converts existing three-rank rows without changing payout records. The subscriber persists all ranks from confirmed finalized events. The creation form and settlement console support the same range; confirmed payouts display their rank. The app checks each deployed contract's WASM hash before using the current ABI, and older or unavailable instances are read-only in the UI. See `docs/verification/issue-224-reference-consumer.md` for migration, compatibility, and rollout notes.
