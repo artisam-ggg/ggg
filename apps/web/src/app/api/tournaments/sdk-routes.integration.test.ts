@@ -79,7 +79,7 @@ async function createDraft() {
       settlementDeadline: Math.floor(Date.now() / 1000) + 7200,
     }),
   );
-  expect(created.status).toBe(201);
+  expect(created.status, JSON.stringify(await created.clone().json())).toBe(201);
   const { tournamentId: draftId, unsignedXdr } = (await created.json()).data;
   tournamentIds.push(draftId);
   return { draftId: draftId as string, unsignedXdr: unsignedXdr as string };
