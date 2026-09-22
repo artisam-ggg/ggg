@@ -563,14 +563,71 @@ describe("SDK-backed tournament routes", () => {
     expect(mocks.submit).not.toHaveBeenCalled();
   });
 
+  it("submits a wallet-signed join without an app session or a trusted client-IP header", async () => {
+    const joined = await deployOrSubmit(
+      request(
+        `/${tournamentId}/submit`,
+        { ...signed, intent: "join" },
+        {
+          "x-forwarded-for": "203.0.113.10",
+        },
+      ),
+      ctx,
+    );
+    expect(joined.status).toBe(200);
+    expect(requireUser).not.toHaveBeenCalled();
+    expect(rateLimit).toHaveBeenCalledWith(`submit:${tournamentId}`, {
+      limit: 30,
+      windowSec: 60,
+    });
+    expect(mocks.validate).toHaveBeenCalledOnce();
+    expect(mocks.participantUpsert).toHaveBeenCalledOnce();
+  });
+
+  it.each(["deploy", "cancel", "finalize", "claim_refund"] as const)(
+    "requires an app session for %s submission",
+    async (intent) => {
+      vi.mocked(requireUser).mockRejectedValueOnce(new AuthError("Authentication required", 401));
+      const response = await deployOrSubmit(
+        request(`/${tournamentId}/submit`, { ...signed, intent }),
+        ctx,
+      );
+      expect(response.status).toBe(401);
+      expect(mocks.submit).not.toHaveBeenCalled();
+    },
+  );
+
+  it("rejects oversized submit bodies before authentication or submission", async () => {
+    const response = await deployOrSubmit(
+      request(`/${tournamentId}/submit`, { ...signed, signedXdr: "A".repeat(16_384) }),
+      ctx,
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: { message: "Request body too large" } });
+    expect(requireUser).not.toHaveBeenCalled();
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
+
+  it("scopes public join idempotency to the signed transaction", async () => {
+    await deployOrSubmit(request(`/${tournamentId}/submit`, { ...signed, intent: "join" }), ctx);
+    await deployOrSubmit(request(`/${tournamentId}/submit`, { ...signed, intent: "join" }), ctx);
+    await deployOrSubmit(
+      request(`/${tournamentId}/submit`, { signedXdr: "AAAAAgAAAAB=", intent: "join" }),
+      ctx,
+    );
+    const keys = vi.mocked(withIdempotency).mock.calls.map(([key]) => key);
+    expect(keys[0]).toBe(keys[1]);
+    expect(keys[2]).not.toBe(keys[0]);
+  });
+
   it("scopes non-deployment idempotency results to the user and intent", async () => {
-    const body = { ...signed, intent: "join" };
+    const body = { ...signed, intent: "claim_refund" };
     await deployOrSubmit(request(`/${tournamentId}/submit`, body), ctx);
     mocks.userId = "other";
     await deployOrSubmit(request(`/${tournamentId}/submit`, body), ctx);
     expect(vi.mocked(withIdempotency).mock.calls.map(([key]) => key)).toEqual([
-      `${tournamentId}:owner:join:key`,
-      `${tournamentId}:other:join:key`,
+      `${tournamentId}:owner:claim_refund:key`,
+      `${tournamentId}:other:claim_refund:key`,
     ]);
   });
 
