@@ -547,7 +547,11 @@ export async function getTournamentDetail(id: string) {
       contractVersion = await escrowVersion(t.contractId);
       if (contractVersion === "CURRENT") {
         const state = await escrowSdk(t.contractId).readTournament(t.organizerAddr);
-        onChainDeadline = Number(state.settlement_deadline);
+        const deadline = state.settlement_deadline;
+        if (deadline <= 0n || deadline > 8_640_000_000_000n) {
+          throw new Error("Escrow deadline is outside the supported Date range");
+        }
+        onChainDeadline = Number(deadline);
       }
     } catch {
       contractVersion = "UNAVAILABLE";

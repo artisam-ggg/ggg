@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   prepared: vi.fn(),
   participantUpsert: vi.fn(),
   requireCurrent: vi.fn(),
+  readTournament: vi.fn(),
 }));
 
 vi.mock("@/lib/env", () => ({
@@ -50,7 +51,11 @@ vi.mock("@/lib/db", () => ({
         async () =>
           mocks.row && {
             ...mocks.row,
-            participants: players.map((playerAddr) => ({ playerAddr })),
+            participants: players.map((playerAddr) => ({
+              playerAddr,
+              joinedAt: new Date("2026-09-22T00:00:00Z"),
+              joinTxHash: null,
+            })),
           },
       ),
       update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
@@ -103,6 +108,7 @@ vi.mock("@/lib/stellar/escrow-sdk", () => {
       networkPassphrase: "passphrase",
     })),
     validateSignedXdr: mocks.validate,
+    readTournament: mocks.readTournament,
     submit: mocks.submit,
     lookup: mocks.lookup,
   };
@@ -139,6 +145,7 @@ vi.mock("@/server/services/idempotency", () => ({
 }));
 
 import { POST as create } from "./route";
+import { GET as detail } from "./[id]/route";
 import { POST as deployOrSubmit } from "./[id]/submit/route";
 import { POST as join } from "./[id]/join/route";
 import { POST as finalize } from "./[id]/finalize/route";
@@ -181,7 +188,11 @@ beforeEach(() => {
     tokenAddr: "CTOKEN",
     deployTxHash: null,
     pendingDeployTxHash: null,
+    events: [],
+    payouts: [],
+    coverImageKey: null,
   };
+  mocks.readTournament.mockResolvedValue({ settlement_deadline: 1_800_000_000n });
   mocks.submitResult = { hash: "hash", status: "SUCCESS", contractId: "CCONTRACT" };
   mocks.submit.mockImplementation(async () => mocks.submitResult);
   mocks.lookup.mockResolvedValue({ hash: "hash", status: "PENDING" });
@@ -445,5 +456,17 @@ describe("SDK-backed tournament routes", () => {
       `${tournamentId}:owner:join:key`,
       `${tournamentId}:other:join:key`,
     ]);
+  });
+
+  it("does not expose an unsafe on-chain deadline as an imprecise number", async () => {
+    const safe = await detail(new Request(`http://localhost/tournaments/${tournamentId}`), ctx);
+    expect((await safe.json()).data.settlementDeadline).toBe(1_800_000_000);
+    mocks.readTournament.mockResolvedValueOnce({
+      settlement_deadline: BigInt(Number.MAX_SAFE_INTEGER) + 1n,
+    });
+    const unsafe = await detail(new Request(`http://localhost/tournaments/${tournamentId}`), ctx);
+    expect(await unsafe.json()).toMatchObject({
+      data: { settlementDeadline: null, contractVersion: "UNAVAILABLE" },
+    });
   });
 });

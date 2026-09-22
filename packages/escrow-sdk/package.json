@@ -40,7 +40,8 @@
   },
   "dependencies": {
     "@stellar/stellar-sdk": "15",
-    "buffer": "6.0.3"
+    "buffer": "6.0.3",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "eslint": "^9.39.4",
