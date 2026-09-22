@@ -66,8 +66,10 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   const { id } = await ctx.params;
 
   // 6. Public joins are limited per tournament and caller IP; other intents per user.
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    req.headers.get("x-real-ip") || "unknown";
+  const ip =
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-real-ip") ||
+    "unknown";
   const limitKey = userId === null ? `submit:join:${id}:${ip}` : `submit:${userId}`;
   const rl = await rateLimit(limitKey, { limit: 20, windowSec: 60 });
   if (!rl.ok) return err("TOO_MANY_REQUESTS", "Too many requests. Try again later.", 429);

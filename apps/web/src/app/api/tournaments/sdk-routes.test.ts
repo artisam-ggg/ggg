@@ -566,9 +566,13 @@ describe("SDK-backed tournament routes", () => {
   it("submits a wallet-signed join without an app session, but still requires one for deploy", async () => {
     vi.mocked(requireUser).mockRejectedValueOnce(new AuthError("Authentication required", 401));
     const joined = await deployOrSubmit(
-      request(`/${tournamentId}/submit`, { ...signed, intent: "join" }, {
-        "x-forwarded-for": "203.0.113.10",
-      }),
+      request(
+        `/${tournamentId}/submit`,
+        { ...signed, intent: "join" },
+        {
+          "x-forwarded-for": "203.0.113.10",
+        },
+      ),
       ctx,
     );
     expect(joined.status).toBe(200);
