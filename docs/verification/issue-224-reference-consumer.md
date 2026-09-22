@@ -18,4 +18,10 @@ New deployments require `ESCROW_WASM_HASH` to equal the #313 hash on the selecte
 
 ## Local verification
 
+### PR #315 route-integration follow-up
+
+Twelve new cases run under the existing `web test:integration` command. They invoke the real create, join, finalize, cancel, refund, and submit HTTP handlers with the real SDK, generated ABI, PostgreSQL, and Redis; only the NextAuth cookie return and Stellar RPC methods are simulated. They cover confirmed and uncertain constructor deployment without `initialize`, confirmed and failed joins, one- and two-winner finalization, cancellation, refund claims, authorization/IDOR, contract mismatch, and legacy-WASM write rejection.
+
+Run these tests against an isolated Postgres 17 database with `prisma migrate deploy` and `prisma db seed`, plus an isolated Redis 7 database: the integration suite clears its configured Redis database. The follow-up local run passed the full migration chain, 590 web unit tests, 18 web integration tests, web typecheck/lint, changed-file formatting, and the production build. A real RPC/Testnet signing and subscriber run remains operator-gated under the prerequisites below.
+
 Use `pnpm install --frozen-lockfile`, `pnpm --filter web db:generate`, `pnpm --filter @ggg/escrow-sdk build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm format:check`, `pnpm --filter @ggg/escrow-sdk test`, `pnpm --filter subscriber test`, `pnpm --filter web test`, `pnpm --filter web test:integration`, and `pnpm --filter web build`. Database-backed checks need PostgreSQL 17, Redis 7, and the required `apps/web` environment variables; seed the disposable database before the full web suite. The final pre-PR run passed 567 web tests, 6 integration tests, the complete migration chain, typecheck, lint, and the production build. Repository-wide `format:check` still reports 210 pre-existing files on Windows; changed code was formatted separately. A live Testnet acceptance run additionally needs the #313 WASM configured on Testnet, funded organizer, referee and player wallets, Freighter, RPC/Horizon access, and a running subscriber. No live transaction is sent by the local unit suites.
