@@ -11,6 +11,7 @@ import { submitTournamentTx } from "@/server/services/tournaments";
 import { withIdempotency } from "@/server/services/idempotency";
 
 type Ctx = { params: Promise<{ id: string }> };
+const MAX_SUBMIT_BODY_BYTES = 16_384;
 
 function methodNotAllowed(): Response {
   return err("METHOD_NOT_ALLOWED", "Method not allowed", 405);
@@ -36,19 +37,41 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
     return err("MISSING_IDEMPOTENCY_KEY", "Idempotency-Key header is required", 400);
   }
 
-  // 3. Parse + validate body before deciding whether this intent needs an app session.
+  // 3. Apply an unspoofable public limit before reading any request body.
+  const { id } = await ctx.params;
+  const publicLimit = await rateLimit(`submit:${id}`, { limit: 30, windowSec: 60 });
+  if (!publicLimit.ok) return err("TOO_MANY_REQUESTS", "Too many requests. Try again later.", 429);
+
+  // 4. Bound streamed input before parsing; Content-Length alone is not trustworthy.
+  const reader = req.body?.getReader();
+  if (!reader) return err("INVALID_REQUEST", "Invalid request body", 400);
   let body: unknown;
   try {
-    body = await req.json();
+    const decoder = new TextDecoder();
+    let raw = "";
+    let bytes = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > MAX_SUBMIT_BODY_BYTES) {
+        await reader.cancel();
+        return err("INVALID_REQUEST", "Request body too large", 400);
+      }
+      raw += decoder.decode(value, { stream: true });
+    }
+    body = JSON.parse(raw + decoder.decode());
   } catch {
     return err("INVALID_REQUEST", "Invalid request body", 400);
+  } finally {
+    reader.releaseLock();
   }
   const parsed = submitSchema.safeParse(body);
   if (!parsed.success) {
     return err("INVALID_REQUEST", parsed.error.issues[0]?.message ?? "Invalid input", 400);
   }
 
-  // 4. A player authorizes a join with their wallet, not a GGG account.
+  // 5. A player authorizes a join with their wallet, not a GGG account.
   let userId: string | null = null;
   if (parsed.data.intent !== "join") {
     try {
@@ -62,17 +85,11 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
     }
   }
 
-  // 5. Resolve route param (Next 16: params is a Promise).
-  const { id } = await ctx.params;
-
-  // 6. Public joins are limited per tournament and caller IP; other intents per user.
-  const ip =
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    req.headers.get("x-real-ip") ||
-    "unknown";
-  const limitKey = userId === null ? `submit:join:${id}:${ip}` : `submit:${userId}`;
-  const rl = await rateLimit(limitKey, { limit: 20, windowSec: 60 });
-  if (!rl.ok) return err("TOO_MANY_REQUESTS", "Too many requests. Try again later.", 429);
+  // 6. Authenticated mutations also retain their per-user limit.
+  if (userId !== null) {
+    const userLimit = await rateLimit(`submit:${userId}`, { limit: 20, windowSec: 60 });
+    if (!userLimit.ok) return err("TOO_MANY_REQUESTS", "Too many requests. Try again later.", 429);
+  }
 
   // 7. Submit with idempotency guarantee.
   try {

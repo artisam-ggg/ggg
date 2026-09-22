@@ -563,8 +563,7 @@ describe("SDK-backed tournament routes", () => {
     expect(mocks.submit).not.toHaveBeenCalled();
   });
 
-  it("submits a wallet-signed join without an app session, but still requires one for deploy", async () => {
-    vi.mocked(requireUser).mockRejectedValueOnce(new AuthError("Authentication required", 401));
+  it("submits a wallet-signed join without an app session or a trusted client-IP header", async () => {
     const joined = await deployOrSubmit(
       request(
         `/${tournamentId}/submit`,
@@ -577,16 +576,36 @@ describe("SDK-backed tournament routes", () => {
     );
     expect(joined.status).toBe(200);
     expect(requireUser).not.toHaveBeenCalled();
-    expect(rateLimit).toHaveBeenCalledWith(`submit:join:${tournamentId}:203.0.113.10`, {
-      limit: 20,
+    expect(rateLimit).toHaveBeenCalledWith(`submit:${tournamentId}`, {
+      limit: 30,
       windowSec: 60,
     });
     expect(mocks.validate).toHaveBeenCalledOnce();
     expect(mocks.participantUpsert).toHaveBeenCalledOnce();
+  });
 
-    const deployed = await deployOrSubmit(request(`/${tournamentId}/submit`, signed), ctx);
-    expect(deployed.status).toBe(401);
-    expect(mocks.submit).toHaveBeenCalledOnce();
+  it.each(["deploy", "cancel", "finalize", "claim_refund"] as const)(
+    "requires an app session for %s submission",
+    async (intent) => {
+      vi.mocked(requireUser).mockRejectedValueOnce(new AuthError("Authentication required", 401));
+      const response = await deployOrSubmit(
+        request(`/${tournamentId}/submit`, { ...signed, intent }),
+        ctx,
+      );
+      expect(response.status).toBe(401);
+      expect(mocks.submit).not.toHaveBeenCalled();
+    },
+  );
+
+  it("rejects oversized submit bodies before authentication or submission", async () => {
+    const response = await deployOrSubmit(
+      request(`/${tournamentId}/submit`, { ...signed, signedXdr: "A".repeat(16_384) }),
+      ctx,
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: { message: "Request body too large" } });
+    expect(requireUser).not.toHaveBeenCalled();
+    expect(mocks.submit).not.toHaveBeenCalled();
   });
 
   it("scopes public join idempotency to the signed transaction", async () => {
