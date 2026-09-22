@@ -200,20 +200,16 @@ describe("createTournamentSchema", () => {
     expect(r.success).toBe(false);
   });
 
-  it("rejects bps with wrong tuple length (2 elements)", () => {
+  it("accepts two positive payout ranks", () => {
     const r = createTournamentSchema.safeParse({
       ...validCreate,
       distributionBps: [5000, 5000],
     });
-    expect(r.success).toBe(false);
+    expect(r.success).toBe(true);
   });
 
   it("distributionBps summing exactly to 10000 passes", () => {
-    const cases: [number, number, number][] = [
-      [10000, 0, 0],
-      [5000, 3000, 2000],
-      [3334, 3333, 3333],
-    ];
+    const cases: number[][] = [[10000], [5000, 5000], [5000, 3000, 2000], [3334, 3333, 3333]];
     for (const bps of cases) {
       const r = createTournamentSchema.safeParse({ ...validCreate, distributionBps: bps });
       expect(r.success).toBe(true);
@@ -269,24 +265,24 @@ describe("joinSchema", () => {
 
 describe("finalizeSchema", () => {
   it("accepts three distinct winners", () => {
-    const r = finalizeSchema.safeParse({ first: G, second: G2, third: G3 });
+    const r = finalizeSchema.safeParse({ winners: [G, G2, G3] });
     expect(r.success).toBe(true);
   });
 
   it("rejects non-distinct winners (first == second)", () => {
-    expect(finalizeSchema.safeParse({ first: G, second: G, third: G2 }).success).toBe(false);
+    expect(finalizeSchema.safeParse({ winners: [G, G, G2] }).success).toBe(false);
   });
 
   it("rejects non-distinct winners (all same)", () => {
-    expect(finalizeSchema.safeParse({ first: G, second: G, third: G }).success).toBe(false);
+    expect(finalizeSchema.safeParse({ winners: [G, G, G] }).success).toBe(false);
   });
 
   it("rejects non-distinct winners (second == third)", () => {
-    expect(finalizeSchema.safeParse({ first: G, second: G2, third: G2 }).success).toBe(false);
+    expect(finalizeSchema.safeParse({ winners: [G, G2, G2] }).success).toBe(false);
   });
 
   it("rejects invalid addresses", () => {
-    expect(finalizeSchema.safeParse({ first: "bad", second: G2, third: G3 }).success).toBe(false);
+    expect(finalizeSchema.safeParse({ winners: ["bad", G2, G3] }).success).toBe(false);
   });
 });
 

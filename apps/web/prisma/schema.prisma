@@ -47,9 +47,7 @@ model Tournament {
   gameTitle          String
   asset              Asset            @default(XLM)
   entryFee           BigInt
-  firstBps           Int
-  secondBps          Int
-  thirdBps           Int
+  distributionBps    Int[]
   organizer          User             @relation("organizer", fields: [organizerId], references: [id])
   organizerId        String
   organizerAddr      String
@@ -63,16 +61,30 @@ model Tournament {
   coverImageKey      String?
   participants       Participant[]
   joinSubmissions    JoinSubmission[]
+  preparedTransactions PreparedEscrowTransaction[]
   payouts            Payout[]
   events             ContractEvent[]
   deployTxHash       String?
   // Tracks an uncertain deployment so retries reconcile its result first.
   pendingDeployTxHash String?
-  // Persisted after initialize submits so reconciliation retries never replay it.
+  // Historical value for pre-constructor deployments; no new initialize flow exists.
   initializeTxHash   String?
   createdAt          DateTime         @default(now())
   finalizedAt        DateTime?
   cancelledAt        DateTime?
+}
+
+model PreparedEscrowTransaction {
+  hash         String     @id
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  tournamentId String
+  intent       String
+  source       String
+  xdr          String
+  createdAt    DateTime   @default(now())
+
+  @@index([tournamentId, intent])
+  @@index([createdAt])
 }
 
 model Participant {

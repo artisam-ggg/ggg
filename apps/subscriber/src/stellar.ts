@@ -1,4 +1,5 @@
 import { rpc, scValToNative, xdr } from "@stellar/stellar-sdk";
+import { CURRENT_ESCROW_WASM_HASH, getEscrowWasmHash } from "@ggg/escrow-sdk";
 import { z } from "zod";
 import { env } from "./env";
 
@@ -16,6 +17,23 @@ const eventsResponseSchema = z.object({
 });
 export type DecodedEvents = z.infer<typeof eventsResponseSchema>;
 export type DecodedEvent = z.infer<typeof eventSchema>;
+
+const VECTOR_WASM_HASHES = new Set([
+  "1356f43a70552178836e1028aab105c113f863a51a51dd72a094a6bf643d3e2d",
+  "2dcfb4c3ed77863269a347308156021de08427f5e6aa77ba15a08d9476c03f77",
+]);
+const LEGACY_WASM_HASHES = new Set([
+  "56faadf3395536f14b10c263c6369dda77dd2bc3ec9c24c6ce39fada518986ac",
+]);
+export type EscrowAbi = "CURRENT" | "VECTOR" | "LEGACY";
+
+export async function getEscrowAbi(contractId: string): Promise<EscrowAbi> {
+  const hash = await getEscrowWasmHash(env.SOROBAN_RPC_URL, contractId);
+  if (hash === CURRENT_ESCROW_WASM_HASH) return "CURRENT";
+  if (VECTOR_WASM_HASHES.has(hash)) return "VECTOR";
+  if (LEGACY_WASM_HASHES.has(hash)) return "LEGACY";
+  throw new Error(`Unsupported escrow WASM for ${contractId}`);
+}
 
 /** Validate a normalised getEvents response (topic/value already base64 XDR). */
 export function decodeEventsResponse(raw: unknown): DecodedEvents {

@@ -16,7 +16,7 @@ export default async function SettlePage({ params }: SettlePageProps) {
   const { id } = await params;
   const t = await getTournamentDetail(id);
 
-  if (!t || t.status !== "ACTIVE") notFound();
+  if (!t || t.status !== "ACTIVE" || t.contractVersion !== "CURRENT") notFound();
 
   return (
     <main className="mx-auto max-w-(--spacing-container-max) px-4 py-12 md:px-(--spacing-margin-desktop)">
@@ -24,6 +24,7 @@ export default async function SettlePage({ params }: SettlePageProps) {
         tournamentId={t.id}
         refereeAddr={t.refereeAddr}
         participants={t.participants}
+        distributionBps={t.distributionBps}
         passphrase={env.NETWORK_PASSPHRASE}
       />
     </main>

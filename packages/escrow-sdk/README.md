@@ -31,6 +31,8 @@ Keep the `BuiltEscrowTransaction` returned by the SDK alongside the user request
 
 `submit` returns `{ hash, status: "SUCCESS" | "FAILED", contractId? }` after confirmation. `lookup(hash, "deploy"?)` additionally returns `PENDING` for an unresolved transaction and extracts a deployed contract ID when available. Preserve the hash on `TX_TIMEOUT` or `CONFIRMATION_FAILED`; an uncertain broadcast can have reached the network. `EscrowSdkError` exposes only stable codes `INVALID_INPUT`, `NETWORK_MISMATCH`, `SIMULATION_FAILED`, `SUBMIT_REJECTED`, `TX_TIMEOUT`, and `CONFIRMATION_FAILED`, plus a safe message and optional hash. A `FAILED` confirmed result means the ledger rejected execution. The SDK does not decide whether an app user is authorized or update an app database.
 
+For consumers that handle existing instances, `getEscrowWasmHash(rpcUrl, contractId)` reads the executable hash before selecting a generated binding. `CURRENT_ESCROW_WASM_HASH` identifies this package's current ABI; do not use its binding to decode or mutate an instance with another hash. Executable metadata and generated-client read results are runtime-validated before the SDK returns them; malformed RPC data fails closed with a safe `EscrowSdkError`. The root also exports `escrowTransactionHash` and the shared public-key, contract-ID, amount, and distribution validators for app-level input and prepared-XDR persistence.
+
 ## Imports
 
 ```ts

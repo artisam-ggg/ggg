@@ -144,7 +144,7 @@ describe("SettlementConsole", () => {
     expect(finalizeBtn).not.toBeDisabled();
   });
 
-  it("POSTs with x-wallet-address header and {first,second,third} body", async () => {
+  it("POSTs with x-wallet-address header and ordered winners", async () => {
     const mockFetch = vi.fn(
       async () =>
         new Response(
@@ -179,12 +179,7 @@ describe("SettlementConsole", () => {
     // Header contract: x-wallet-address = connected referee G-address
     const headers = init.headers as Record<string, string>;
     expect(headers["x-wallet-address"]).toBe(REF);
-    // Body contract: { first, second, third }
-    expect(JSON.parse(init.body as string)).toEqual({
-      first: ADDR_A,
-      second: ADDR_B,
-      third: ADDR_C,
-    });
+    expect(JSON.parse(init.body as string)).toEqual({ winners: [ADDR_A, ADDR_B, ADDR_C] });
   });
 
   it("shows error and does NOT redirect on {ok:false} (e.g. 403)", async () => {

@@ -1,7 +1,7 @@
-import { stellarPublicKey } from "../stellar/validation";
+import { isValidEscrowPublicKey } from "@ggg/escrow-sdk";
 import { z } from "zod";
 
-export const stellarAddressSchema = stellarPublicKey;
+export const stellarAddressSchema = z.string().refine(isValidEscrowPublicKey);
 
 export const refundClaimPayloadSchema = z.object({
   player: stellarAddressSchema,
