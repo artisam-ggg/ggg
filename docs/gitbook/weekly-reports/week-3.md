@@ -10,7 +10,7 @@ Extract the SDK, publish `@goodgameguild/escrow-sdk@0.1.0`, provide a Node.js ex
 
 | Required proof | Recorded in this book? |
 | --- | --- |
-| `@goodgameguild/escrow-sdk@0.1.0` public package and installed version | No |
+| [`@goodgameguild/escrow-sdk@0.1.0`](https://www.npmjs.com/package/@goodgameguild/escrow-sdk/v/0.1.0) public package and installed version | Yes |
 | Public SDK source and usage documentation | No |
 | Successful Node.js example result | No |
 | Redeployed Testnet app and health response | No |

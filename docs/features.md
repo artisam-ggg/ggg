@@ -2,11 +2,11 @@
 
 Running log of shipped features (append one entry per change), per the auto-dev workflow.
 
-## Issue #226 — Release readiness (publication and deployment pending)
+## Issue #226 — Release readiness (SDK published; deployment pending)
 
-Prepared the `@goodgameguild/escrow-sdk@0.1.0` release inventory, restricted tarball manifest, external consumer check, exact pinned-toolchain WASM/binding verification, coordinated #224 migration and rollback plan, exact-revision staging promotion plan, and reviewer-facing Instawards evidence checklist. Upgraded the SDK and its workspace consumers to Stellar SDK 16.3.0, added a clean-consumer npm audit to CI, and cleared the former high-severity production audit findings. Local SDK, contract, subscriber, web, integration, typecheck, lint, build, audit, and health checks pass. npm publication, staging migration/promotion, Railway deployment, and final funded Testnet evidence remain approval-gated and are not claimed as shipped. See [the release and evidence record](instawards-evidence.md).
+Prepared and published [`@goodgameguild/escrow-sdk@0.1.0`](https://www.npmjs.com/package/@goodgameguild/escrow-sdk/v/0.1.0) from exact reviewed revision `26f41f0` and immutable tag `goodgameguild-escrow-sdk-v0.1.0`. The registry artifact matches the reviewed tarball integrity, installs in a clean external consumer, passes the standalone SDK smoke test, and audits with zero production vulnerabilities. Local SDK, contract, subscriber, web, integration, typecheck, lint, build, audit, and health checks pass. Staging migration/promotion, Railway deployment, and final funded Testnet evidence remain approval-gated and are not claimed as shipped. See [the release and evidence record](instawards-evidence.md).
 
-Corrected the unpublished SDK scope from the unavailable `@ggg` organization to the project-owned `@goodgameguild` organization across package metadata, workspace consumers, CI, examples, and documentation. The original Git tag remains immutable as a superseded candidate; the corrected release receives a new scope-specific tag after merge and exact-revision CI.
+Corrected the SDK scope from the unavailable `@ggg` organization to the project-owned `@goodgameguild` organization across package metadata, workspace consumers, CI, examples, and documentation. The original Git tag remains immutable as a superseded candidate; the published release uses the new scope-specific tag created after merge and exact-revision CI.
 
 ## Issue #319 — Make payout-rank actions visibly interactive
 

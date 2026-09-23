@@ -1,22 +1,21 @@
 # Instawards release and evidence record
 
-Status: **release preparation only**. npm publication is approved after the
-corrected package scope is merged, tagged, and verified. The staging migration
-and promotion, Railway deployment, and the final funded Testnet runs remain
-pending explicit approval. Historical
-Testnet links below are supporting evidence; they do not prove the final public
-release.
+Status: **SDK published; deployment pending**. The corrected package is public
+on npm from the reviewed immutable source tag. The staging migration and
+promotion, Railway deployment, and the final funded Testnet runs remain pending
+explicit approval. Historical Testnet links below are supporting evidence; they
+do not prove the final deployed release.
 
-## Release candidate
+## SDK release
 
 | Field | Prepared value |
 | --- | --- |
 | Repository | `webnxt-2030/ggg` |
-| SDK source revision | Pending merge of the `@goodgameguild` scope correction based on `9c9c4db51a2a91c6e90ea83d66bb2db94b8fe329` |
-| Immutable SDK tag | Pending `goodgameguild-escrow-sdk-v0.1.0`; the earlier [`escrow-sdk-v0.1.0`](https://github.com/webnxt-2030/ggg/tree/escrow-sdk-v0.1.0) candidate is superseded and will not be moved |
-| Source CI | Pending exact-revision CI for the corrected scope; the superseded candidate passed [run 35827482104](https://github.com/webnxt-2030/ggg/actions/runs/35827482104) |
+| SDK source revision | `26f41f059994b33ab09085f4de09e4431069c391` |
+| Immutable SDK tag | [`goodgameguild-escrow-sdk-v0.1.0`](https://github.com/webnxt-2030/ggg/tree/goodgameguild-escrow-sdk-v0.1.0); the earlier [`escrow-sdk-v0.1.0`](https://github.com/webnxt-2030/ggg/tree/escrow-sdk-v0.1.0) candidate is superseded and was not moved |
+| Source CI | Exact post-merge [run 35843403207](https://github.com/webnxt-2030/ggg/actions/runs/35843403207) passed |
 | SDK package | `@goodgameguild/escrow-sdk@0.1.0` |
-| npm state | Unpublished as of 2026-09-23; publisher `0xhakua` has 2FA enabled and is a verified owner of the `goodgameguild` organization, but the corrected scope must complete review before publication |
+| npm state | [Published publicly](https://www.npmjs.com/package/@goodgameguild/escrow-sdk/v/0.1.0) on 2026-09-23 by `0xhakua`, a verified owner of the `goodgameguild` organization |
 | Network | Stellar Testnet / `Test SDF Network ; September 2015` |
 | Escrow WASM | `b704f577f1715d965f9ba24f2cebf49df52735d42c9a4cd2a93781d612a46dd9` |
 | Public app health URL | `https://app.ggg.quest/api/health` |
@@ -24,10 +23,10 @@ release.
 
 `313bc0e` is the superseded reviewed candidate and remains the target of the
 immutable `escrow-sdk-v0.1.0` tag. That tag will not be rewritten. The corrected
-package keeps version `0.1.0` because no npm package was created, and its new
-source revision will receive the scope-specific immutable tag
-`goodgameguild-escrow-sdk-v0.1.0` after merge and exact-revision CI. The base
-candidate upgrades the package and its direct workspace consumers to
+package kept version `0.1.0` because the rejected attempts created no npm
+version. The corrected merge revision `26f41f0` is the target of the immutable
+scope-specific tag `goodgameguild-escrow-sdk-v0.1.0`. The base candidate
+upgrades the package and its direct workspace consumers to
 `@stellar/stellar-sdk@16.3.0`; a clean external npm install and production audit
 report zero vulnerabilities. The later staging promotion revision may add
 release evidence only, but must not change the tagged package or application
@@ -154,11 +153,11 @@ entry remains available; a Testnet reset requires a new verified upload.
 Supporting public history: [WASM upload and named deadline refund](verification/sow-deadline-refund-entrypoint.md)
 and [standalone Node Testnet paths](verification/issue-225-node-example-testnet.md).
 
-## npm publication gate
+## npm publication evidence
 
-Publication approval and publisher 2FA are complete. Do not retry the publish
-command until the scope correction is merged, exact-revision CI passes, and the
-new scope-specific immutable tag is created at that merge revision.
+Publication completed from the detached immutable tag after exact-revision CI.
+These commands describe the reviewed release path; do not rerun `npm publish`
+for version `0.1.0`, which is now immutable in the registry.
 
 ```sh
 git fetch origin tag goodgameguild-escrow-sdk-v0.1.0
@@ -171,19 +170,19 @@ npm publish packages/escrow-sdk/goodgameguild-escrow-sdk-0.1.0.tgz --access publ
 npm view @goodgameguild/escrow-sdk@0.1.0 version dist repository license engines exports --json
 ```
 
-After publication, install from the registry—not the local tarball—in a fresh
-external directory and rerun the example smoke. Record:
+After publication, a fresh external directory installed from the registry—not
+the local tarball—and reran the example smoke with these results:
 
 | Publication evidence field | Status |
 | --- | --- |
-| Public npm version URL | Pending corrected-scope review and publication |
-| Registry tarball URL | Pending publication |
-| Registry SHA-1 and integrity | Pending publication; must match the approved tarball |
-| Reviewed source commit and immutable tag | Pending correction merge; `goodgameguild-escrow-sdk-v0.1.0` |
-| Publish date and publisher account name | Pending publication |
-| Fresh `npm install @goodgameguild/escrow-sdk@0.1.0` result | Pending publication |
-| Registry-installed Node example result | Pending publication |
-| Public CI run for the exact revision | Pending correction merge; superseded candidate [run 35827482104](https://github.com/webnxt-2030/ggg/actions/runs/35827482104) passed |
+| Public npm version URL | [`@goodgameguild/escrow-sdk@0.1.0`](https://www.npmjs.com/package/@goodgameguild/escrow-sdk/v/0.1.0) |
+| Registry tarball URL | `https://registry.npmjs.org/@goodgameguild/escrow-sdk/-/escrow-sdk-0.1.0.tgz` |
+| Registry SHA-1 and integrity | `1372c6d4a04d4fd7293ec813405cc14a72173c33`; `sha512-Mx1unWUJTXEH1ONVvkcsE0dIgm+5IFBlZJtLFEUizn7DQa8iRVWRDyQoTAUAJPuonGC05xTNcUzRi0hbuycqfA==` (matches reviewed tarball) |
+| Reviewed source commit and immutable tag | `26f41f059994b33ab09085f4de09e4431069c391`; `goodgameguild-escrow-sdk-v0.1.0` |
+| Publish date and publisher account name | `2026-09-23T09:56:09.569Z`; `0xhakua` |
+| Fresh `npm install @goodgameguild/escrow-sdk@0.1.0` result | Passed: 45 packages added, 46 audited, zero vulnerabilities |
+| Registry-installed Node example result | Passed: public API, configuration, simulated join construction, and signed-XDR validation |
+| Public CI run for the exact revision | [Run 35843403207](https://github.com/webnxt-2030/ggg/actions/runs/35843403207) passed |
 
 Required npm access: an account authorized to publish the public
 `@goodgameguild` scope,
@@ -343,22 +342,18 @@ recorded.
 
 ## Blockers and smallest next approval
 
-1. The former external npm audit blocker is fixed and fully retested. Publisher
-   2FA is enabled and the `goodgameguild` organization exists. The package scope
-   correction must merge and pass exact-revision CI before publication; no
-   package version was created by the rejected attempts.
+1. The former external npm audit and scope blockers are resolved. The reviewed
+   package is public under the project-owned `@goodgameguild` scope, and its
+   registry integrity and clean-consumer audit match the release evidence.
 2. PR #324 is excluded; keep it unmerged while `develop` is frozen and the
    exact artifact is published and promoted.
 3. `staging` history is reconciled into `develop`; reverify ancestry immediately
    before the approved fast-forward promotion.
 4. The staging backup method and current migration state remain environment
    gates; no staging database operation was performed during preparation.
-5. npm publication, staging promotion, Railway changes/deployment, and funded
-   Testnet transactions remain unperformed. Only npm publication is currently
-   approved.
+5. Staging promotion, Railway changes/deployment, and funded Testnet
+   transactions remain unperformed and require explicit approval.
 
-The current approval covers a new immutable SDK tag for the corrected scope and
-npm publication after merge and exact-revision CI. The superseded tag remains
-unchanged; rejected publication attempts created no package version. This
-approval does **not** cover staging migration/promotion, Railway
-changes/deployment, or funded Testnet activity.
+The immutable corrected SDK tag and npm publication are complete. The
+superseded tag remains unchanged. No approval has been given for staging
+migration/promotion, Railway changes/deployment, or funded Testnet activity.
