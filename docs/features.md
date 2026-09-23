@@ -2,6 +2,10 @@
 
 Running log of shipped features (append one entry per change), per the auto-dev workflow.
 
+## Issue #226 — Release readiness (publication and deployment pending)
+
+Prepared the `@ggg/escrow-sdk@0.1.0` release inventory, restricted tarball manifest, external consumer check, exact pinned-toolchain WASM/binding verification, coordinated #224 migration and rollback plan, exact-revision staging promotion plan, and reviewer-facing Instawards evidence checklist. Upgraded the SDK and its workspace consumers to Stellar SDK 16.3.0, added a clean-consumer npm audit to CI, and cleared the former high-severity production audit findings. Local SDK, contract, subscriber, web, integration, typecheck, lint, build, audit, and health checks pass. npm publication, staging migration/promotion, Railway deployment, and final funded Testnet evidence remain approval-gated and are not claimed as shipped. See [the release and evidence record](instawards-evidence.md).
+
 ## Issue #319 — Make payout-rank actions visibly interactive
 
 Tournament creation now uses the shared button design system for adding and removing payout ranks. The controls have distinct plus/minus icons and treatments, responsive full-width mobile targets, and the design system's hover, focus-visible, pressed, and disabled states while preserving the existing 1–10 rank limits and keyboard-accessible names.
