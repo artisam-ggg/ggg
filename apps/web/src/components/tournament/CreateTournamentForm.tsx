@@ -241,8 +241,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   const bps = splits.map((s) => Math.round(s * 100));
   const splitSum = bps.reduce((sum, value) => sum + value, 0) / 100;
   const splitValid =
-    isValidEscrowDistribution(bps) &&
-    splits.every((value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-6);
+    isValidEscrowDistribution(bps) && splits.every((value) => toExactBps(value) !== null);
   let firstPlaceError: string | null = null;
   try {
     calculateEqualPayoutDistribution(toExactBps(splits[0]!) ?? Number.NaN, splits.length);
