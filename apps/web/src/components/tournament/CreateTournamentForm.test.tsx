@@ -76,23 +76,44 @@ describe("CreateTournamentForm", () => {
   });
 
   it("restores a valid calculated split without recalculating it", async () => {
-    localStorage.setItem(
-      "ggg:tournament-create-draft",
-      JSON.stringify({
-        name: "Rounded Cup",
-        gameTitle: "SF6",
-        entryFee: "1",
-        asset: "XLM",
-        refereeAddress: REF,
-        settlementDeadline: "2026-10-01T12:00",
-        splits: [50, 16.67, 16.67, 16.66],
-      }),
+    const firstRender = render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/tournament name/i), {
+      target: { value: "Rounded Cup" },
+    });
+    fireEvent.change(screen.getByLabelText(/1st %/i), { target: { value: "50" } });
+    fireEvent.click(screen.getByRole("button", { name: /add payout rank/i }));
+
+    await waitFor(() =>
+      expect(localStorage.getItem("ggg:tournament-create-draft")).toContain(
+        '"splits":[50,16.67,16.67,16.66]',
+      ),
     );
+    firstRender.unmount();
 
     render(<CreateTournamentForm expectedPassphrase="P" />);
 
     expect(await screen.findByDisplayValue("Rounded Cup")).toBeInTheDocument();
     expect(screen.getByText(/5000 \/ 1667 \/ 1667 \/ 1666 bps/i)).toBeInTheDocument();
+  });
+
+  it("restores an in-progress manual split without losing the rest of the draft", async () => {
+    localStorage.setItem(
+      "ggg:tournament-create-draft",
+      JSON.stringify({
+        name: "Work in progress",
+        gameTitle: "SF6",
+        entryFee: "1",
+        asset: "XLM",
+        refereeAddress: REF,
+        settlementDeadline: "2026-10-01T12:00",
+        splits: [50, 20, 20],
+      }),
+    );
+
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+
+    expect(await screen.findByDisplayValue("Work in progress")).toBeInTheDocument();
+    expect(screen.getByText(/must sum to 100/i)).toBeInTheDocument();
   });
 
   it("restores a preloaded draft during hydration without deleting it", async () => {
@@ -304,6 +325,7 @@ describe("CreateTournamentForm", () => {
     expect(screen.getByLabelText(/1st %/i)).toHaveValue(100);
     expect(screen.getByLabelText(/1st %/i)).toBeDisabled();
     expect(screen.getByText(/^10000 bps$/i)).toBeInTheDocument();
+    expect(screen.getByText(/starts both ranks at 50%/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /add payout rank/i }));
     expect(screen.getByLabelText(/1st %/i)).toHaveValue(50);
@@ -494,6 +516,8 @@ describe("CreateTournamentForm", () => {
     fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
     fillSettlementDeadline();
     fireEvent.change(screen.getByLabelText(/1st %/i), { target: { value: "50" } });
+    fireEvent.click(screen.getByRole("button", { name: /add payout rank/i }));
+    expect(screen.getByText(/5000 \/ 1667 \/ 1667 \/ 1666 bps/i)).toBeInTheDocument();
 
     // Connect wallet
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
@@ -526,7 +550,7 @@ describe("CreateTournamentForm", () => {
     expect(body.organizerAddress).toBe(MOCK_ORGANIZER);
     expect(body.refereeAddress).toBe(REF);
     expect(body.settlementDeadline).toBeGreaterThan(Math.floor(Date.now() / 1000));
-    expect(body.distributionBps).toEqual([5000, 2500, 2500]);
+    expect(body.distributionBps).toEqual([5000, 1667, 1667, 1666]);
 
     // signAndSubmit called with correct args
     await waitFor(() =>

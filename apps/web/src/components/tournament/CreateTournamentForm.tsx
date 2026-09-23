@@ -8,10 +8,7 @@ import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
 import { signAndSubmit, SubmissionError } from "@/lib/wallet";
 import { createTournamentSchema } from "@/lib/validation/tournament";
 import { apiResponseSchema } from "@/lib/api";
-import {
-  calculateEqualPayoutDistribution,
-  isValidEscrowDistribution,
-} from "@ggg/escrow-sdk/distribution";
+import { calculateEqualPayoutDistribution, isValidEscrowDistribution } from "@ggg/escrow-sdk";
 import { z } from "zod";
 
 // 1 XLM = 10,000,000 stroops (7 decimal places)
@@ -40,20 +37,15 @@ const toExactBps = (percentage: number) => {
   return Math.abs(scaled - rounded) < 1e-6 ? rounded : null;
 };
 
-const draftSchema = z
-  .object({
-    name: z.string().max(120),
-    gameTitle: z.string().max(120),
-    entryFee: z.string().max(32),
-    asset: z.enum(["XLM", "USDC"]),
-    refereeAddress: z.string().max(56),
-    settlementDeadline: z.string().max(32),
-    splits: z.array(z.number().min(0.01).max(100)).min(1).max(10),
-  })
-  .refine(({ splits }) => {
-    const bps = splits.map(toExactBps);
-    return bps.every((value) => value !== null) && isValidEscrowDistribution(bps);
-  });
+const draftSchema = z.object({
+  name: z.string().max(120),
+  gameTitle: z.string().max(120),
+  entryFee: z.string().max(32),
+  asset: z.enum(["XLM", "USDC"]),
+  refereeAddress: z.string().max(56),
+  settlementDeadline: z.string().max(32),
+  splits: z.array(z.number().min(0.01).max(100)).min(1).max(10),
+});
 
 type TournamentDraft = z.infer<typeof draftSchema>;
 
@@ -638,6 +630,12 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         <p className="data-mono mt-3 text-sm text-on-surface-variant" aria-live="polite">
           {bps.join(" / ")} bps
         </p>
+        {splits.length === 1 && (
+          <p className="mt-1 text-sm text-on-surface-variant">
+            Adding a second payout rank starts both ranks at 50%. You can adjust first place
+            afterward.
+          </p>
+        )}
         {firstPlaceError && (
           <p id="first-place-error" role="alert" className="mt-1 text-sm text-error">
             {firstPlaceError}

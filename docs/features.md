@@ -8,7 +8,7 @@ Tournament creation now uses the shared button design system for adding and remo
 
 ## Issue #320 — Automatic ranked prize shares
 
-Changing first place or the number of payout ranks now divides the remaining integer basis points equally across later ranks, assigning indivisible BPS in rank order so every generated split totals exactly 10,000. One-winner tournaments stay at 100%; valid saved drafts and manual edits to later ranks remain supported, while invalid first-place values are rejected inline before submission. The reusable calculation and distribution validation live in `@ggg/escrow-sdk`; the contract ABI and payout policy are unchanged.
+Changing first place or the number of payout ranks now divides the remaining integer basis points equally across later ranks, assigning indivisible BPS in rank order so every generated split totals exactly 10,000. One-winner tournaments stay at 100%; adding a second rank explicitly starts at 50/50, after which first place can be adjusted. Saved drafts retain valid calculated shares and in-progress manual edits, while invalid first-place values are rejected inline before submission. The reusable calculation and distribution validation live in `@ggg/escrow-sdk`; the contract ABI and payout policy are unchanged.
 
 ## Issue #225 — Standalone Node escrow consumer
 

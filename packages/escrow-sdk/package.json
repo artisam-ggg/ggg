@@ -25,10 +25,6 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./distribution": {
-      "types": "./dist/distribution.d.ts",
-      "import": "./dist/distribution.js"
-    },
     "./contract": {
       "types": "./dist/contract/index.d.ts",
       "import": "./dist/contract/index.js"
