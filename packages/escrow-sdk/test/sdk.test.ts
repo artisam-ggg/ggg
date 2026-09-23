@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { Buffer } from "buffer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   Account,

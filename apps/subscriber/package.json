@@ -14,7 +14,7 @@
     "@ggg/escrow-sdk": "workspace:*",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
-    "@stellar/stellar-sdk": "15",
+    "@stellar/stellar-sdk": "16.3.0",
     "ioredis": "^5.11.1",
     "pg": "^8.22.0",
     "web": "workspace:*",

@@ -25,10 +25,10 @@ try {
     JSON.stringify({
       name: "ggg-sdk-smoke",
       private: true,
-      pnpm: { overrides: { "@stellar/stellar-sdk": "15.1.0" } },
+      pnpm: { overrides: { "@stellar/stellar-sdk": "16.3.0" } },
     }),
   );
-  run("pnpm", ["add", join(isolated, tarball), "@stellar/stellar-sdk@15.1.0"], isolated);
+  run("pnpm", ["add", join(isolated, tarball), "@stellar/stellar-sdk@16.3.0"], isolated);
   copyFileSync(join(here, "smoke-client.mjs"), join(isolated, "smoke-client.mjs"));
   run("node", ["smoke-client.mjs"], isolated);
 } finally {
