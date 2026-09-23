@@ -78,6 +78,7 @@ jobs:
           cd "$consumer"
           npm init --yes
           npm install "$tarball"
+          npm audit --omit=dev --audit-level=high
           node --input-type=module -e 'await Promise.all([import("@ggg/escrow-sdk"), import("@ggg/escrow-sdk/contract")])'
 
       - name: Generate Prisma client
