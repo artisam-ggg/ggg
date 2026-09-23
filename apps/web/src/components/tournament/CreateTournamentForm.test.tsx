@@ -216,6 +216,30 @@ describe("CreateTournamentForm", () => {
     expect(screen.getByText(/6000 \/ 3000 \/ 1000 bps/i)).toBeInTheDocument();
   });
 
+  it("renders accessible payout-rank buttons and enforces the 1–10 rank limits", () => {
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    const add = screen.getByRole("button", { name: "Add payout rank" });
+    const remove = screen.getByRole("button", { name: "Remove last rank" });
+
+    expect(add).toHaveAttribute("data-variant", "default");
+    expect(remove).toHaveAttribute("data-variant", "destructive");
+    expect(add).toHaveClass("h-11", "w-full", "sm:w-auto");
+    expect(remove).toHaveClass("h-11", "w-full", "sm:w-auto");
+    expect(add.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    expect(remove.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    add.focus();
+    expect(add).toHaveFocus();
+
+    for (let rank = 4; rank <= 10; rank += 1) fireEvent.click(add);
+    expect(screen.getByLabelText("Rank 10 %")).toBeInTheDocument();
+    expect(add).toBeDisabled();
+
+    for (let rank = 10; rank > 1; rank -= 1) fireEvent.click(remove);
+    expect(screen.queryByLabelText(/2nd %/i)).not.toBeInTheDocument();
+    expect(remove).toBeDisabled();
+    expect(add).toBeEnabled();
+  });
+
   it("accepts hundredth-percent splits and preserves exact basis points", () => {
     render(<CreateTournamentForm expectedPassphrase="P" />);
     fireEvent.change(screen.getByLabelText(/1st %/i), { target: { value: "33.34" } });
