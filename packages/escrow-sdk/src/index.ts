@@ -11,11 +11,11 @@ export {
   isValidEscrowPublicKey,
   isValidEscrowContractId,
   isValidEscrowAmount,
-  isValidEscrowDistribution,
   escrowTransactionHash,
   getEscrowWasmHash,
   CURRENT_ESCROW_WASM_HASH,
 } from "./sdk.js";
+export { calculateEqualPayoutDistribution, isValidEscrowDistribution } from "./distribution.js";
 export type {
   EscrowSdkConfig,
   BuiltEscrowTransaction,

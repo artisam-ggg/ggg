@@ -11,6 +11,7 @@ import {
 import { Buffer } from "buffer";
 import { z } from "zod";
 import { Client, type TournamentInfo } from "./contract/index.js";
+import { isValidEscrowDistribution } from "./distribution.js";
 
 const I128_MAX = (1n << 127n) - 1n;
 const U64_MAX = (1n << 64n) - 1n;
@@ -73,13 +74,6 @@ export const isValidEscrowContractId = (value: unknown): value is string =>
   typeof value === "string" && StrKey.isValidContract(value);
 export const isValidEscrowAmount = (value: unknown): value is bigint =>
   typeof value === "bigint" && value > 0n && value <= I128_MAX;
-export const isValidEscrowDistribution = (values: unknown): values is number[] =>
-  Array.isArray(values) &&
-  values.length >= 1 &&
-  values.length <= 10 &&
-  values.every((v) => Number.isInteger(v) && v > 0 && v <= 10000) &&
-  values.reduce((a, b) => a + b, 0) === 10000;
-
 const publicKeySchema = z.string().refine(isValidEscrowPublicKey);
 const contractIdSchema = z.string().refine(isValidEscrowContractId);
 const amountSchema = z.bigint().min(0n).max(I128_MAX);
