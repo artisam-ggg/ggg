@@ -33,7 +33,7 @@ importers:
 
   apps/subscriber:
     dependencies:
-      '@ggg/escrow-sdk':
+      '@goodgameguild/escrow-sdk':
         specifier: workspace:*
         version: link:../../packages/escrow-sdk
       '@prisma/adapter-pg':
@@ -85,7 +85,7 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.1075.0
         version: 3.1075.0
-      '@ggg/escrow-sdk':
+      '@goodgameguild/escrow-sdk':
         specifier: workspace:*
         version: link:../../packages/escrow-sdk
       '@prisma/adapter-pg':

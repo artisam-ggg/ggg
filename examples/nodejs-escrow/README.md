@@ -1,6 +1,6 @@
 # Standalone Node escrow example (#225)
 
-This consumer uses `@ggg/escrow-sdk` through its package root. It does not import the GGG web app or SDK source. The live runner creates three distinct Testnet escrows: one pays 1–10 ranked winners, one allows a delegated refund at the deadline, and one is cancelled before its deadline and refunded. Settlement and refund are alternative terminal outcomes for the same tournament; the runner never tries both on one instance. Each mutating transaction is simulated by the SDK, signed by your external signer, submitted, and checked against confirmed on-chain reads. It prints public contract IDs, hashes, and Testnet explorer links, never signed XDR or keys.
+This consumer uses `@goodgameguild/escrow-sdk` through its package root. It does not import the GGG web app or SDK source. The live runner creates three distinct Testnet escrows: one pays 1–10 ranked winners, one allows a delegated refund at the deadline, and one is cancelled before its deadline and refunded. Settlement and refund are alternative terminal outcomes for the same tournament; the runner never tries both on one instance. Each mutating transaction is simulated by the SDK, signed by your external signer, submitted, and checked against confirmed on-chain reads. It prints public contract IDs, hashes, and Testnet explorer links, never signed XDR or keys.
 
 An approved live Testnet run of the one-winner path and both refund branches is recorded in [`docs/verification/issue-225-node-example-testnet.md`](../../docs/verification/issue-225-node-example-testnet.md).
 
@@ -16,13 +16,13 @@ node examples/nodejs-escrow/smoke.mjs
 For a development install of the actual tarball, from the repository root:
 
 ```sh
-pnpm --filter @ggg/escrow-sdk build
+pnpm --filter @goodgameguild/escrow-sdk build
 pnpm --dir packages/escrow-sdk pack --pack-destination ../../examples/nodejs-escrow
 cd examples/nodejs-escrow
-npm install --no-save --package-lock=false ./ggg-escrow-sdk-0.1.0.tgz
+npm install --no-save --package-lock=false ./goodgameguild-escrow-sdk-0.1.0.tgz
 ```
 
-The tarball is ignored by Git. `npm install --no-save --package-lock=false` keeps the example manifest unchanged. After issue #226 publishes the package, replace that final install command with `npm install --no-save --package-lock=false @ggg/escrow-sdk@0.1.0`. Do not use a workspace link for this consumer check. The package contains its runtime dependencies and public exports; the smoke check additionally installs `@stellar/stellar-sdk` in its disposable directory solely to generate mocked RPC fixtures.
+The tarball is ignored by Git. `npm install --no-save --package-lock=false` keeps the example manifest unchanged. After issue #226 publishes the package, replace that final install command with `npm install --no-save --package-lock=false @goodgameguild/escrow-sdk@0.1.0`. Do not use a workspace link for this consumer check. The package contains its runtime dependencies and public exports; the smoke check additionally installs `@stellar/stellar-sdk` in its disposable directory solely to generate mocked RPC fixtures.
 
 ## Live Testnet prerequisites and command
 

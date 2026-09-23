@@ -4,7 +4,7 @@ import { requireUser, AuthError } from "@/lib/auth-guards";
 import { assertSameOrigin, CsrfError } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
 import { StellarError } from "@/lib/stellar";
-import { EscrowSdkError } from "@ggg/escrow-sdk";
+import { EscrowSdkError } from "@goodgameguild/escrow-sdk";
 import { createTournamentSchema, listQuerySchema } from "@/lib/validation/tournament";
 import { createTournament, listTournaments } from "@/server/services/tournaments";
 

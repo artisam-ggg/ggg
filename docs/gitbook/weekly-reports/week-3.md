@@ -2,7 +2,7 @@
 
 ## Planned work
 
-Extract the SDK, publish `@ggg/escrow-sdk@0.1.0`, provide a Node.js example, and redeploy the Testnet application. See the [Week 3 plan in the SOW](https://github.com/artisam-ggg/ggg/blob/675986512bda71c01218e05993ac8ea252a51dee/docs/Instawards_SOW.md).
+Extract the SDK, publish `@goodgameguild/escrow-sdk@0.1.0`, provide a Node.js example, and redeploy the Testnet application. See the [Week 3 plan in the SOW](https://github.com/artisam-ggg/ggg/blob/675986512bda71c01218e05993ac8ea252a51dee/docs/Instawards_SOW.md).
 
 ## Evidence status
 
@@ -10,7 +10,7 @@ Extract the SDK, publish `@ggg/escrow-sdk@0.1.0`, provide a Node.js example, and
 
 | Required proof | Recorded in this book? |
 | --- | --- |
-| `@ggg/escrow-sdk@0.1.0` public package and installed version | No |
+| `@goodgameguild/escrow-sdk@0.1.0` public package and installed version | No |
 | Public SDK source and usage documentation | No |
 | Successful Node.js example result | No |
 | Redeployed Testnet app and health response | No |

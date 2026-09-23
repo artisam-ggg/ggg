@@ -4,7 +4,7 @@ const { getEventsMock, wasmHashMock } = vi.hoisted(() => ({
   getEventsMock: vi.fn(),
   wasmHashMock: vi.fn(),
 }));
-vi.mock("@ggg/escrow-sdk", () => ({
+vi.mock("@goodgameguild/escrow-sdk", () => ({
   CURRENT_ESCROW_WASM_HASH: "b704f577f1715d965f9ba24f2cebf49df52735d42c9a4cd2a93781d612a46dd9",
   getEscrowWasmHash: wasmHashMock,
 }));

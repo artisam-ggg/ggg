@@ -1,6 +1,6 @@
 # Issue #225 standalone Node example: Testnet verification
 
-Date: 2026-09-22. Network: Stellar Testnet (`Test SDF Network ; September 2015`). The run used the packed `@ggg/escrow-sdk@0.1.0`, WASM hash `b704f577f1715d965f9ba24f2cebf49df52735d42c9a4cd2a93781d612a46dd9`, the native XLM SAC, and four newly generated Friendbot-funded identities held only in process memory. No secret key was saved or printed. Each entry fee was 10,000,000 stroops (1 XLM). The run exited with status 0.
+Date: 2026-09-22. Network: Stellar Testnet (`Test SDF Network ; September 2015`). The run used the packed `0.1.0` SDK candidate, then named `@ggg/escrow-sdk` and subsequently renamed without runtime changes to `@goodgameguild/escrow-sdk`, WASM hash `b704f577f1715d965f9ba24f2cebf49df52735d42c9a4cd2a93781d612a46dd9`, the native XLM SAC, and four newly generated Friendbot-funded identities held only in process memory. No secret key was saved or printed. Each entry fee was 10,000,000 stroops (1 XLM). The run exited with status 0.
 
 | Independent path | Public confirmation |
 | --- | --- |

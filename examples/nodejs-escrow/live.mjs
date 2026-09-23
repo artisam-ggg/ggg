@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { pathToFileURL } from "node:url";
-import { EscrowSdk, EscrowSdkError } from "@ggg/escrow-sdk";
+import { EscrowSdk, EscrowSdkError } from "@goodgameguild/escrow-sdk";
 
 const required = (name) => {
   const value = process.env[name]?.trim();

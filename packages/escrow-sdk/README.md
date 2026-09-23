@@ -1,4 +1,4 @@
-# @ggg/escrow-sdk
+# @goodgameguild/escrow-sdk
 
 Typed Stellar Soroban bindings and keyless transaction APIs for the GGG escrow contract. This package is MIT licensed and works in Node.js 22+ and browser projects. It does not hold keys, read app environment variables, or depend on Next.js or Prisma.
 
@@ -7,7 +7,7 @@ Version `0.1.0` distributes the finalized contract ABI from issues #215–#220 a
 ## Build, sign, submit, reconcile
 
 ```ts
-import { EscrowSdk } from "@ggg/escrow-sdk";
+import { EscrowSdk } from "@goodgameguild/escrow-sdk";
 
 const networkPassphrase = "Test SDF Network ; September 2015";
 const sdk = new EscrowSdk({
@@ -36,8 +36,8 @@ For consumers that handle existing instances, `getEscrowWasmHash(rpcUrl, contrac
 ## Imports
 
 ```ts
-import { EscrowClient, type TournamentInfo } from "@ggg/escrow-sdk";
-import { Client, Errors } from "@ggg/escrow-sdk/contract";
+import { EscrowClient, type TournamentInfo } from "@goodgameguild/escrow-sdk";
+import { Client, Errors } from "@goodgameguild/escrow-sdk/contract";
 ```
 
 The package root exposes stable GGG names (`EscrowClient`, `EscrowErrors`, `EscrowDataKey`, `TournamentInfo`). The `/contract` export exposes the generated Stellar binding, including `Client`, its complete method types, contract errors, and the Stellar SDK types re-exported by the generator. Use the root for normal applications and `/contract` when you need the generated interface directly.
@@ -64,7 +64,7 @@ From the repository root, use Node 22, pnpm 10.6.4, Rust, and Stellar CLI 27.0.0
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm --filter @ggg/escrow-sdk build
+pnpm --filter @goodgameguild/escrow-sdk build
 cd contracts/escrow
 stellar contract build
 cd ../..
@@ -75,6 +75,6 @@ stellar contract bindings typescript \
 
 Copy `/tmp/ggg-escrow-bindings/src/index.ts` to `packages/escrow-sdk/src/contract/index.ts` and prepend the existing `// @ts-nocheck` generator note. Do not copy the generated package metadata: the SDK package has its own exports and build settings. The CI contract job builds the current WASM and diffs the regenerated binding against the checked-in file. A changed contract interface requires regenerating the binding and updating the ABI smoke test.
 
-`pnpm --filter @ggg/escrow-sdk pack` builds a publication tarball containing only `dist/`, this README, the license, and package metadata. The package has no runtime dependency on any GGG workspace package.
+`pnpm --filter @goodgameguild/escrow-sdk pack` builds a publication tarball containing only `dist/`, this README, the license, and package metadata. The package has no runtime dependency on any GGG workspace package.
 
 For a complete standalone Node consumer, including exact local pack/install and offline/live commands, external signing, three terminal paths, payout confirmation, and Testnet reset recovery, see `examples/nodejs-escrow/README.md` in the repository. The package tarball itself remains independent of that example.

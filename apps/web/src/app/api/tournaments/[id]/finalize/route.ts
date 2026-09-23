@@ -3,7 +3,7 @@ import { ok, err } from "@/lib/api";
 import { assertSameOrigin, CsrfError } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
 import { StellarError } from "@/lib/stellar";
-import { EscrowSdkError } from "@ggg/escrow-sdk";
+import { EscrowSdkError } from "@goodgameguild/escrow-sdk";
 import { finalizeSchema, stellarPublicKey } from "@/lib/validation/tournament";
 import { buildFinalize } from "@/server/services/tournaments";
 

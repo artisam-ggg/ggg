@@ -1,5 +1,5 @@
 {
-  "name": "@ggg/escrow-sdk",
+  "name": "@goodgameguild/escrow-sdk",
   "version": "0.1.0",
   "description": "Typed bindings for the GGG Stellar escrow contract",
   "license": "MIT",

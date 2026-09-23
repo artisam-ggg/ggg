@@ -8,7 +8,10 @@ import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
 import { signAndSubmit, SubmissionError } from "@/lib/wallet";
 import { createTournamentSchema } from "@/lib/validation/tournament";
 import { apiResponseSchema } from "@/lib/api";
-import { calculateEqualPayoutDistribution, isValidEscrowDistribution } from "@ggg/escrow-sdk";
+import {
+  calculateEqualPayoutDistribution,
+  isValidEscrowDistribution,
+} from "@goodgameguild/escrow-sdk";
 import { z } from "zod";
 
 // 1 XLM = 10,000,000 stroops (7 decimal places)
