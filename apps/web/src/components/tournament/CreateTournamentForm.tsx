@@ -8,7 +8,11 @@ import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
 import { signAndSubmit, SubmissionError } from "@/lib/wallet";
 import { createTournamentSchema } from "@/lib/validation/tournament";
 import { apiResponseSchema } from "@/lib/api";
-import { calculateEqualPayoutDistribution, isValidEscrowDistribution } from "@ggg/escrow-sdk";
+import {
+  calculateDescendingPayoutDistribution,
+  calculateEqualPayoutDistribution,
+  isValidEscrowDistribution,
+} from "@ggg/escrow-sdk";
 import { z } from "zod";
 
 // 1 XLM = 10,000,000 stroops (7 decimal places)
@@ -37,6 +41,9 @@ const toExactBps = (percentage: number) => {
   return Math.abs(scaled - rounded) < 1e-6 ? rounded : null;
 };
 
+const distributionModeSchema = z.enum(["equal", "descending", "custom"]);
+type DistributionMode = z.infer<typeof distributionModeSchema>;
+
 const draftSchema = z.object({
   name: z.string().max(120),
   gameTitle: z.string().max(120),
@@ -45,6 +52,7 @@ const draftSchema = z.object({
   refereeAddress: z.string().max(56),
   settlementDeadline: z.string().max(32),
   splits: z.array(z.number().min(0.01).max(100)).min(1).max(10),
+  distributionMode: distributionModeSchema.default("custom"),
 });
 
 type TournamentDraft = z.infer<typeof draftSchema>;
@@ -56,7 +64,8 @@ const emptyDraft: TournamentDraft = {
   asset: "XLM",
   refereeAddress: "",
   settlementDeadline: "",
-  splits: [60, 30, 10],
+  splits: [60, 20, 20],
+  distributionMode: "equal",
 };
 
 function loadDraft(): TournamentDraft {
@@ -134,7 +143,8 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   const [refereeAddress, setRefereeAddress] = useState("");
   const [organizerAddress, setOrganizerAddress] = useState("");
   const [settlementDeadline, setSettlementDeadline] = useState("");
-  const [splits, setSplits] = useState<number[]>([60, 30, 10]);
+  const [splits, setSplits] = useState<number[]>([60, 20, 20]);
+  const [distributionMode, setDistributionMode] = useState<DistributionMode>("equal");
   const [coverImageKey, setCoverImageKey] = useState<string | undefined>();
   const [coverUploadStatus, setCoverUploadStatus] = useState<CoverUploadStatus>("idle");
   const coverUploadRequest = useRef(0);
@@ -155,7 +165,8 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     !!refereeAddress ||
     !!settlementDeadline ||
     asset !== "XLM" ||
-    splits.join(",") !== "60,30,10";
+    splits.join(",") !== "60,20,20" ||
+    distributionMode !== "equal";
 
   useEffect(() => {
     const draft = loadDraft();
@@ -167,6 +178,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     setRefereeAddress(draft.refereeAddress);
     setSettlementDeadline(draft.settlementDeadline);
     setSplits(draft.splits);
+    setDistributionMode(draft.distributionMode);
     setRestored(true);
   }, []);
 
@@ -174,7 +186,16 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     if (!restored) return;
 
     // Wallet and upload state are deliberately excluded; both must be fetched live.
-    const draft = { name, gameTitle, entryFee, asset, refereeAddress, settlementDeadline, splits };
+    const draft = {
+      name,
+      gameTitle,
+      entryFee,
+      asset,
+      refereeAddress,
+      settlementDeadline,
+      splits,
+      distributionMode,
+    };
     if (!hasDraft) {
       removeStoredDraft();
     } else {
@@ -186,6 +207,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     }
   }, [
     asset,
+    distributionMode,
     entryFee,
     gameTitle,
     hasDraft,
@@ -204,17 +226,42 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     setAsset("XLM");
     setRefereeAddress("");
     setSettlementDeadline("");
-    setSplits([60, 30, 10]);
+    setSplits([60, 20, 20]);
+    setDistributionMode("equal");
+  }
+
+  function calculateSplits(mode: Exclude<DistributionMode, "custom">, winnerCount: number) {
+    const firstPlaceBps = splits.length === 1 ? 5_000 : toExactBps(splits[0]!);
+    const calculate =
+      mode === "descending"
+        ? calculateDescendingPayoutDistribution
+        : calculateEqualPayoutDistribution;
+    return calculate(firstPlaceBps ?? Number.NaN, winnerCount).map((value) => value / 100);
+  }
+
+  function changeDistributionMode(mode: DistributionMode) {
+    if (mode === "custom") {
+      setDistributionMode(mode);
+      return;
+    }
+    try {
+      setSplits(calculateSplits(mode, splits.length));
+      setDistributionMode(mode);
+    } catch {
+      // Keep the current values so the inline first-place error remains actionable.
+    }
   }
 
   function changeWinnerCount(winnerCount: number) {
-    const firstPlaceBps = splits.length === 1 ? 5_000 : toExactBps(splits[0]!);
+    if (distributionMode === "custom") {
+      if (winnerCount === 1) setSplits([100]);
+      else if (splits.length === 1) setSplits([50, 50]);
+      else if (winnerCount > splits.length) setSplits([...splits, 1]);
+      else setSplits(splits.slice(0, winnerCount));
+      return;
+    }
     try {
-      setSplits(
-        calculateEqualPayoutDistribution(firstPlaceBps ?? Number.NaN, winnerCount).map(
-          (value) => value / 100,
-        ),
-      );
+      setSplits(calculateSplits(distributionMode, winnerCount));
     } catch {
       // The inline first-place error explains why the rank count cannot change yet.
     }
@@ -225,13 +272,17 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       setSplits([0, ...splits.slice(1)]);
       return;
     }
+    if (distributionMode === "custom") {
+      setSplits([value, ...splits.slice(1)]);
+      return;
+    }
     const firstPlaceBps = toExactBps(value);
+    const calculate =
+      distributionMode === "descending"
+        ? calculateDescendingPayoutDistribution
+        : calculateEqualPayoutDistribution;
     try {
-      setSplits(
-        calculateEqualPayoutDistribution(firstPlaceBps ?? Number.NaN, splits.length).map(
-          (share) => share / 100,
-        ),
-      );
+      setSplits(calculate(firstPlaceBps ?? Number.NaN, splits.length).map((share) => share / 100));
     } catch {
       setSplits([value, ...splits.slice(1)]);
     }
@@ -568,6 +619,25 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       {/* Prize Split */}
       <fieldset className="mt-6">
         <legend className={labelClass}>Prize Split (%)</legend>
+        <div className="mb-4 max-w-sm">
+          <label className={labelClass} htmlFor="distributionMode">
+            Payout calculation
+          </label>
+          <select
+            id="distributionMode"
+            className={fieldClass}
+            value={distributionMode}
+            onChange={(event) => changeDistributionMode(event.target.value as DistributionMode)}
+          >
+            <option value="equal">Equal remainder</option>
+            <option value="descending">Descending ranked</option>
+            <option value="custom">Custom</option>
+          </select>
+          <p className="mt-1 text-sm text-on-surface-variant">
+            Equal and Descending recalculate lower ranks when first place or the winner count
+            changes. Editing a lower rank switches to Custom.
+          </p>
+        </div>
         <div className="grid gap-4 sm:grid-cols-3">
           {splits.map((split, i) => (
             <div key={i}>
@@ -591,6 +661,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
                   const next = [...splits];
                   next[i] = Number(e.target.value);
                   setSplits(next);
+                  setDistributionMode("custom");
                 }}
                 aria-describedby={
                   i === 0 && firstPlaceError

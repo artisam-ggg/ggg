@@ -2,6 +2,10 @@
 
 Running log of shipped features (append one entry per change), per the auto-dev workflow.
 
+## Issue #323 — Descending ranked prize shares
+
+Tournament creation now offers Equal remainder, Descending ranked, and Custom payout modes. Descending mode divides the amount left after first place with descending integer weights, recalculates when the first-place share or winner count changes, and assigns indivisible basis points to higher ranks. Drafts retain their exact mode and distribution, while editing a lower rank switches safely to Custom.
+
 ## Issue #319 — Make payout-rank actions visibly interactive
 
 Tournament creation now uses the shared button design system for adding and removing payout ranks. The controls have distinct plus/minus icons and treatments, responsive full-width mobile targets, and the design system's hover, focus-visible, pressed, and disabled states while preserving the existing 1–10 rank limits and keyboard-accessible names.
