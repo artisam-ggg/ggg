@@ -1,7 +1,9 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Minus, Plus } from "lucide-react";
 import { WalletButton } from "./WalletButton";
+import { Button } from "@/components/ui/button";
 import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
 import { signAndSubmit, SubmissionError } from "@/lib/wallet";
 import { createTournamentSchema } from "@/lib/validation/tournament";
@@ -548,21 +550,28 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
             </div>
           ))}
         </div>
-        <div className="mt-3 flex gap-3">
-          <button
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+          <Button
             type="button"
+            size="lg"
+            className="h-11 w-full sm:w-auto"
             disabled={splits.length >= 10}
             onClick={() => setSplits([...splits, 1])}
           >
+            <Plus aria-hidden="true" />
             Add payout rank
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="destructive"
+            size="lg"
+            className="h-11 w-full sm:w-auto"
             disabled={splits.length <= 1}
             onClick={() => setSplits(splits.slice(0, -1))}
           >
+            <Minus aria-hidden="true" />
             Remove last rank
-          </button>
+          </Button>
         </div>
         <p className="data-mono mt-3 text-sm text-on-surface-variant" aria-live="polite">
           {bps.join(" / ")} bps
