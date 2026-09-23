@@ -6,6 +6,10 @@ Running log of shipped features (append one entry per change), per the auto-dev 
 
 Tournament creation now uses the shared button design system for adding and removing payout ranks. The controls have distinct plus/minus icons and treatments, responsive full-width mobile targets, and the design system's hover, focus-visible, pressed, and disabled states while preserving the existing 1–10 rank limits and keyboard-accessible names.
 
+## Issue #320 — Automatic ranked prize shares
+
+Changing first place or the number of payout ranks now divides the remaining integer basis points equally across later ranks, assigning indivisible BPS in rank order so every generated split totals exactly 10,000. One-winner tournaments stay at 100%; adding a second rank explicitly starts at 50/50, after which first place can be adjusted. Saved drafts retain valid calculated shares and in-progress manual edits, while invalid first-place values are rejected inline before submission. The reusable calculation and distribution validation live in `@ggg/escrow-sdk`; the contract ABI and payout policy are unchanged.
+
 ## Issue #225 — Standalone Node escrow consumer
 
 Added a package-only Node example that demonstrates Testnet constructor deployment, registration, 1–10 winner settlement with confirmed payout reads, and separate deadline-delegated and cancellation refund instances. Its external signer contract keeps account secrets outside the repository. The documented pack/install path and isolated mocked-RPC smoke exercise the SDK as a third-party consumer. An approved live Testnet run confirmed the one-winner settlement, delegated deadline refund, and cancellation/refund paths on separate instances; public hashes and on-chain read results are recorded in [the verification record](verification/issue-225-node-example-testnet.md).

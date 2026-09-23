@@ -8,6 +8,7 @@ import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
 import { signAndSubmit, SubmissionError } from "@/lib/wallet";
 import { createTournamentSchema } from "@/lib/validation/tournament";
 import { apiResponseSchema } from "@/lib/api";
+import { calculateEqualPayoutDistribution, isValidEscrowDistribution } from "@ggg/escrow-sdk";
 import { z } from "zod";
 
 // 1 XLM = 10,000,000 stroops (7 decimal places)
@@ -30,6 +31,11 @@ const createTournamentResponseSchema = apiResponseSchema(
 );
 
 const DRAFT_STORAGE_KEY = "ggg:tournament-create-draft";
+const toExactBps = (percentage: number) => {
+  const scaled = percentage * 100;
+  const rounded = Math.round(scaled);
+  return Math.abs(scaled - rounded) < 1e-6 ? rounded : null;
+};
 
 const draftSchema = z.object({
   name: z.string().max(120),
@@ -201,12 +207,48 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     setSplits([60, 30, 10]);
   }
 
+  function changeWinnerCount(winnerCount: number) {
+    const firstPlaceBps = splits.length === 1 ? 5_000 : toExactBps(splits[0]!);
+    try {
+      setSplits(
+        calculateEqualPayoutDistribution(firstPlaceBps ?? Number.NaN, winnerCount).map(
+          (value) => value / 100,
+        ),
+      );
+    } catch {
+      // The inline first-place error explains why the rank count cannot change yet.
+    }
+  }
+
+  function changeFirstPlace(value: number) {
+    if (!Number.isFinite(value)) {
+      setSplits([0, ...splits.slice(1)]);
+      return;
+    }
+    const firstPlaceBps = toExactBps(value);
+    try {
+      setSplits(
+        calculateEqualPayoutDistribution(firstPlaceBps ?? Number.NaN, splits.length).map(
+          (share) => share / 100,
+        ),
+      );
+    } catch {
+      setSplits([value, ...splits.slice(1)]);
+    }
+  }
+
   // Derived values
   const bps = splits.map((s) => Math.round(s * 100));
   const splitSum = bps.reduce((sum, value) => sum + value, 0) / 100;
   const splitValid =
-    splitSum === 100 &&
-    splits.every((value) => value > 0 && Math.abs(value * 100 - Math.round(value * 100)) < 1e-6);
+    isValidEscrowDistribution(bps) && splits.every((value) => toExactBps(value) !== null);
+  let firstPlaceError: string | null = null;
+  try {
+    calculateEqualPayoutDistribution(toExactBps(splits[0]!) ?? Number.NaN, splits.length);
+  } catch {
+    const max = (10_000 - (splits.length - 1)) / 100;
+    firstPlaceError = `First place must use at most two decimal places and be between 0.01% and ${max.toFixed(2)}% for ${splits.length} winners`;
+  }
 
   async function handleCoverUpload(file: File) {
     const request = ++coverUploadRequest.current;
@@ -540,12 +582,23 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
                 step={0.01}
                 className={monoFieldClass}
                 value={split}
+                disabled={splits.length === 1}
                 onChange={(e) => {
+                  if (i === 0) {
+                    changeFirstPlace(e.target.valueAsNumber);
+                    return;
+                  }
                   const next = [...splits];
                   next[i] = Number(e.target.value);
                   setSplits(next);
                 }}
-                aria-describedby={!splitValid ? "split-error" : undefined}
+                aria-describedby={
+                  i === 0 && firstPlaceError
+                    ? "first-place-error"
+                    : !splitValid
+                      ? "split-error"
+                      : undefined
+                }
               />
             </div>
           ))}
@@ -556,7 +609,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
             size="lg"
             className="h-11 w-full sm:w-auto"
             disabled={splits.length >= 10}
-            onClick={() => setSplits([...splits, 1])}
+            onClick={() => changeWinnerCount(splits.length + 1)}
           >
             <Plus aria-hidden="true" />
             Add payout rank
@@ -567,7 +620,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
             size="lg"
             className="h-11 w-full sm:w-auto"
             disabled={splits.length <= 1}
-            onClick={() => setSplits(splits.slice(0, -1))}
+            onClick={() => changeWinnerCount(splits.length - 1)}
           >
             <Minus aria-hidden="true" />
             Remove last rank
@@ -576,6 +629,17 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         <p className="data-mono mt-3 text-sm text-on-surface-variant" aria-live="polite">
           {bps.join(" / ")} bps
         </p>
+        {splits.length === 1 && (
+          <p className="mt-1 text-sm text-on-surface-variant">
+            Adding a second payout rank starts both ranks at 50%. You can adjust first place
+            afterward.
+          </p>
+        )}
+        {firstPlaceError && (
+          <p id="first-place-error" role="alert" className="mt-1 text-sm text-error">
+            {firstPlaceError}
+          </p>
+        )}
         {!splitValid && (
           <p id="split-error" role="alert" className="mt-1 text-sm text-error">
             Split must sum to 100 using hundredths of a percent (currently {splitSum})
