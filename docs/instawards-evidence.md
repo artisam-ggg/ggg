@@ -1,8 +1,9 @@
 # Instawards release and evidence record
 
-Status: **release preparation only**. npm publication is approved but blocked
-on publisher 2FA. The staging migration and promotion, Railway deployment, and
-the final funded Testnet runs remain pending explicit approval. Historical
+Status: **release preparation only**. npm publication is approved after the
+corrected package scope is merged, tagged, and verified. The staging migration
+and promotion, Railway deployment, and the final funded Testnet runs remain
+pending explicit approval. Historical
 Testnet links below are supporting evidence; they do not prove the final public
 release.
 
@@ -11,18 +12,22 @@ release.
 | Field | Prepared value |
 | --- | --- |
 | Repository | `webnxt-2030/ggg` |
-| SDK source revision | `313bc0ee2cb0d6d7117c10a18ad78c477d8a6297` |
-| Immutable SDK tag | [`escrow-sdk-v0.1.0`](https://github.com/webnxt-2030/ggg/tree/escrow-sdk-v0.1.0) |
-| Source CI | [Successful run 35827482104](https://github.com/webnxt-2030/ggg/actions/runs/35827482104) |
-| SDK package | `@ggg/escrow-sdk@0.1.0` |
-| npm state | Unpublished as of 2026-09-23; publish returned `E403` because interactive 2FA or a granular token allowed to bypass 2FA is required |
+| SDK source revision | Pending merge of the `@goodgameguild` scope correction based on `9c9c4db51a2a91c6e90ea83d66bb2db94b8fe329` |
+| Immutable SDK tag | Pending `goodgameguild-escrow-sdk-v0.1.0`; the earlier [`escrow-sdk-v0.1.0`](https://github.com/webnxt-2030/ggg/tree/escrow-sdk-v0.1.0) candidate is superseded and will not be moved |
+| Source CI | Pending exact-revision CI for the corrected scope; the superseded candidate passed [run 35827482104](https://github.com/webnxt-2030/ggg/actions/runs/35827482104) |
+| SDK package | `@goodgameguild/escrow-sdk@0.1.0` |
+| npm state | Unpublished as of 2026-09-23; publisher `0xhakua` has 2FA enabled and is a verified owner of the `goodgameguild` organization, but the corrected scope must complete review before publication |
 | Network | Stellar Testnet / `Test SDF Network ; September 2015` |
 | Escrow WASM | `b704f577f1715d965f9ba24f2cebf49df52735d42c9a4cd2a93781d612a46dd9` |
 | Public app health URL | `https://app.ggg.quest/api/health` |
 | Current staging revision | `8647e5fa6fb6d5ba94cff7d8dd7974b3a2abc28d` (web and subscriber) |
 
-`313bc0e` is the reviewed SDK source revision and the target of the immutable
-SDK tag. It upgrades the package and its direct workspace consumers to
+`313bc0e` is the superseded reviewed candidate and remains the target of the
+immutable `escrow-sdk-v0.1.0` tag. That tag will not be rewritten. The corrected
+package keeps version `0.1.0` because no npm package was created, and its new
+source revision will receive the scope-specific immutable tag
+`goodgameguild-escrow-sdk-v0.1.0` after merge and exact-revision CI. The base
+candidate upgrades the package and its direct workspace consumers to
 `@stellar/stellar-sdk@16.3.0`; a clean external npm install and production audit
 report zero vulnerabilities. The later staging promotion revision may add
 release evidence only, but must not change the tagged package or application
@@ -40,8 +45,8 @@ The package metadata declares the public MIT-licensed scope and version,
 Node.js 22+, the public repository and package directory, public npm access,
 and two ESM exports:
 
-- `@ggg/escrow-sdk` -> `dist/index.js` with `dist/index.d.ts`;
-- `@ggg/escrow-sdk/contract` -> `dist/contract/index.js` with
+- `@goodgameguild/escrow-sdk` -> `dist/index.js` with `dist/index.d.ts`;
+- `@goodgameguild/escrow-sdk/contract` -> `dist/contract/index.js` with
   `dist/contract/index.d.ts`.
 
 The package README documents keyless build/sign/submit/reconcile behavior,
@@ -49,18 +54,18 @@ bigint/stroop and BPS rules, deadlines, current-WASM compatibility, error
 codes, binding regeneration, and the standalone Node example. `LICENSE` is the
 MIT license with the same 2026 Artisam Labs attribution as the repository.
 
-`pnpm pack` produced `ggg-escrow-sdk-0.1.0.tgz` with these verified unpublished values.
+`pnpm pack` produced `goodgameguild-escrow-sdk-0.1.0.tgz` with these verified unpublished values.
 The packer removes the `prepack` lifecycle hook from the published manifest but
 preserves the package's runtime metadata, dependencies, exports, license,
 repository, and engine requirements:
 
 | Field | Value |
 | --- | --- |
-| Packed size | 14,595 bytes |
-| Unpacked size | 51,196 bytes |
+| Packed size | 14,604 bytes |
+| Unpacked size | 51,266 bytes |
 | Entries | 11 |
-| SHA-1 | `ef724b70ee3b692bde017c3f0f41c48438db6c51` |
-| Integrity | `sha512-0NNdR6kwdVY9x/ysssyDdsN5501E2XqPGokE9ZnhGo/s1P9/dFxLU9/31xqKjTXFvnVsgoRbwuG2I5+XFli1JA==` |
+| SHA-1 | `1372c6d4a04d4fd7293ec813405cc14a72173c33` |
+| Integrity | `sha512-Mx1unWUJTXEH1ONVvkcsE0dIgm+5IFBlZJtLFEUizn7DQa8iRVWRDyQoTAUAJPuonGC05xTNcUzRi0hbuycqfA==` |
 
 The tarball contains only:
 
@@ -88,12 +93,13 @@ simulated join transaction, and validated externally signed XDR successfully.
 | Command/check | Result |
 | --- | --- |
 | `pnpm install --frozen-lockfile` | Passed after allowing the pinned packages and Prisma engine to download |
-| `pnpm --filter @ggg/escrow-sdk build` | Passed |
-| `pnpm --filter @ggg/escrow-sdk test` | Passed: 25 tests |
+| `pnpm --filter @goodgameguild/escrow-sdk build` | Passed |
+| `pnpm --filter @goodgameguild/escrow-sdk test` | Passed: 25 tests |
 | `node examples/nodejs-escrow/smoke.mjs` | Passed in a disposable non-workspace consumer |
-| `npm publish ggg-escrow-sdk-0.1.0.tgz --access public --dry-run --json` | Passed twice; reproduced the 11-file manifest and integrity above |
+| `npm publish goodgameguild-escrow-sdk-0.1.0.tgz --access public --dry-run --json` | Passed; reproduced the 11-file manifest and integrity above |
 | Clean `npm install` of the tarball | Passed: 45 production packages added, 46 audited |
 | Clean `npm audit --omit=dev --audit-level=high` | Passed: zero vulnerabilities |
+| `npm org ls goodgameguild 0xhakua --json` | Passed: `0xhakua` is an organization owner |
 | Workspace `pnpm audit --audit-level high` | Passed: no high or critical findings; 13 moderate and 1 low remain |
 | Exact Stellar CLI 27.0.0 contract build | Passed; 10,946-byte WASM with hash `b704f577...a46dd9` |
 | Generated binding comparison | Passed; generated binding matches the checked-in SDK binding |
@@ -150,19 +156,19 @@ and [standalone Node Testnet paths](verification/issue-225-node-example-testnet.
 
 ## npm publication gate
 
-The source review, exact-revision CI, immutable tag, and publication approval
-are complete. Do not retry the publish command until this integrity correction
-is reviewed and the publisher can complete npm 2FA.
+Publication approval and publisher 2FA are complete. Do not retry the publish
+command until the scope correction is merged, exact-revision CI passes, and the
+new scope-specific immutable tag is created at that merge revision.
 
 ```sh
-git fetch origin tag escrow-sdk-v0.1.0
-git checkout --detach escrow-sdk-v0.1.0
+git fetch origin tag goodgameguild-escrow-sdk-v0.1.0
+git checkout --detach goodgameguild-escrow-sdk-v0.1.0
 pnpm install --frozen-lockfile
-pnpm --filter @ggg/escrow-sdk build
-pnpm --filter @ggg/escrow-sdk test
+pnpm --filter @goodgameguild/escrow-sdk build
+pnpm --filter @goodgameguild/escrow-sdk test
 pnpm --dir packages/escrow-sdk pack
-npm publish packages/escrow-sdk/ggg-escrow-sdk-0.1.0.tgz --access public
-npm view @ggg/escrow-sdk@0.1.0 version dist repository license engines exports --json
+npm publish packages/escrow-sdk/goodgameguild-escrow-sdk-0.1.0.tgz --access public
+npm view @goodgameguild/escrow-sdk@0.1.0 version dist repository license engines exports --json
 ```
 
 After publication, install from the registry—not the local tarball—in a fresh
@@ -170,16 +176,17 @@ external directory and rerun the example smoke. Record:
 
 | Publication evidence field | Status |
 | --- | --- |
-| Public npm version URL | Pending publisher 2FA |
+| Public npm version URL | Pending corrected-scope review and publication |
 | Registry tarball URL | Pending publication |
 | Registry SHA-1 and integrity | Pending publication; must match the approved tarball |
-| Reviewed source commit and immutable tag | `313bc0e`; `escrow-sdk-v0.1.0` |
+| Reviewed source commit and immutable tag | Pending correction merge; `goodgameguild-escrow-sdk-v0.1.0` |
 | Publish date and publisher account name | Pending publication |
-| Fresh `npm install @ggg/escrow-sdk@0.1.0` result | Pending publication |
+| Fresh `npm install @goodgameguild/escrow-sdk@0.1.0` result | Pending publication |
 | Registry-installed Node example result | Pending publication |
-| Public CI run for the exact revision | [Run 35827482104](https://github.com/webnxt-2030/ggg/actions/runs/35827482104) passed |
+| Public CI run for the exact revision | Pending correction merge; superseded candidate [run 35827482104](https://github.com/webnxt-2030/ggg/actions/runs/35827482104) passed |
 
-Required npm access: an account authorized to publish the public `@ggg` scope,
+Required npm access: an account authorized to publish the public
+`@goodgameguild` scope,
 an npm authentication method with publish permission, and any required 2FA/OTP
 or trusted-publishing configuration. Never place the token or OTP in a command,
 log, screenshot, shell history, or repository file.
@@ -310,7 +317,7 @@ SDK-backed public app.
 
 ## Credentials and environment prerequisites
 
-- **npm:** authorized `@ggg` publisher, secure publish authentication, and
+- **npm:** authorized `@goodgameguild` publisher, secure publish authentication, and
   required 2FA/OTP or trusted publishing.
 - **GitHub:** permission to review/merge the dependency and history-reconcile
   changes, then fast-forward the protected `staging` branch.
@@ -336,10 +343,10 @@ recorded.
 
 ## Blockers and smallest next approval
 
-1. The former external npm audit blocker is fixed and fully retested. npm
-   publication now requires the publisher to complete interactive 2FA or use a
-   granular token explicitly allowed to bypass 2FA; no package version was
-   created by the rejected attempt.
+1. The former external npm audit blocker is fixed and fully retested. Publisher
+   2FA is enabled and the `goodgameguild` organization exists. The package scope
+   correction must merge and pass exact-revision CI before publication; no
+   package version was created by the rejected attempts.
 2. PR #324 is excluded; keep it unmerged while `develop` is frozen and the
    exact artifact is published and promoted.
 3. `staging` history is reconciled into `develop`; reverify ancestry immediately
@@ -350,7 +357,8 @@ recorded.
    Testnet transactions remain unperformed. Only npm publication is currently
    approved.
 
-The current approval covers the immutable SDK tag and npm publication. The tag
-was pushed; publication was rejected before package creation because npm needs
-interactive 2FA or an eligible granular token. It does **not** cover staging
-migration/promotion, Railway changes/deployment, or funded Testnet activity.
+The current approval covers a new immutable SDK tag for the corrected scope and
+npm publication after merge and exact-revision CI. The superseded tag remains
+unchanged; rejected publication attempts created no package version. This
+approval does **not** cover staging migration/promotion, Railway
+changes/deployment, or funded Testnet activity.

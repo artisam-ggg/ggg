@@ -4,7 +4,7 @@ import { requireUser, AuthError } from "@/lib/auth-guards";
 import { assertSameOrigin, CsrfError } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
 import { StellarError } from "@/lib/stellar";
-import { EscrowSdkError } from "@ggg/escrow-sdk";
+import { EscrowSdkError } from "@goodgameguild/escrow-sdk";
 import { buildCancel } from "@/server/services/tournaments";
 
 export async function POST(

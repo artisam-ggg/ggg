@@ -1,5 +1,5 @@
 import { rpc, scValToNative, xdr } from "@stellar/stellar-sdk";
-import { CURRENT_ESCROW_WASM_HASH, getEscrowWasmHash } from "@ggg/escrow-sdk";
+import { CURRENT_ESCROW_WASM_HASH, getEscrowWasmHash } from "@goodgameguild/escrow-sdk";
 import { z } from "zod";
 import { env } from "./env";
 
