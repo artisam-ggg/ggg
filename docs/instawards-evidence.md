@@ -1,29 +1,32 @@
 # Instawards release and evidence record
 
-Status: **release preparation only**. npm publication, the staging migration and
-promotion, Railway deployment, and the final funded Testnet runs are pending
-explicit approval. Historical Testnet links below are supporting evidence; they
-do not prove the final public release.
+Status: **release preparation only**. npm publication is approved but blocked
+on publisher 2FA. The staging migration and promotion, Railway deployment, and
+the final funded Testnet runs remain pending explicit approval. Historical
+Testnet links below are supporting evidence; they do not prove the final public
+release.
 
 ## Release candidate
 
 | Field | Prepared value |
 | --- | --- |
 | Repository | `webnxt-2030/ggg` |
-| Candidate `develop` revision | `04c14a93e28132f4c49375bffa3ba5d8109413b3` |
-| Candidate CI | [Successful run 35820347157](https://github.com/webnxt-2030/ggg/actions/runs/35820347157) |
+| SDK source revision | `313bc0ee2cb0d6d7117c10a18ad78c477d8a6297` |
+| Immutable SDK tag | [`escrow-sdk-v0.1.0`](https://github.com/webnxt-2030/ggg/tree/escrow-sdk-v0.1.0) |
+| Source CI | [Successful run 35827482104](https://github.com/webnxt-2030/ggg/actions/runs/35827482104) |
 | SDK package | `@ggg/escrow-sdk@0.1.0` |
-| npm state | Unpublished as of 2026-09-23 (`npm view` returned `E404`) |
+| npm state | Unpublished as of 2026-09-23; publish returned `E403` because interactive 2FA or a granular token allowed to bypass 2FA is required |
 | Network | Stellar Testnet / `Test SDF Network ; September 2015` |
 | Escrow WASM | `b704f577f1715d965f9ba24f2cebf49df52735d42c9a4cd2a93781d612a46dd9` |
 | Public app health URL | `https://app.ggg.quest/api/health` |
 | Current staging revision | `8647e5fa6fb6d5ba94cff7d8dd7974b3a2abc28d` (web and subscriber) |
 
-`04c14a9` is the prepared base, not the final release revision. The
-release-readiness branch upgrades the package and its direct workspace consumers
-to `@stellar/stellar-sdk@16.3.0`; a clean external npm install and production
-audit now report zero vulnerabilities. Replace the candidate revision with the
-reviewed `develop` merge revision before publication or staging promotion.
+`313bc0e` is the reviewed SDK source revision and the target of the immutable
+SDK tag. It upgrades the package and its direct workspace consumers to
+`@stellar/stellar-sdk@16.3.0`; a clean external npm install and production audit
+report zero vulnerabilities. The later staging promotion revision may add
+release evidence only, but must not change the tagged package or application
+source without repeating the package and deployment review.
 
 PR #324 is an active, unrelated feature PR against `develop` that changes SDK
 distribution behavior. It was explicitly excluded from this release on
@@ -46,15 +49,18 @@ bigint/stroop and BPS rules, deadlines, current-WASM compatibility, error
 codes, binding regeneration, and the standalone Node example. `LICENSE` is the
 MIT license with the same 2026 Artisam Labs attribution as the repository.
 
-`npm pack` produced `ggg-escrow-sdk-0.1.0.tgz` with these candidate values:
+`pnpm pack` produced `ggg-escrow-sdk-0.1.0.tgz` with these verified unpublished values.
+The packer removes the `prepack` lifecycle hook from the published manifest but
+preserves the package's runtime metadata, dependencies, exports, license,
+repository, and engine requirements:
 
 | Field | Value |
 | --- | --- |
-| Packed size | 14,533 bytes |
-| Unpacked size | 51,277 bytes |
+| Packed size | 14,595 bytes |
+| Unpacked size | 51,196 bytes |
 | Entries | 11 |
-| SHA-1 | `fb98df121412e54af6fe5f8bea0e06b3cb41f6dc` |
-| Integrity | `sha512-4rrtkyLWjpWI3uNHi702XGg5xOJJPlJOn3mOumanLgOAauyzYhnwMA9a+jmI6aSskRBoqYdm9W52qxm3AE1UcQ==` |
+| SHA-1 | `ef724b70ee3b692bde017c3f0f41c48438db6c51` |
+| Integrity | `sha512-0NNdR6kwdVY9x/ysssyDdsN5501E2XqPGokE9ZnhGo/s1P9/dFxLU9/31xqKjTXFvnVsgoRbwuG2I5+XFli1JA==` |
 
 The tarball contains only:
 
@@ -85,7 +91,7 @@ simulated join transaction, and validated externally signed XDR successfully.
 | `pnpm --filter @ggg/escrow-sdk build` | Passed |
 | `pnpm --filter @ggg/escrow-sdk test` | Passed: 25 tests |
 | `node examples/nodejs-escrow/smoke.mjs` | Passed in a disposable non-workspace consumer |
-| `npm publish --dry-run --access public --json` | Passed; reproduced the 11-file manifest and integrity above |
+| `npm publish ggg-escrow-sdk-0.1.0.tgz --access public --dry-run --json` | Passed twice; reproduced the 11-file manifest and integrity above |
 | Clean `npm install` of the tarball | Passed: 45 production packages added, 46 audited |
 | Clean `npm audit --omit=dev --audit-level=high` | Passed: zero vulnerabilities |
 | Workspace `pnpm audit --audit-level high` | Passed: no high or critical findings; 13 moderate and 1 low remain |
@@ -144,12 +150,13 @@ and [standalone Node Testnet paths](verification/issue-225-node-example-testnet.
 
 ## npm publication gate
 
-Do not run these commands until the release-readiness PR is reviewed, the exact
-revision is green, and explicit publication approval is given.
+The source review, exact-revision CI, immutable tag, and publication approval
+are complete. Do not retry the publish command until this integrity correction
+is reviewed and the publisher can complete npm 2FA.
 
 ```sh
-git fetch origin develop
-git rev-parse origin/develop
+git fetch origin tag escrow-sdk-v0.1.0
+git checkout --detach escrow-sdk-v0.1.0
 pnpm install --frozen-lockfile
 pnpm --filter @ggg/escrow-sdk build
 pnpm --filter @ggg/escrow-sdk test
@@ -163,14 +170,14 @@ external directory and rerun the example smoke. Record:
 
 | Publication evidence field | Status |
 | --- | --- |
-| Public npm version URL | Pending publication approval |
+| Public npm version URL | Pending publisher 2FA |
 | Registry tarball URL | Pending publication |
 | Registry SHA-1 and integrity | Pending publication; must match the approved tarball |
-| Reviewed source commit and immutable tag | Pending final dependency fix/review |
+| Reviewed source commit and immutable tag | `313bc0e`; `escrow-sdk-v0.1.0` |
 | Publish date and publisher account name | Pending publication |
 | Fresh `npm install @ggg/escrow-sdk@0.1.0` result | Pending publication |
 | Registry-installed Node example result | Pending publication |
-| Public CI run for the exact revision | Pending final revision |
+| Public CI run for the exact revision | [Run 35827482104](https://github.com/webnxt-2030/ggg/actions/runs/35827482104) passed |
 
 Required npm access: an account authorized to publish the public `@ggg` scope,
 an npm authentication method with publish permission, and any required 2FA/OTP
@@ -329,20 +336,21 @@ recorded.
 
 ## Blockers and smallest next approval
 
-1. The former external npm audit blocker is fixed and fully retested on the
-   release-readiness branch; review and green CI are still required before the
-   candidate can be called final.
+1. The former external npm audit blocker is fixed and fully retested. npm
+   publication now requires the publisher to complete interactive 2FA or use a
+   granular token explicitly allowed to bypass 2FA; no package version was
+   created by the rejected attempt.
 2. PR #324 is excluded; keep it unmerged while `develop` is frozen and the
    exact artifact is published and promoted.
-3. `staging` history must be reconciled into `develop` before an exact,
-   non-force fast-forward promotion is possible.
+3. `staging` history is reconciled into `develop`; reverify ancestry immediately
+   before the approved fast-forward promotion.
 4. The staging backup method and current migration state remain environment
    gates; no staging database operation was performed during preparation.
 5. npm publication, staging promotion, Railway changes/deployment, and funded
-   Testnet transactions remain unperformed and require their own approvals.
+   Testnet transactions remain unperformed. Only npm publication is currently
+   approved.
 
-The current approval covers preparing, committing, pushing, and opening the
-release-readiness PR, including the dependency-only Stellar SDK upgrade and the
-no-content staging-history reconciliation. It does **not** cover publication or
-deployment. Only after the exact reviewed revision is green should npm
-publication become the next external approval gate.
+The current approval covers the immutable SDK tag and npm publication. The tag
+was pushed; publication was rejected before package creation because npm needs
+interactive 2FA or an eligible granular token. It does **not** cover staging
+migration/promotion, Railway changes/deployment, or funded Testnet activity.
