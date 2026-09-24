@@ -1,10 +1,11 @@
 # Instawards release and evidence record
 
-Status: **SDK published; deployment pending**. The corrected package is public
-on npm from the reviewed immutable source tag. The staging migration and
-promotion, Railway deployment, and the final funded Testnet runs remain pending
-explicit approval. Historical Testnet links below are supporting evidence; they
-do not prove the final deployed release.
+Status: **SDK published; staging deployed**. The corrected package is public
+on npm from the reviewed immutable source tag. The staging database migrations,
+exact-revision promotion, matching WASM configuration, and Railway deployment
+are complete. The final funded Testnet runs remain pending explicit approval.
+Historical Testnet links below are supporting evidence; they do not prove the
+final deployed release.
 
 ## SDK release
 
@@ -19,7 +20,10 @@ do not prove the final deployed release.
 | Network | Stellar Testnet / `Test SDF Network ; September 2015` |
 | Escrow WASM | `b704f577f1715d965f9ba24f2cebf49df52735d42c9a4cd2a93781d612a46dd9` |
 | Public app health URL | `https://app.ggg.quest/api/health` |
-| Current staging revision | `8647e5fa6fb6d5ba94cff7d8dd7974b3a2abc28d` (web and subscriber) |
+| Current staging revision | `b50ff27d7836cfec662097f3ad5eff084d57c097` (web and subscriber) |
+| Pre-migration backup | `issue-226-pre-migration-20260923` (`8c12d727-0f52-4118-846b-2dc160c3cf6d`) |
+| Railway deployments | Web `1a2af8c2-4b7d-4251-99c7-6f6cc684038e`; subscriber `77dadfbc-6452-413f-895d-943b0ca4e3ab` |
+| Post-deploy health | HTTP 200 from `https://app.ggg.quest/api/health` at `2026-09-24T05:26:14.414Z` |
 
 `313bc0e` is the superseded reviewed candidate and remains the target of the
 immutable `escrow-sdk-v0.1.0` tag. That tag will not be rewritten. The corrected
@@ -34,9 +38,9 @@ source without repeating the package and deployment review.
 
 PR #324 is an active, unrelated feature PR against `develop` that changes SDK
 distribution behavior. It was explicitly excluded from this release on
-2026-09-23 and must not merge until the #226 release revision is frozen. If it
-does merge first, the final revision, tarball, tests, and evidence must be
-regenerated.
+2026-09-23. The staged #226 release is frozen at `b50ff27`; any later change
+from #324 is outside this evidence record and requires its own review before a
+subsequent staging promotion.
 
 ## Package and tarball verification
 
@@ -190,7 +194,7 @@ an npm authentication method with publish permission, and any required 2FA/OTP
 or trusted-publishing configuration. Never place the token or OTP in a command,
 log, screenshot, shell history, or repository file.
 
-## Staging database, migration, and rollback plan
+## Staging database, migration, and rollback record
 
 The two #224 migrations are:
 
@@ -203,29 +207,18 @@ cannot read the new schema, and new code cannot read the old schema. Use a
 coordinated maintenance window; do not allow writes between migration and the
 new web/subscriber deployment.
 
-Before approval:
+On 2026-09-23 Railway backup `issue-226-pre-migration-20260923`
+(`8c12d727-0f52-4118-846b-2dc160c3cf6d`) was created for the staging Postgres
+service. Railway reports it present with no expiry; a destructive restore test
+was not performed.
 
-- upgrade the local Railway CLI from 5.23.2 to a version supporting native
-  Postgres backup commands (5.47.1+ is preferred by the current Railway
-  guidance), or select and document an equivalent dashboard backup path;
-- confirm backup/PITR eligibility for the staging Postgres service, currently a
-  Postgres 18 `postgres-ssl` image;
-- record the current database revision and confirm both #224 migrations are
-  absent before the release;
-- agree on a release window and stop or prevent writes.
-
-After explicit migration approval:
-
-1. Create a named pre-migration backup, record its ID/time/coverage, lock it if
-   supported, and verify it is restorable.
-2. From the exact reviewed worktree, run only `prisma migrate deploy` using
-   variables injected by Railway; never print `DATABASE_URL`.
-3. Verify both migrations are applied and inspect representative legacy rows
-   for ordered `[first, second, third]` conversion.
-4. Configure `ESCROW_WASM_HASH=b704...a46dd9` on `ggg-app` with Railway's
-   `--stdin --skip-deploys` path so the variable change does not create an
-   uncoordinated deployment.
-5. Immediately perform the exact staging promotion below.
+On 2026-09-24 both application services were stopped before migration. The two
+migrations above were then applied from exact reviewed revision `b50ff27` using
+Railway-injected variables. Prisma reports all 11 migrations applied and the
+schema up to date. A post-migration check found 74 tournaments and zero invalid
+payout vectors: every vector has 1–10 positive ranks totaling 10,000 BPS.
+`ESCROW_WASM_HASH` was set to the reviewed `b704...a46dd9` value without an
+early deployment, immediately before the coordinated promotion.
 
 Rollback after migration is a database recovery, not merely a code redeploy.
 Stop writes, restore the named pre-migration backup, verify the old fixed-rank
@@ -235,58 +228,51 @@ reverse migration is unsafe once any 1-, 2-, or 4–10-rank tournament exists.
 
 ## Exact develop-to-staging promotion
 
-Both Railway services are confirmed to track `staging`. They currently run
-`8647e5fa...` successfully. The Git branches are not presently fast-forward
-compatible: `origin/staging` is at `8647e5fa...`, with five staging-only release
-merge commits, while candidate `origin/develop` is 35 commits ahead of their
-merge base.
+The staging-only release history was reconciled into `develop` before review,
+making the branches fast-forward compatible. On 2026-09-24 `staging` was
+fast-forwarded without force from `8647e5fa...` directly to reviewed, green
+revision `b50ff27d7836cfec662097f3ad5eff084d57c097`. A final remote check
+confirmed `refs/heads/staging` at that exact revision.
 
-To deploy the exact reviewed commit without force-pushing or creating a new,
-unreviewed staging merge commit:
-
-1. Before final review, merge the staging-only history back into `develop` via
-   a normal reviewed PR. Those five commits are release merge commits; confirm
-   this reconciliation produces no content changes.
-2. Merge the dependency fix and these evidence docs into `develop`; call the
-   resulting reviewed, green commit `RELEASE_REVISION`.
-3. Freshly fetch both branches and require
-   `git merge-base --is-ancestor origin/staging RELEASE_REVISION` and
-   `git rev-parse origin/develop == RELEASE_REVISION`.
-4. Record the `RELEASE_REVISION` commit and tree IDs, CI links, tarball
-   integrity, pre-release staging revision, and database backup ID.
-5. After the migration and deferred WASM-variable configuration, request the
-   explicit promotion approval and fast-forward `staging` directly to
-   `RELEASE_REVISION`. Do not use a merge commit, cherry-pick, or force push.
-6. Capture the web and subscriber deployment IDs created by that branch update
-   and require both exact commit hashes and terminal `SUCCESS` states.
+Railway web deployment `1a2af8c2-4b7d-4251-99c7-6f6cc684038e` reached
+`SUCCESS` and is running the exact revision. The first subscriber deployment,
+`cff09ae7-b52e-4834-85f9-88c831de9d4f`, crashed because the Railway build
+command did not build the workspace SDK's `dist` output. The build command was
+corrected to build `@goodgameguild/escrow-sdk`, and replacement deployment
+`77dadfbc-6452-413f-895d-943b0ca4e3ab` reached `SUCCESS` and is running the
+same exact revision. Subscriber polling continues normally; legacy contracts
+with older WASM are isolated as unsupported rather than crashing the process.
 
 The active Railway web configuration differs from the committed
 `apps/web/railway.json`: the live deployment currently has no Railway health
 check and runs a dashboard-configured Railpack build/predeploy command. Verify
 the effective commands before promotion and use the public health request as a
-mandatory post-deploy gate. The subscriber and web must deploy the same commit.
+mandatory post-deploy gate. The subscriber's effective build command was also
+corrected during this release; `apps/subscriber/railway.json` now preserves the
+SDK build step for future deployments. The subscriber and web deploy the same
+commit.
 
 ## Coordinated staging and Testnet sequence
 
-These are separate approval gates and must run in this order:
+These are separate approval gates and run in this order:
 
-1. Identify and record the exact reviewed `develop` revision.
-2. Take and verify the staging database backup.
-3. Apply the two #224 migrations from that exact revision.
-4. Configure the matching `b704...a46dd9` WASM hash without an early deploy.
-5. Fast-forward `staging` and deploy web and subscriber together from it.
-6. Verify both deployment IDs/revisions and public
+1. [x] Identify and record exact reviewed `develop` revision `b50ff27`.
+2. [x] Take and verify the staging database backup.
+3. [x] Apply the two #224 migrations from that exact revision.
+4. [x] Configure the matching `b704...a46dd9` WASM hash without an early deploy.
+5. [x] Fast-forward `staging` and deploy web and subscriber from it.
+6. [x] Verify both deployment IDs/revisions and public
    `GET https://app.ggg.quest/api/health` HTTP 200.
-7. On one new instance, run create -> funded join -> referee settlement ->
+7. [ ] On one new instance, run create -> funded join -> referee settlement ->
    payout and confirm state, events, balances, and Explorer transactions.
-8. On a second new instance, run delegated deadline refund at/after the
+8. [ ] On a second new instance, run delegated deadline refund at/after the
    inclusive deadline. On a third, run cancellation then refund claim.
-9. Record public npm, source/CI, health, deployment revision, contract IDs,
+9. [ ] Record public npm, source/CI, health, deployment revision, contract IDs,
    transaction, payout/refund, and Stellar Explorer evidence.
 
-The current stale deployment returned HTTP 200 at `app.ggg.quest/api/health`
-on 2026-09-23; `ggg.quest/api/health` returned 404 because that host is the
-landing site. This is a baseline only and must not be reused as final evidence.
+The promoted deployment returned HTTP 200 at `app.ggg.quest/api/health` after
+both services reached their healthy replacement states. `ggg.quest/api/health`
+is not the application endpoint; that host is the landing site.
 
 ## Live Testnet evidence checklist
 
