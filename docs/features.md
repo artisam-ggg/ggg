@@ -2,9 +2,11 @@
 
 Running log of shipped features (append one entry per change), per the auto-dev workflow.
 
-## Issue #226 — Release readiness (SDK published; deployment pending)
+## Issue #226 — Release readiness (SDK published and staging deployed)
 
-Prepared and published [`@goodgameguild/escrow-sdk@0.1.0`](https://www.npmjs.com/package/@goodgameguild/escrow-sdk/v/0.1.0) from exact reviewed revision `26f41f0` and immutable tag `goodgameguild-escrow-sdk-v0.1.0`. The registry artifact matches the reviewed tarball integrity, installs in a clean external consumer, passes the standalone SDK smoke test, and audits with zero production vulnerabilities. Local SDK, contract, subscriber, web, integration, typecheck, lint, build, audit, and health checks pass. Staging migration/promotion, Railway deployment, and final funded Testnet evidence remain approval-gated and are not claimed as shipped. See [the release and evidence record](instawards-evidence.md).
+Prepared and published [`@goodgameguild/escrow-sdk@0.1.0`](https://www.npmjs.com/package/@goodgameguild/escrow-sdk/v/0.1.0) from exact reviewed revision `26f41f0` and immutable tag `goodgameguild-escrow-sdk-v0.1.0`. The registry artifact matches the reviewed tarball integrity, installs in a clean external consumer, passes the standalone SDK smoke test, and audits with zero production vulnerabilities. Local SDK, contract, subscriber, web, integration, typecheck, lint, build, audit, and health checks pass. The two #224 migrations were applied after a named Railway backup, `staging` was fast-forwarded without force to reviewed revision `b50ff27`, and both Railway services now run that exact revision with the matching escrow WASM hash. The public health endpoint returned HTTP 200 after deployment. Final funded Testnet evidence remains separately approval-gated and is not yet claimed. See [the release and evidence record](instawards-evidence.md).
+
+The subscriber initially crashed because its Railway build command installed the workspace package without building its `dist` output. The live command was corrected and the replacement deployment is healthy; the repository Railway configuration now builds `@goodgameguild/escrow-sdk` before starting the subscriber so future deployments retain that fix.
 
 Corrected the SDK scope from the unavailable `@ggg` organization to the project-owned `@goodgameguild` organization across package metadata, workspace consumers, CI, examples, and documentation. The original Git tag remains immutable as a superseded candidate; the published release uses the new scope-specific tag created after merge and exact-revision CI.
 
