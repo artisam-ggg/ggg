@@ -2,6 +2,10 @@
 
 Running log of shipped features (append one entry per change), per the auto-dev workflow.
 
+## Issue #309 — Epic 3 GitBook closeout
+
+Added a public SDK integration guide for `@goodgameguild/escrow-sdk@0.1.0` covering Node.js/Testnet setup, constructor deployment, the build → simulate/assemble → external sign → submit → confirm boundary, joins, 1–10 winner settlement, reads, cancellation and delegated deadline refunds, safe pending-transaction recovery, and Testnet resets. Refreshed the GitBook landing page, D2/D3 deliverables, Weeks 3–4, evidence index, reviewer path, flow/timeline, metrics, and changelog with the final npm, public source, matching deployment, health, demo, CI, contract, transaction, payout, and refund evidence. Retained the existing `gitbook-docs.yaml` space mapping. Live GitBook sync, desktop/mobile rendering, and published-link verification remain post-merge acceptance checks before #309 closes.
+
 ## Issue #226 — Release readiness (SDK published and staging deployed)
 
 Prepared and published [`@goodgameguild/escrow-sdk@0.1.0`](https://www.npmjs.com/package/@goodgameguild/escrow-sdk/v/0.1.0) from exact reviewed revision `26f41f0` and immutable tag `goodgameguild-escrow-sdk-v0.1.0`. The registry artifact matches the reviewed tarball integrity, installs in a clean external consumer, passes the standalone SDK smoke test, and audits with zero production vulnerabilities. Local SDK, contract, subscriber, web, integration, typecheck, lint, build, audit, and health checks pass. The two #224 migrations were applied after a named Railway backup, and both Railway services run the reviewed application tree with the matching escrow WASM hash. The public health endpoint returned HTTP 200 after deployment.

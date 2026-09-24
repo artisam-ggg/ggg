@@ -11,19 +11,18 @@ is published at a durable public URL and is accessible without authentication.
 
 | Field | Prepared value |
 | --- | --- |
-| Repository | `webnxt-2030/ggg` |
+| Public repository | [`artisam-ggg/ggg`](https://github.com/artisam-ggg/ggg) |
 | SDK source revision | `26f41f059994b33ab09085f4de09e4431069c391` |
-| Immutable SDK tag | [`goodgameguild-escrow-sdk-v0.1.0`](https://github.com/webnxt-2030/ggg/tree/goodgameguild-escrow-sdk-v0.1.0); the earlier [`escrow-sdk-v0.1.0`](https://github.com/webnxt-2030/ggg/tree/escrow-sdk-v0.1.0) candidate is superseded and was not moved |
-| Source CI | Exact post-merge [run 35843403207](https://github.com/webnxt-2030/ggg/actions/runs/35843403207) passed |
-| Final application CI | Promotion [run 35961615844](https://github.com/webnxt-2030/ggg/actions/runs/35961615844) and exact post-reconciliation `develop` [run 35963253498](https://github.com/webnxt-2030/ggg/actions/runs/35963253498) passed |
+| Immutable SDK tag | [`goodgameguild-escrow-sdk-v0.1.0`](https://github.com/artisam-ggg/ggg/tree/goodgameguild-escrow-sdk-v0.1.0); the superseded private candidate tag was not published to the public mirror |
+| Public release CI | Exact public [`develop` run 35977199117](https://github.com/artisam-ggg/ggg/actions/runs/35977199117) and [`staging` run 35977199084](https://github.com/artisam-ggg/ggg/actions/runs/35977199084) passed, including SDK package verification |
 | SDK package | `@goodgameguild/escrow-sdk@0.1.0` |
 | npm state | [Published publicly](https://www.npmjs.com/package/@goodgameguild/escrow-sdk/v/0.1.0) on 2026-09-23 by `0xhakua`, a verified owner of the `goodgameguild` organization |
 | Network | Stellar Testnet / `Test SDF Network ; September 2015` |
 | Escrow WASM | `b704f577f1715d965f9ba24f2cebf49df52735d42c9a4cd2a93781d612a46dd9` |
 | Public app health URL | `https://app.ggg.quest/api/health` |
-| Current staging revision | `2f95987877166907e9f449e2f3006f0af78eb768` (web and subscriber); its tree exactly matches reviewed `develop` revision `673269f64c5aec4c35dcb176f7662719cff06bd4` |
+| Final application evidence revision | `15902cfdd626d0d5e6629f10b01990dc9dc5cd4c`, synchronized across private/public `develop` and `staging`; the application tree matches the funded run because later changes were evidence documentation only |
 | Pre-migration backup | `issue-226-pre-migration-20260923` (`8c12d727-0f52-4118-846b-2dc160c3cf6d`) |
-| Railway deployments | Web `3c910613-65f1-44ef-91b9-87f50c0a0ae6`; subscriber `f7ae4591-aa06-4ba1-b45d-0d96e17420fd`, both `SUCCESS` |
+| Evidence deployments | Web `f5e76302-57bf-45b1-a569-f54cb4a4b6bb`; subscriber `465c460d-c91e-4cf0-9b98-78b63963a2a7`, both `SUCCESS` on `15902cf` |
 | Post-deploy health | HTTP 200 from `https://app.ggg.quest/api/health`, rechecked after the final promotion and again before the live run |
 | Demo video | [Edited full-flow Testnet recording](https://drive.google.com/file/d/1NvTigSXywA8Uk5PpIhEwdjDpWx_DfKmd/view?usp=sharing); anonymous direct access returned HTTP 200, `video/mp4`, and `Content-Length: 52969934` on 2026-09-24 |
 
@@ -40,10 +39,11 @@ source without repeating the package and deployment review.
 
 PR #324 is an active, unrelated feature PR against `develop` that changes SDK
 distribution behavior. It was explicitly excluded from this release on
-2026-09-23. The staged #226 application tree is frozen at reviewed revision
-`673269f`; staging promotion merge `2f95987` has that identical tree. Any later
-change from #324 is outside this evidence record and requires its own review
-before a subsequent staging promotion.
+2026-09-23. The funded run used the reviewed application tree at `673269f` via
+staging promotion `2f95987`. Final evidence revision `15902cf` retains that
+application tree and adds the subscriber configuration/evidence record. Any
+later change from #324 is outside this evidence record and requires its own
+review before a subsequent staging promotion.
 
 ## Package and tarball verification
 
@@ -189,7 +189,7 @@ the local tarball—and reran the example smoke with these results:
 | Publish date and publisher account name | `2026-09-23T09:56:09.569Z`; `0xhakua` |
 | Fresh `npm install @goodgameguild/escrow-sdk@0.1.0` result | Passed: 45 packages added, 46 audited, zero vulnerabilities |
 | Registry-installed Node example result | Passed: public API, configuration, simulated join construction, and signed-XDR validation |
-| Public CI run for the exact revision | [Run 35843403207](https://github.com/webnxt-2030/ggg/actions/runs/35843403207) passed |
+| Public CI on the final published repository revision | [`develop` run 35977199117](https://github.com/artisam-ggg/ggg/actions/runs/35977199117) and [`staging` run 35977199084](https://github.com/artisam-ggg/ggg/actions/runs/35977199084) passed |
 
 Required npm access: an account authorized to publish the public
 `@goodgameguild` scope,
@@ -256,6 +256,14 @@ History-only PR #331 reconciled that promotion commit back into `develop` at
 `08524a9`; post-merge CI passed, `staging` is an ancestor of `develop`, and the
 two branch tips still have identical trees. The reconciliation did not trigger
 another Railway deployment.
+
+Final evidence PR #332 merged at `15902cf`. Private `staging` was then
+fast-forwarded without a merge commit, producing successful web deployment
+`f5e76302-57bf-45b1-a569-f54cb4a4b6bb` and subscriber deployment
+`465c460d-c91e-4cf0-9b98-78b63963a2a7`; the public health endpoint returned
+HTTP 200. The same exact revision and immutable SDK tag were fast-forwarded to
+the public [`artisam-ggg/ggg`](https://github.com/artisam-ggg/ggg) mirror, where
+both public branch CI runs passed.
 
 The active Railway web configuration differs from the committed
 `apps/web/railway.json`: the live deployment currently has no Railway health
@@ -383,7 +391,7 @@ Contract:
 - [x] Distinct cancellation instance, join, cancellation, refund claim/event,
       recipient amount, and zero pool.
 - [x] Public Stellar Expert Testnet links for every transaction and contract.
-- [x] Public [SDK README](https://github.com/webnxt-2030/ggg/tree/goodgameguild-escrow-sdk-v0.1.0/packages/escrow-sdk), [Node example](https://github.com/webnxt-2030/ggg/tree/goodgameguild-escrow-sdk-v0.1.0/examples/nodejs-escrow), and exact CI links.
+- [x] Public [SDK README](https://github.com/artisam-ggg/ggg/tree/goodgameguild-escrow-sdk-v0.1.0/packages/escrow-sdk), [Node example](https://github.com/artisam-ggg/ggg/tree/goodgameguild-escrow-sdk-v0.1.0/examples/nodejs-escrow), and exact public CI links.
 - [x] [Edited full-flow demo recording](https://drive.google.com/file/d/1NvTigSXywA8Uk5PpIhEwdjDpWx_DfKmd/view?usp=sharing)
       published at a durable public URL; anonymous viewer and direct MP4 access
       were verified without authentication.
