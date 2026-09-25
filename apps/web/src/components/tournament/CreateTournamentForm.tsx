@@ -635,7 +635,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       {/* Prize Split */}
       <fieldset className="mt-6">
         <legend className={labelClass}>Prize Split (%)</legend>
-        <div className="mb-4 max-w-sm">
+        <div className="mb-4 w-full max-w-sm">
           <label className={labelClass} htmlFor="distributionMode">
             Payout calculation
           </label>

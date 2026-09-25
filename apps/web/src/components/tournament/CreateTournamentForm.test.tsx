@@ -261,7 +261,9 @@ describe("CreateTournamentForm", () => {
 
   it("shows the equal-remainder mode and split by default", () => {
     render(<CreateTournamentForm expectedPassphrase="P" />);
-    expect(screen.getByLabelText(/payout calculation/i)).toHaveValue("equal");
+    const calculation = screen.getByLabelText(/payout calculation/i);
+    expect(calculation).toHaveValue("equal");
+    expect(calculation.parentElement).toHaveClass("w-full", "max-w-sm");
     expect(screen.getByText(/6000 \/ 2000 \/ 2000 bps/i)).toBeInTheDocument();
   });
 
