@@ -7,8 +7,8 @@ export function isProtectedPath(pathname: string): boolean {
   // /tournaments/[id] is public-read; everything else under /tournaments is protected
   if (pathname === "/tournaments" || pathname === "/tournaments/") return true;
   if (pathname === "/tournaments/new" || pathname.startsWith("/tournaments/new/")) return true;
-  if (/^\/tournaments\/[^/]+\/settle$/.test(pathname)) return true;
-  // Single-segment /tournaments/[id] and any deeper non-settle paths are public
+  // Tournament pages, including the referee settlement console, are public.
+  // The settlement API validates the connected referee wallet and signed XDR.
   if (/^\/tournaments\/[^/]+/.test(pathname)) return false;
   if (pathname.startsWith("/admin")) return true;
   return false;

@@ -71,9 +71,12 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
     return err("INVALID_REQUEST", parsed.error.issues[0]?.message ?? "Invalid input", 400);
   }
 
-  // 5. A player authorizes a join with their wallet, not a GGG account.
+  // 5. Players authorize joins and referees authorize finalization with their
+  // wallet. The service validates the exact prepared XDR; the contract then
+  // enforces the signer's authorization on-chain.
   let userId: string | null = null;
-  if (parsed.data.intent !== "join") {
+  const walletAuthorized = parsed.data.intent === "join" || parsed.data.intent === "finalize";
+  if (!walletAuthorized) {
     try {
       userId = (await requireUser(undefined, false)).id;
     } catch (e) {
@@ -94,8 +97,8 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   // 7. Submit with idempotency guarantee.
   try {
     const data = await withIdempotency(
-      parsed.data.intent === "join"
-        ? `${id}:join:${createHash("sha256").update(parsed.data.signedXdr).digest("hex")}`
+      walletAuthorized
+        ? `${id}:${parsed.data.intent}:${createHash("sha256").update(parsed.data.signedXdr).digest("hex")}`
         : parsed.data.intent === "deploy"
           ? `${id}:${userId}:deploy`
           : `${id}:${userId}:${parsed.data.intent}:${idemKey}`,
