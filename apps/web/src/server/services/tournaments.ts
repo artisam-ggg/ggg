@@ -1,21 +1,18 @@
 import { prisma } from "@/lib/db";
 import { env } from "@/lib/env";
+import { EscrowSdkError, type ConfirmedEscrowTransaction } from "@goodgameguild/escrow-sdk";
 import {
-  buildCancelTx,
-  buildDeployInitializeTx,
-  buildFinalizeTx,
-  buildClaimRefundTx,
-  buildJoinTx,
-  signedTransactionHash,
-  explorerContractUrl,
-  explorerTxUrl,
-  lookupDeployment,
-  resolveSacAddress,
-  StellarError,
-  submitSignedXdr,
-  validateDeployXdr,
-  validateJoinXdr,
-} from "@/lib/stellar";
+  escrowSdk,
+  escrowToken,
+  escrowVersion,
+  requireCurrentEscrow,
+  savePrepared,
+  findPrepared,
+  forgetPrepared,
+  deploymentSalt,
+  CURRENT_ESCROW_WASM_HASH,
+} from "@/lib/stellar/escrow-sdk";
+import { explorerContractUrl, explorerTxUrl, StellarError } from "@/lib/stellar";
 
 import type {
   CreateTournamentInput,
@@ -81,7 +78,13 @@ export async function createTournament(
   input: CreateTournamentInput,
   userId: string,
 ): Promise<{ tournamentId: string; unsignedXdr: string; network: string }> {
-  const tokenAddr = resolveSacAddress(input.asset);
+  if (env.ESCROW_WASM_HASH?.toLowerCase() !== CURRENT_ESCROW_WASM_HASH) {
+    throw new EscrowSdkError(
+      "INVALID_INPUT",
+      "The configured escrow WASM is not the supported SDK ABI",
+    );
+  }
+  const tokenAddr = escrowToken(input.asset);
 
   const tournament = await prisma.tournament.create({
     data: {
@@ -89,9 +92,7 @@ export async function createTournament(
       gameTitle: input.gameTitle,
       asset: input.asset,
       entryFee: input.entryFee,
-      firstBps: input.distributionBps[0],
-      secondBps: input.distributionBps[1],
-      thirdBps: input.distributionBps[2],
+      distributionBps: input.distributionBps,
       organizerId: userId,
       organizerAddr: input.organizerAddress,
       refereeAddr: input.refereeAddress,
@@ -102,16 +103,15 @@ export async function createTournament(
     },
   });
 
-  const { xdr: unsignedXdr } = await buildDeployInitializeTx({
-    tournamentId: tournament.id,
-    organizerAddress: input.organizerAddress,
-    refereeAddress: input.refereeAddress,
-    tokenAddr,
+  const built = await escrowSdk().buildDeploy(input.organizerAddress, {
+    referee: input.refereeAddress,
+    token: tokenAddr,
     entryFee: input.entryFee,
     distributionBps: input.distributionBps,
     settlementDeadline: BigInt(input.settlementDeadline),
+    salt: deploymentSalt(tournament.id),
   });
-
+  const { unsignedXdr } = await savePrepared(tournament.id, built);
   return { tournamentId: tournament.id, unsignedXdr, network: env.STELLAR_NETWORK };
 }
 
@@ -144,7 +144,7 @@ function requireFutureSettlementDeadline(deadline: Date | null): Date {
 export async function submitTournamentTx(
   id: string,
   input: SubmitInput,
-  userId: string,
+  userId: string | null,
 ): Promise<SubmitTxResult> {
   const submittedAt = new Date();
   const tournament = await prisma.tournament.findUnique({ where: { id } });
@@ -160,7 +160,15 @@ export async function submitTournamentTx(
     throw Object.assign(new Error("Forbidden"), { status: 403 });
   }
 
-  let recoveredDeployment: Awaited<ReturnType<typeof submitSignedXdr>> | null = null;
+  const sdk =
+    input.intent === "deploy"
+      ? escrowSdk()
+      : tournament.contractId
+        ? await requireCurrentEscrow(tournament.contractId)
+        : escrowSdk();
+  const built = await findPrepared(id, input.signedXdr, input.intent);
+  sdk.validateSignedXdr(input.signedXdr, built, env.NETWORK_PASSPHRASE);
+  let recoveredDeployment: ConfirmedEscrowTransaction | null = null;
   if (input.intent === "deploy") {
     if (tournament.status !== "DRAFT" || tournament.contractId || tournament.deployTxHash) {
       throw Object.assign(new Error("Tournament has already been deployed"), { status: 409 });
@@ -174,29 +182,23 @@ export async function submitTournamentTx(
     if (!tournament.tokenAddr) {
       throw Object.assign(new Error("Tournament is missing its escrow token"), { status: 409 });
     }
-    validateDeployXdr(input.signedXdr, {
-      tournamentId: tournament.id,
-      organizerAddress: tournament.organizerAddr,
-      refereeAddress: tournament.refereeAddr,
-      tokenAddr: tournament.tokenAddr,
-      entryFee: tournament.entryFee,
-      distributionBps: [tournament.firstBps, tournament.secondBps, tournament.thirdBps],
-      settlementDeadline: BigInt(Math.floor(settlementDeadline.getTime() / 1000)),
-    });
-
-    const currentHash = signedTransactionHash(input.signedXdr);
+    if (built.source !== tournament.organizerAddr) {
+      throw Object.assign(new Error("Deployment signer differs from organizer"), { status: 403 });
+    }
+    const currentHash = built.hash;
     const pendingHash = tournament.pendingDeployTxHash;
     if (pendingHash) {
-      const prior = await lookupDeployment(pendingHash);
-      if (prior?.status === "SUCCESS") {
+      const prior = await sdk.lookup(pendingHash, "deploy");
+      if (prior.status === "SUCCESS") {
         recoveredDeployment = prior;
-      } else if (prior?.status === "FAILED" && pendingHash === currentHash) {
+      } else if (prior.status === "FAILED" && pendingHash === currentHash) {
         await prisma.tournament.update({ where: { id }, data: { pendingDeployTxHash: null } });
+        await forgetPrepared(pendingHash);
         throw new StellarError("TX_FAILED", "Transaction failed on-chain", {
           txHash: pendingHash,
           retryable: false,
         });
-      } else if (!prior && pendingHash !== currentHash) {
+      } else if (prior.status === "PENDING" && pendingHash !== currentHash) {
         throw new StellarError("TX_TIMEOUT", "Previous deployment is still unconfirmed", {
           txHash: pendingHash,
           retryable: true,
@@ -221,8 +223,8 @@ export async function submitTournamentTx(
     if (tournament.status !== "ACTIVE" || !tournament.contractId) {
       throw Object.assign(new Error("Tournament is not open for joining"), { status: 409 });
     }
-    joinPlayer = validateJoinXdr(input.signedXdr, { contractId: tournament.contractId });
-    joinTxHash = signedTransactionHash(input.signedXdr);
+    joinPlayer = built.source;
+    joinTxHash = built.hash;
     const submission = await prisma.joinSubmission.upsert({
       where: { txHash: joinTxHash },
       create: {
@@ -236,17 +238,24 @@ export async function submitTournamentTx(
     joinSubmittedAt = submission.submittedAt;
   }
 
-  let result: Awaited<ReturnType<typeof submitSignedXdr>>;
+  let result: ConfirmedEscrowTransaction;
   try {
-    result = recoveredDeployment ?? (await submitSignedXdr(input.signedXdr, input.intent));
+    result =
+      recoveredDeployment ?? (await sdk.submit(input.signedXdr, built, env.NETWORK_PASSPHRASE));
   } catch (error) {
-    if (input.intent === "deploy" && error instanceof StellarError && error.retryable === false) {
-      const currentHash = signedTransactionHash(input.signedXdr);
-      const landed = await lookupDeployment(currentHash);
-      if (landed?.status === "SUCCESS") {
+    if (
+      input.intent === "deploy" &&
+      error instanceof EscrowSdkError &&
+      error.code === "SUBMIT_REJECTED"
+    ) {
+      const currentHash = built.hash;
+      const landed = await sdk.lookup(currentHash, "deploy");
+      if (landed.status === "SUCCESS") {
         result = landed;
-      } else if (landed?.status === "FAILED" || tournament.pendingDeployTxHash !== currentHash) {
+      } else if (landed.status === "FAILED" || tournament.pendingDeployTxHash !== currentHash) {
+        // The fetched row is pre-submit: only an existing same-hash retry stays pending.
         await prisma.tournament.update({ where: { id }, data: { pendingDeployTxHash: null } });
+        await forgetPrepared(currentHash);
         throw error;
       } else {
         throw new StellarError("TX_TIMEOUT", "Deployment result is still unconfirmed", {
@@ -266,6 +275,7 @@ export async function submitTournamentTx(
     if (input.intent === "deploy") {
       await prisma.tournament.update({ where: { id }, data: { pendingDeployTxHash: null } });
     }
+    await forgetPrepared(built.hash);
     // Do NOT mutate tournament to any success state.
     throw new StellarError("TX_FAILED", "Transaction failed on-chain", {
       txHash: result.hash,
@@ -288,6 +298,8 @@ export async function submitTournamentTx(
         deadlineConfirmedAt: new Date(),
       },
     });
+    await forgetPrepared(built.hash);
+    if (result.hash !== built.hash) await forgetPrepared(result.hash);
     return {
       txHash: result.hash,
       contractId: updated.contractId,
@@ -301,6 +313,7 @@ export async function submitTournamentTx(
       where: { id },
       data: { status: "CANCELLED", cancelledAt: new Date() },
     });
+    await forgetPrepared(built.hash);
     return {
       txHash: result.hash,
       status: updated.status,
@@ -313,6 +326,7 @@ export async function submitTournamentTx(
       where: { id },
       data: { status: "FINISHED", finalizedAt: new Date() },
     });
+    await forgetPrepared(built.hash);
     return {
       txHash: result.hash,
       status: updated.status,
@@ -344,6 +358,7 @@ export async function submitTournamentTx(
     }
   }
 
+  await forgetPrepared(built.hash);
   return {
     txHash: result.hash,
     status: tournament.status,
@@ -431,11 +446,8 @@ export async function buildJoin(
       status: 409,
     });
   }
-  const { xdr, network } = await buildJoinTx({
-    contractId: t.contractId,
-    playerAddress,
-  });
-  return { unsignedXdr: xdr, network };
+  const sdk = await requireCurrentEscrow(t.contractId);
+  return savePrepared(id, await sdk.buildJoin(playerAddress));
 }
 
 export async function buildRefundClaim(
@@ -454,12 +466,8 @@ export async function buildRefundClaim(
       status: 409,
     });
   }
-  const { xdr, network } = await buildClaimRefundTx({
-    contractId: t.contractId,
-    playerAddress,
-    submitterAddress,
-  });
-  return { unsignedXdr: xdr, network };
+  const sdk = await requireCurrentEscrow(t.contractId);
+  return savePrepared(id, await sdk.buildClaimRefund(submitterAddress, playerAddress));
 }
 
 export async function buildFinalize(
@@ -480,22 +488,21 @@ export async function buildFinalize(
   if (t.status !== "ACTIVE" || !t.contractId) {
     throw Object.assign(new Error("Tournament is not finalizable"), { status: 409 });
   }
+  if (input.winners.length !== t.distributionBps.length) {
+    throw Object.assign(new Error("Winner count must match the tournament payout split"), {
+      status: 409,
+    });
+  }
   const registered = new Set(t.participants.map((p) => p.playerAddr));
-  for (const addr of [input.first, input.second, input.third]) {
+  for (const addr of input.winners) {
     if (!registered.has(addr)) {
       throw Object.assign(new Error(`Winner ${addr} is not a registered participant`), {
         status: 422,
       });
     }
   }
-  const { xdr, network } = await buildFinalizeTx({
-    contractId: t.contractId,
-    refereeAddress: t.refereeAddr,
-    first: input.first,
-    second: input.second,
-    third: input.third,
-  });
-  return { unsignedXdr: xdr, network };
+  const sdk = await requireCurrentEscrow(t.contractId);
+  return savePrepared(id, await sdk.buildFinalize(t.refereeAddr, input.winners));
 }
 
 export async function buildCancel(
@@ -516,11 +523,8 @@ export async function buildCancel(
       status: 409,
     });
   }
-  const { xdr, network } = await buildCancelTx({
-    contractId: t.contractId,
-    organizerAddress: t.organizerAddr,
-  });
-  return { unsignedXdr: xdr, network };
+  const sdk = await requireCurrentEscrow(t.contractId);
+  return savePrepared(id, await sdk.buildCancel(t.organizerAddr));
 }
 
 export async function getTournamentDetail(id: string) {
@@ -545,8 +549,24 @@ export async function getTournamentDetail(id: string) {
   const grossPool = t.entryFee * BigInt(t.participants.length);
   const distributed = paidOut + refunded;
   const pool = (grossPool > distributed ? grossPool - distributed : 0n).toString();
-  const confirmedSettlementDeadline = t.deadlineConfirmedAt ? t.settlementDeadline : null;
   const now = Date.now();
+  let contractVersion: "CURRENT" | "UNSUPPORTED" | "UNAVAILABLE" | "PENDING" = "PENDING";
+  let onChainDeadline: number | null = null;
+  if (t.contractId) {
+    try {
+      contractVersion = await escrowVersion(t.contractId);
+      if (contractVersion === "CURRENT") {
+        const state = await escrowSdk(t.contractId).readTournament(t.organizerAddr);
+        const deadline = state.settlement_deadline;
+        if (deadline <= 0n || deadline > 8_640_000_000_000n) {
+          throw new Error("Escrow deadline is outside the supported Date range");
+        }
+        onChainDeadline = Number(deadline);
+      }
+    } catch {
+      contractVersion = "UNAVAILABLE";
+    }
+  }
 
   return {
     id: t.id,
@@ -566,16 +586,10 @@ export async function getTournamentDetail(id: string) {
     ),
     asset: t.asset,
     entryFee: t.entryFee.toString(),
-    distributionBps: [t.firstBps, t.secondBps, t.thirdBps] as const,
+    distributionBps: t.distributionBps,
     contractId: t.contractId,
-    settlementDeadline: confirmedSettlementDeadline
-      ? Math.floor(confirmedSettlementDeadline.getTime() / 1000)
-      : null,
-    contractVersion: confirmedSettlementDeadline
-      ? "DEADLINE"
-      : t.status === "DRAFT"
-        ? "PENDING"
-        : "LEGACY",
+    settlementDeadline: onChainDeadline,
+    contractVersion,
     contractUrl: t.contractId ? explorerContractUrl(t.contractId) : null,
     tokenAddr: t.tokenAddr,
     organizerId: t.organizerId,

@@ -222,7 +222,7 @@ export async function getTournamentAdminDetail(id: string) {
     status: t.status,
     asset: t.asset,
     entryFee: t.entryFee.toString(),
-    distributionBps: [t.firstBps, t.secondBps, t.thirdBps] as const,
+    distributionBps: t.distributionBps,
     contractId: t.contractId,
     tokenAddr: t.tokenAddr,
     organizerId: t.organizerId,

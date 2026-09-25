@@ -71,7 +71,55 @@ describe("CreateTournamentForm", () => {
     expect(screen.getByDisplayValue("USDC")).toBeInTheDocument();
     expect(screen.getByDisplayValue(REF)).toBeInTheDocument();
     expect(screen.getByDisplayValue("50")).toBeInTheDocument();
+    expect(screen.getByText(/5000 \/ 3000 \/ 2000 bps/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/payout calculation/i)).toHaveValue("custom");
     expect(localStorage.getItem("ggg:tournament-create-draft")).not.toContain(MOCK_ORGANIZER);
+  });
+
+  it("restores a descending mode draft without recalculating it", async () => {
+    const firstRender = render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/tournament name/i), {
+      target: { value: "Rounded Cup" },
+    });
+    fireEvent.change(screen.getByLabelText(/payout calculation/i), {
+      target: { value: "descending" },
+    });
+    fireEvent.change(screen.getByLabelText(/1st %/i), { target: { value: "50" } });
+    fireEvent.click(screen.getByRole("button", { name: /add payout rank/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add payout rank/i }));
+
+    await waitFor(() => {
+      const stored = localStorage.getItem("ggg:tournament-create-draft");
+      expect(stored).toContain('"splits":[50,20,15,10,5]');
+      expect(stored).toContain('"distributionMode":"descending"');
+    });
+    firstRender.unmount();
+
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+
+    expect(await screen.findByDisplayValue("Rounded Cup")).toBeInTheDocument();
+    expect(screen.getByLabelText(/payout calculation/i)).toHaveValue("descending");
+    expect(screen.getByText(/5000 \/ 2000 \/ 1500 \/ 1000 \/ 500 bps/i)).toBeInTheDocument();
+  });
+
+  it("restores an in-progress manual split without losing the rest of the draft", async () => {
+    localStorage.setItem(
+      "ggg:tournament-create-draft",
+      JSON.stringify({
+        name: "Work in progress",
+        gameTitle: "SF6",
+        entryFee: "1",
+        asset: "XLM",
+        refereeAddress: REF,
+        settlementDeadline: "2026-10-01T12:00",
+        splits: [50, 20, 20],
+      }),
+    );
+
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+
+    expect(await screen.findByDisplayValue("Work in progress")).toBeInTheDocument();
+    expect(screen.getByText(/must sum to 100/i)).toBeInTheDocument();
   });
 
   it("restores a preloaded draft during hydration without deleting it", async () => {
@@ -211,9 +259,135 @@ describe("CreateTournamentForm", () => {
     expect(screen.getByLabelText(/settlement deadline/i)).toBeInTheDocument();
   });
 
-  it("shows bps summary for default 60/30/10 split", () => {
+  it("shows the equal-remainder mode and split by default", () => {
     render(<CreateTournamentForm expectedPassphrase="P" />);
-    expect(screen.getByText(/6000 \/ 3000 \/ 1000 bps/i)).toBeInTheDocument();
+    const calculation = screen.getByLabelText(/payout calculation/i);
+    expect(calculation).toHaveValue("equal");
+    expect(calculation.parentElement).toHaveClass("w-full", "max-w-[24rem]");
+    expect(screen.getByText(/6000 \/ 2000 \/ 2000 bps/i)).toBeInTheDocument();
+  });
+
+  it("renders accessible payout-rank buttons and enforces the 1–10 rank limits", () => {
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    const add = screen.getByRole("button", { name: "Add payout rank" });
+    const remove = screen.getByRole("button", { name: "Remove last rank" });
+
+    expect(add).toHaveAttribute("data-variant", "default");
+    expect(remove).toHaveAttribute("data-variant", "destructive");
+    expect(add).toHaveClass("h-11", "w-full", "sm:w-auto");
+    expect(remove).toHaveClass("h-11", "w-full", "sm:w-auto");
+    expect(add.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    expect(remove.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    add.focus();
+    expect(add).toHaveFocus();
+
+    for (let rank = 4; rank <= 10; rank += 1) fireEvent.click(add);
+    expect(screen.getByLabelText("Rank 10 %")).toBeInTheDocument();
+    expect(add).toBeDisabled();
+
+    for (let rank = 10; rank > 1; rank -= 1) fireEvent.click(remove);
+    expect(screen.queryByLabelText(/2nd %/i)).not.toBeInTheDocument();
+    expect(remove).toBeDisabled();
+    expect(add).toBeEnabled();
+  });
+
+  it("accepts hundredth-percent splits and preserves exact basis points", () => {
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/1st %/i), { target: { value: "33.34" } });
+    fireEvent.change(screen.getByLabelText(/2nd %/i), { target: { value: "33.33" } });
+    fireEvent.change(screen.getByLabelText(/3rd %/i), { target: { value: "33.33" } });
+    expect(screen.getByText(/3334 \/ 3333 \/ 3333 bps/i)).toBeInTheDocument();
+    expect(screen.queryByText(/must sum to 100/i)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/3rd %/i), { target: { value: "33.333" } });
+    expect(screen.getByText(/hundredths of a percent/i)).toBeInTheDocument();
+  });
+
+  it("recalculates later ranks immediately when first place changes", () => {
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+
+    fireEvent.change(screen.getByLabelText(/1st %/i), { target: { value: "50" } });
+
+    expect(screen.getByLabelText(/2nd %/i)).toHaveValue(25);
+    expect(screen.getByLabelText(/3rd %/i)).toHaveValue(25);
+    expect(screen.getByText(/5000 \/ 2500 \/ 2500 bps/i)).toBeInTheDocument();
+  });
+
+  it("recalculates with deterministic rounding when the rank count changes", () => {
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/1st %/i), { target: { value: "50" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /add payout rank/i }));
+
+    expect(screen.getByLabelText(/2nd %/i)).toHaveValue(16.67);
+    expect(screen.getByLabelText(/3rd %/i)).toHaveValue(16.67);
+    expect(screen.getByLabelText(/rank 4 %/i)).toHaveValue(16.66);
+    expect(screen.getByText(/5000 \/ 1667 \/ 1667 \/ 1666 bps/i)).toBeInTheDocument();
+  });
+
+  it("recalculates all lower ranks in descending mode", () => {
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/payout calculation/i), {
+      target: { value: "descending" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /add payout rank/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add payout rank/i }));
+
+    expect(screen.getByText(/6000 \/ 1600 \/ 1200 \/ 800 \/ 400 bps/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/1st %/i), { target: { value: "50" } });
+    expect(screen.getByText(/5000 \/ 2000 \/ 1500 \/ 1000 \/ 500 bps/i)).toBeInTheDocument();
+  });
+
+  it("rejects a descending first-place share below second place", () => {
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/payout calculation/i), {
+      target: { value: "descending" },
+    });
+
+    fireEvent.change(screen.getByLabelText(/1st %/i), { target: { value: "1" } });
+
+    expect(screen.getByText(/at least as large as second place/i)).toBeInTheDocument();
+  });
+
+  it("switches to Custom when a calculated lower rank is edited", () => {
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/payout calculation/i), {
+      target: { value: "descending" },
+    });
+
+    fireEvent.change(screen.getByLabelText(/2nd %/i), { target: { value: "30" } });
+    expect(screen.getByLabelText(/payout calculation/i)).toHaveValue("custom");
+
+    fireEvent.change(screen.getByLabelText(/1st %/i), { target: { value: "55" } });
+    expect(screen.getByLabelText(/2nd %/i)).toHaveValue(30);
+  });
+
+  it("fixes one winner at 100% and starts two winners with positive equal shares", () => {
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    const remove = screen.getByRole("button", { name: /remove last rank/i });
+
+    fireEvent.click(remove);
+    fireEvent.click(remove);
+
+    expect(screen.getByLabelText(/1st %/i)).toHaveValue(100);
+    expect(screen.getByLabelText(/1st %/i)).toBeDisabled();
+    expect(screen.getByText(/^10000 bps$/i)).toBeInTheDocument();
+    expect(screen.getByText(/starts both ranks at 50%/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /add payout rank/i }));
+    expect(screen.getByLabelText(/1st %/i)).toHaveValue(50);
+    expect(screen.getByLabelText(/2nd %/i)).toHaveValue(50);
+  });
+
+  it("shows an inline error and blocks submission for an invalid first-place share", async () => {
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/1st %/i), { target: { value: "99.99" } });
+
+    expect(screen.getByText(/first place.*between 0.01% and 99.98%/i)).toHaveAttribute(
+      "role",
+      "alert",
+    );
+    expect(screen.getByRole("button", { name: /deploy soroban contract/i })).toBeDisabled();
   });
 
   it("explains that the deadline input is local and the saved instant is UTC", () => {
@@ -296,8 +470,7 @@ describe("CreateTournamentForm", () => {
 
   it("shows split-sum error when percentages do not sum to 100", () => {
     render(<CreateTournamentForm expectedPassphrase="P" />);
-    // Change 1st to 50% — now sum = 50+30+10 = 90
-    fireEvent.change(screen.getByLabelText(/1st %/i), { target: { value: "50" } });
+    fireEvent.change(screen.getByLabelText(/2nd %/i), { target: { value: "30" } });
     expect(screen.getByText(/must sum to 100/i)).toBeInTheDocument();
   });
 
@@ -340,11 +513,9 @@ describe("CreateTournamentForm", () => {
 
   it("clears split-sum error when percentages sum to 100 again", () => {
     render(<CreateTournamentForm expectedPassphrase="P" />);
-    // Break the sum
-    fireEvent.change(screen.getByLabelText(/1st %/i), { target: { value: "50" } });
+    fireEvent.change(screen.getByLabelText(/2nd %/i), { target: { value: "30" } });
     expect(screen.getByText(/must sum to 100/i)).toBeInTheDocument();
-    // Fix it
-    fireEvent.change(screen.getByLabelText(/2nd %/i), { target: { value: "40" } });
+    fireEvent.change(screen.getByLabelText(/2nd %/i), { target: { value: "20" } });
     expect(screen.queryByText(/must sum to 100/i)).not.toBeInTheDocument();
   });
 
@@ -391,6 +562,13 @@ describe("CreateTournamentForm", () => {
     fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1.5" } });
     fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
     fillSettlementDeadline();
+    fireEvent.change(screen.getByLabelText(/payout calculation/i), {
+      target: { value: "descending" },
+    });
+    fireEvent.change(screen.getByLabelText(/1st %/i), { target: { value: "50" } });
+    fireEvent.click(screen.getByRole("button", { name: /add payout rank/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add payout rank/i }));
+    expect(screen.getByText(/5000 \/ 2000 \/ 1500 \/ 1000 \/ 500 bps/i)).toBeInTheDocument();
 
     // Connect wallet
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
@@ -423,8 +601,7 @@ describe("CreateTournamentForm", () => {
     expect(body.organizerAddress).toBe(MOCK_ORGANIZER);
     expect(body.refereeAddress).toBe(REF);
     expect(body.settlementDeadline).toBeGreaterThan(Math.floor(Date.now() / 1000));
-    // default splits 60/30/10 → bps [6000,3000,1000]
-    expect(body.distributionBps).toEqual([6000, 3000, 1000]);
+    expect(body.distributionBps).toEqual([5000, 2000, 1500, 1000, 500]);
 
     // signAndSubmit called with correct args
     await waitFor(() =>

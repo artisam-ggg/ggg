@@ -2,8 +2,9 @@ import { type NextRequest } from "next/server";
 import { ok, err } from "@/lib/api";
 import { assertSameOrigin, CsrfError } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
-import { StellarError, stellarPublicKey } from "@/lib/stellar";
-import { finalizeSchema } from "@/lib/validation/tournament";
+import { StellarError } from "@/lib/stellar";
+import { EscrowSdkError } from "@goodgameguild/escrow-sdk";
+import { finalizeSchema, stellarPublicKey } from "@/lib/validation/tournament";
 import { buildFinalize } from "@/server/services/tournaments";
 
 // Referee-gated endpoint — no session auth required. The caller identifies
@@ -55,7 +56,7 @@ export async function POST(
     const data = await buildFinalize(id, parsed.data, walletParsed.data);
     return ok(data);
   } catch (e) {
-    if (e instanceof StellarError) {
+    if (e instanceof StellarError || e instanceof EscrowSdkError) {
       return err("STELLAR_ERROR", e.message, 422);
     }
     const status = (e as { status?: number }).status;

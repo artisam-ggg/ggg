@@ -3,6 +3,7 @@ import { ok, err } from "@/lib/api";
 import { assertSameOrigin, CsrfError } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
 import { StellarError } from "@/lib/stellar";
+import { EscrowSdkError } from "@goodgameguild/escrow-sdk";
 import { refundClaimSchema, tournamentParamsSchema } from "@/lib/validation/tournament";
 import { buildRefundClaim } from "@/server/services/tournaments";
 
@@ -38,7 +39,8 @@ export async function POST(
   try {
     return ok(await buildRefundClaim(id, parsed.data.playerAddress, parsed.data.submitterAddress));
   } catch (e) {
-    if (e instanceof StellarError) return err("STELLAR_ERROR", e.message, 422);
+    if (e instanceof StellarError || e instanceof EscrowSdkError)
+      return err("STELLAR_ERROR", e.message, 422);
     const status = (e as { status?: number }).status;
     if (status === 404) return err("NOT_FOUND", (e as Error).message, 404);
     if (status === 409) return err("CONFLICT", (e as Error).message, 409);

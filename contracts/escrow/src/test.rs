@@ -1308,6 +1308,111 @@ fn refund_succeeds_after_deadline() {
 }
 
 #[test]
+fn deadline_entrypoint_rejects_before_deadline_then_pays_at_boundary() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().with_mut(|ledger| ledger.timestamp = 1_000);
+    let admin = Address::generate(&env);
+    let (token_addr, sac, token) = create_token(&env, &admin);
+    let organizer = Address::generate(&env);
+    let referee = Address::generate(&env);
+    let escrow = init_with_deadline(&env, &token_addr, &organizer, &referee, 1_001);
+    let player = join(&env, &escrow, &sac);
+
+    env.set_auths(&[]);
+    assert_eq!(
+        escrow.try_claim_refund_after_deadline(&player),
+        Err(Ok(soroban_sdk::Error::from_contract_error(14)))
+    );
+    assert_eq!(token.balance(&player), 9_000_000i128);
+    assert_eq!(escrow.get_pool(), 1_000_000i128);
+
+    env.ledger().with_mut(|ledger| ledger.timestamp = 1_001);
+    escrow.claim_refund_after_deadline(&player);
+    assert!(env.auths().is_empty());
+    assert_eq!(
+        env.events().all().filter_by_contract(&escrow.address),
+        std::vec![RefundClaimed {
+            player: player.clone(),
+            amount: 1_000_000i128,
+        }
+        .to_xdr(&env, &escrow.address)]
+    );
+    assert_eq!(token.balance(&player), 10_000_000i128);
+    assert_eq!(escrow.get_pool(), 0i128);
+    assert_eq!(
+        escrow.try_claim_refund(&player),
+        Err(Ok(soroban_sdk::Error::from_contract_error(16)))
+    );
+}
+
+#[test]
+fn old_refund_blocks_a_second_claim_through_deadline_entrypoint() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().with_mut(|ledger| ledger.timestamp = 1_000);
+    let admin = Address::generate(&env);
+    let (token_addr, sac, token) = create_token(&env, &admin);
+    let organizer = Address::generate(&env);
+    let referee = Address::generate(&env);
+    let escrow = init_with_deadline(&env, &token_addr, &organizer, &referee, 1_001);
+    let player = join(&env, &escrow, &sac);
+    env.ledger().with_mut(|ledger| ledger.timestamp = 1_001);
+    escrow.claim_refund(&player);
+
+    assert_eq!(
+        escrow.try_claim_refund_after_deadline(&player),
+        Err(Ok(soroban_sdk::Error::from_contract_error(16)))
+    );
+    assert_eq!(token.balance(&player), 10_000_000i128);
+    assert_eq!(escrow.get_pool(), 0i128);
+}
+
+#[test]
+fn deadline_entrypoint_rejects_cancelled_tournament_but_old_refund_still_works() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().with_mut(|ledger| ledger.timestamp = 1_000);
+    let admin = Address::generate(&env);
+    let (token_addr, sac, token) = create_token(&env, &admin);
+    let organizer = Address::generate(&env);
+    let referee = Address::generate(&env);
+    let escrow = init_with_deadline(&env, &token_addr, &organizer, &referee, 1_001);
+    let player = join(&env, &escrow, &sac);
+    escrow.cancel_tournament();
+    env.ledger().with_mut(|ledger| ledger.timestamp = 1_001);
+
+    assert_eq!(
+        escrow.try_claim_refund_after_deadline(&player),
+        Err(Ok(soroban_sdk::Error::from_contract_error(8)))
+    );
+    escrow.claim_refund(&player);
+    assert_eq!(token.balance(&player), 10_000_000i128);
+}
+
+#[test]
+fn deadline_entrypoint_rejects_finalized_tournament() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().with_mut(|ledger| ledger.timestamp = 1_000);
+    let admin = Address::generate(&env);
+    let (token_addr, sac, _token) = create_token(&env, &admin);
+    let organizer = Address::generate(&env);
+    let referee = Address::generate(&env);
+    let escrow = init_with_deadline(&env, &token_addr, &organizer, &referee, 1_001);
+    let p1 = join(&env, &escrow, &sac);
+    let p2 = join(&env, &escrow, &sac);
+    let p3 = join(&env, &escrow, &sac);
+    finalize_three(&env, &escrow, &p1, &p2, &p3);
+    env.ledger().with_mut(|ledger| ledger.timestamp = 1_001);
+
+    assert_eq!(
+        escrow.try_claim_refund_after_deadline(&p1),
+        Err(Ok(soroban_sdk::Error::from_contract_error(7)))
+    );
+}
+
+#[test]
 #[should_panic(expected = "Error(Contract, #15)")] // PlayerNotRegistered
 fn refund_rejects_unknown_player() {
     let env = Env::default();
