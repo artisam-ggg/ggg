@@ -97,7 +97,6 @@ export function ClaimRefundButton({
   }
 
   function refreshStatus() {
-    setRefreshAttempts(0);
     router.refresh();
   }
 

@@ -121,6 +121,8 @@ describe("ClaimRefundButton", () => {
     const refreshButton = screen.getByRole("button", { name: /refresh refund status/i });
     fireEvent.click(refreshButton);
     expect(refresh).toHaveBeenCalledTimes(9);
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(refresh).toHaveBeenCalledTimes(9);
   });
 
   it("cleans up automatic refresh when the component unmounts", async () => {
