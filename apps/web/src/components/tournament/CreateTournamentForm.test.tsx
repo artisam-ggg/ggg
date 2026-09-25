@@ -336,6 +336,17 @@ describe("CreateTournamentForm", () => {
     expect(screen.getByText(/5000 \/ 2000 \/ 1500 \/ 1000 \/ 500 bps/i)).toBeInTheDocument();
   });
 
+  it("rejects a descending first-place share below second place", () => {
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/payout calculation/i), {
+      target: { value: "descending" },
+    });
+
+    fireEvent.change(screen.getByLabelText(/1st %/i), { target: { value: "1" } });
+
+    expect(screen.getByText(/at least as large as second place/i)).toBeInTheDocument();
+  });
+
   it("switches to Custom when a calculated lower rank is edited", () => {
     render(<CreateTournamentForm expectedPassphrase="P" />);
     fireEvent.change(screen.getByLabelText(/payout calculation/i), {

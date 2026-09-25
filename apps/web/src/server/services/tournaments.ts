@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { env } from "@/lib/env";
-import { EscrowSdkError, type ConfirmedEscrowTransaction } from "@ggg/escrow-sdk";
+import { EscrowSdkError, type ConfirmedEscrowTransaction } from "@goodgameguild/escrow-sdk";
 import {
   escrowSdk,
   escrowToken,

@@ -154,7 +154,7 @@ import { POST as finalize } from "./[id]/finalize/route";
 import { POST as cancel } from "./[id]/cancel/route";
 import { POST as refund } from "./[id]/refund/route";
 import { requireUser, AuthError } from "@/lib/auth-guards";
-import { EscrowSdkError } from "@ggg/escrow-sdk";
+import { EscrowSdkError } from "@goodgameguild/escrow-sdk";
 import { withIdempotency } from "@/server/services/idempotency";
 import { assertSameOrigin, CsrfError } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";

@@ -10,8 +10,8 @@ const fakes = vi.hoisted(() => ({
   deletePrepared: vi.fn(),
 }));
 
-vi.mock("@ggg/escrow-sdk", async (original) => {
-  const actual = await original<typeof import("@ggg/escrow-sdk")>();
+vi.mock("@goodgameguild/escrow-sdk", async (original) => {
+  const actual = await original<typeof import("@goodgameguild/escrow-sdk")>();
   return {
     ...actual,
     escrowTransactionHash: vi.fn(() => "prepared-hash"),

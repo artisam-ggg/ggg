@@ -110,7 +110,7 @@ flowchart TD
 
     subgraph Web["apps/web — Next.js 16 (Railway)"]
         RH["Route Handlers /api/*<br/>auth · tournaments · admin · uploads · SSE"]
-        TX["Escrow transaction adapter<br/>@ggg/escrow-sdk"]
+        TX["Escrow transaction adapter<br/>@goodgameguild/escrow-sdk"]
         MW["Middleware<br/>auth · CSRF · security headers"]
     end
 

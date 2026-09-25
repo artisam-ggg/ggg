@@ -69,5 +69,9 @@ export function calculateDescendingPayoutDistribution(
   const extraBps = remaining - shares.reduce((sum, value) => sum + value, 0);
   for (let index = 0; index < extraBps; index += 1) shares[index]! += 1;
 
+  if (shares[0]! > firstPlaceBps) {
+    throw new RangeError("First place must be at least as large as second place");
+  }
+
   return [firstPlaceBps, ...shares];
 }

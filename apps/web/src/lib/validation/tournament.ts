@@ -4,7 +4,7 @@ import {
   isValidEscrowContractId,
   isValidEscrowAmount,
   isValidEscrowDistribution,
-} from "@ggg/escrow-sdk";
+} from "@goodgameguild/escrow-sdk";
 import { Asset, TournamentStatus } from "@/generated/prisma/enums";
 
 /** Conservative, uniform maximum settlement window for every supported network. */

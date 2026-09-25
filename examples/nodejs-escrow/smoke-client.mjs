@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
-import { EscrowClient, EscrowSdk, EscrowSdkError, resolveSacAddress } from "@ggg/escrow-sdk";
+import {
+  EscrowClient,
+  EscrowSdk,
+  EscrowSdkError,
+  resolveSacAddress,
+} from "@goodgameguild/escrow-sdk";
 // This direct dependency is used only to make local RPC fixtures and unsigned XDR.
 import {
   Account,

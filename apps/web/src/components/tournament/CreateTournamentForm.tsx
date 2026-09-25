@@ -12,7 +12,7 @@ import {
   calculateDescendingPayoutDistribution,
   calculateEqualPayoutDistribution,
   isValidEscrowDistribution,
-} from "@ggg/escrow-sdk";
+} from "@goodgameguild/escrow-sdk";
 import { z } from "zod";
 
 // 1 XLM = 10,000,000 stroops (7 decimal places)
@@ -43,6 +43,16 @@ const toExactBps = (percentage: number) => {
 
 const distributionModeSchema = z.enum(["equal", "descending", "custom"]);
 type DistributionMode = z.infer<typeof distributionModeSchema>;
+type CalculatedDistributionMode = Exclude<DistributionMode, "custom">;
+
+const calculateDistribution = (
+  mode: CalculatedDistributionMode,
+  firstPlaceBps: number,
+  winnerCount: number,
+) =>
+  mode === "descending"
+    ? calculateDescendingPayoutDistribution(firstPlaceBps, winnerCount)
+    : calculateEqualPayoutDistribution(firstPlaceBps, winnerCount);
 
 const draftSchema = z.object({
   name: z.string().max(120),
@@ -230,13 +240,11 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     setDistributionMode("equal");
   }
 
-  function calculateSplits(mode: Exclude<DistributionMode, "custom">, winnerCount: number) {
+  function calculateSplits(mode: CalculatedDistributionMode, winnerCount: number) {
     const firstPlaceBps = splits.length === 1 ? 5_000 : toExactBps(splits[0]!);
-    const calculate =
-      mode === "descending"
-        ? calculateDescendingPayoutDistribution
-        : calculateEqualPayoutDistribution;
-    return calculate(firstPlaceBps ?? Number.NaN, winnerCount).map((value) => value / 100);
+    return calculateDistribution(mode, firstPlaceBps ?? Number.NaN, winnerCount).map(
+      (value) => value / 100,
+    );
   }
 
   function changeDistributionMode(mode: DistributionMode) {
@@ -277,12 +285,12 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       return;
     }
     const firstPlaceBps = toExactBps(value);
-    const calculate =
-      distributionMode === "descending"
-        ? calculateDescendingPayoutDistribution
-        : calculateEqualPayoutDistribution;
     try {
-      setSplits(calculate(firstPlaceBps ?? Number.NaN, splits.length).map((share) => share / 100));
+      setSplits(
+        calculateDistribution(distributionMode, firstPlaceBps ?? Number.NaN, splits.length).map(
+          (share) => share / 100,
+        ),
+      );
     } catch {
       setSplits([value, ...splits.slice(1)]);
     }
@@ -295,10 +303,17 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     isValidEscrowDistribution(bps) && splits.every((value) => toExactBps(value) !== null);
   let firstPlaceError: string | null = null;
   try {
-    calculateEqualPayoutDistribution(toExactBps(splits[0]!) ?? Number.NaN, splits.length);
+    calculateDistribution(
+      distributionMode === "descending" ? "descending" : "equal",
+      toExactBps(splits[0]!) ?? Number.NaN,
+      splits.length,
+    );
   } catch {
     const max = (10_000 - (splits.length - 1)) / 100;
-    firstPlaceError = `First place must use at most two decimal places and be between 0.01% and ${max.toFixed(2)}% for ${splits.length} winners`;
+    firstPlaceError =
+      distributionMode === "descending"
+        ? "First place must use at most two decimal places and be at least as large as second place"
+        : `First place must use at most two decimal places and be between 0.01% and ${max.toFixed(2)}% for ${splits.length} winners`;
   }
 
   async function handleCoverUpload(file: File) {

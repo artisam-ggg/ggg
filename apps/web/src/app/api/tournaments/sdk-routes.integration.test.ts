@@ -10,8 +10,8 @@ import {
   rpc,
   xdr,
 } from "@stellar/stellar-sdk";
-import { CURRENT_ESCROW_WASM_HASH } from "@ggg/escrow-sdk";
-import { Client } from "@ggg/escrow-sdk/contract";
+import { CURRENT_ESCROW_WASM_HASH } from "@goodgameguild/escrow-sdk";
+import { Client } from "@goodgameguild/escrow-sdk/contract";
 import { prisma } from "@/lib/db";
 import { redis } from "@/lib/redis";
 import { createSession } from "@/lib/session-store";

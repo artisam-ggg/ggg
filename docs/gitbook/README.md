@@ -8,7 +8,7 @@ GGG (Good Game Guild) is a trustless tournament prize-escrow and match-settlemen
 | Builder | Neil John Rivera / Artisam Labs |
 | Ambassador chapter | Philippines |
 | Target network | Stellar Testnet |
-| Public application endpoints | Primary: [ggg.quest](https://ggg.quest/) · Beta: [beta.ggg.quest](https://beta.ggg.quest/) |
+| Public application endpoints | Landing: [ggg.quest](https://ggg.quest/) · SDK-backed app: [app.ggg.quest](https://app.ggg.quest/) · [health](https://app.ggg.quest/api/health) |
 | Public source repository | [artisam-ggg/ggg](https://github.com/artisam-ggg/ggg) |
 | Scope baseline | [Approved Instawards SOW](https://github.com/artisam-ggg/ggg/blob/675986512bda71c01218e05993ac8ea252a51dee/docs/Instawards_SOW.md) |
 
@@ -31,8 +31,8 @@ Status labels are deliberately conservative:
 | Deliverable | Status | What is currently evidenced | What still needs public proof |
 | --- | --- | --- | --- |
 | [D1 — Deadline-enforced escrow](deliverables/d1.md) | Testnet refund evidenced; pre-deadline boundary locally verified | Public contract and successful refund-claim transactions; contract behavior and boundary tests | Public pre-deadline rejection evidence |
-| [D2 — Single-sig, N-winner, and TTL](deliverables/d2.md) | Implementation complete; Testnet code upload verified | Constructor/payout/TTL/read-helper records, regression snapshot, and WASM upload | Deploy-and-initialize transaction, contract ID, and live N-winner payout |
-| [D3 — SDK extraction, npm, and live redeploy](deliverables/d3.md) | Planned | Approved SOW and required evidence checklist | Published package, example, matching redeploy, demo, health check, and E2E transactions |
+| [D2 — Single-sig, N-winner, and TTL](deliverables/d2.md) | Completed and Testnet verified | Constructor/payout/TTL/read-helper records, exact release CI, live constructor deployment, contract ID, three joins, and N-winner payout | No remaining D2 proof gap; live TTL boundaries remain test-backed rather than directly measured |
+| [D3 — SDK extraction, npm, and live redeploy](deliverables/d3.md) | Completed and Testnet verified | Published npm package and immutable source, SDK guide and Node example, matching app/subscriber redeploy, public health result, demo, and three funded terminal paths | No remaining D3 proof gap; Testnet-reset caveat remains |
 
 The [Evidence index](reference/evidence.md) is the single reference for every Testnet artifact currently recorded in the repository. It is not a claim that every SOW acceptance criterion is complete.
 
@@ -47,8 +47,8 @@ The project design keeps signing in the user's wallet. This documentation does n
 | Deliverable | Planned outcome | Current documentary status |
 | --- | --- | --- |
 | [D1 — Deadline-enforced escrow](deliverables/d1.md) | Permissionless refund after an unfinalized tournament reaches its settlement deadline | Public successful refund claims and local boundary-test evidence are recorded; public proof of the rejected pre-deadline path is still needed. |
-| [D2 — Single-sig, N-winner, and TTL](deliverables/d2.md) | Atomic deployment, configurable winner payouts, TTL lifecycle handling, and read helpers | Implementation is complete with local verification and a Testnet WASM upload recorded; deployed-instance and live-payout proof remain in the public evidence checklist. |
-| [D3 — SDK extraction, npm, and live redeploy](deliverables/d3.md) | Standalone SDK, npm publication, example, and live Testnet reference consumer | Planned in the SOW; this book does not claim publication or redeployment without public proof. |
+| [D2 — Single-sig, N-winner, and TTL](deliverables/d2.md) | Atomic deployment, configurable winner payouts, TTL lifecycle handling, and read helpers | Completed with the earlier implementation/test record plus the 24 September constructor deployment and live three-winner payout. |
+| [D3 — SDK extraction, npm, and live redeploy](deliverables/d3.md) | Standalone SDK, npm publication, example, and live Testnet reference consumer | Completed on 24 September 2026 with public package/source, matching deployments, health, demo, and settlement/refund transaction evidence. |
 
 ## Boundaries
 

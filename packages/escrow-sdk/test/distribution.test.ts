@@ -51,6 +51,12 @@ describe("calculateDescendingPayoutDistribution", () => {
     expect(calculateDescendingPayoutDistribution(6_000, 4)).toEqual([6_000, 2_001, 1_333, 666]);
   });
 
+  it("rejects a first-place share smaller than second place", () => {
+    expect(() => calculateDescendingPayoutDistribution(100, 3)).toThrow(
+      "First place must be at least as large as second place",
+    );
+  });
+
   it("keeps every winner positive when only the minimum remainder is available", () => {
     expect(calculateDescendingPayoutDistribution(9_991, 10)).toEqual([
       9_991, 1, 1, 1, 1, 1, 1, 1, 1, 1,

@@ -1,4 +1,4 @@
-import { isValidEscrowPublicKey } from "@ggg/escrow-sdk";
+import { isValidEscrowPublicKey } from "@goodgameguild/escrow-sdk";
 import { z } from "zod";
 
 export const stellarAddressSchema = z.string().refine(isValidEscrowPublicKey);

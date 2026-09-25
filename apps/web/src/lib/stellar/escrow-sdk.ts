@@ -8,7 +8,7 @@ import {
   resolveSacAddress as sdkResolveSacAddress,
   type BuiltEscrowTransaction,
   type EscrowIntent,
-} from "@ggg/escrow-sdk";
+} from "@goodgameguild/escrow-sdk";
 import { prisma } from "@/lib/db";
 import { env } from "@/lib/env";
 
