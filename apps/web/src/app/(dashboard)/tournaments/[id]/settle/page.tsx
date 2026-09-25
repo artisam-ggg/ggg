@@ -25,6 +25,8 @@ export default async function SettlePage({ params }: SettlePageProps) {
         refereeAddr={t.refereeAddr}
         participants={t.participants}
         distributionBps={t.distributionBps}
+        pool={t.pool}
+        asset={t.asset}
         passphrase={env.NETWORK_PASSPHRASE}
       />
     </main>

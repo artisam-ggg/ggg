@@ -7,6 +7,7 @@ import { CandidateCard } from "./CandidateCard";
 import { PodiumSlot } from "./PodiumSlot";
 import { SettlementModal } from "./SettlementModal";
 import { WalletButton } from "@/components/tournament/WalletButton";
+import { PrizeBreakdown } from "@/components/tournament/PrizeBreakdown";
 import { signAndSubmit } from "@/lib/wallet";
 import { BackButton } from "@/components/ui/BackButton";
 
@@ -20,6 +21,8 @@ interface SettlementConsoleProps {
   participants: Participant[];
   passphrase: string;
   distributionBps?: number[];
+  pool?: string;
+  asset?: "XLM" | "USDC";
 }
 
 export function SettlementConsole({
@@ -28,6 +31,8 @@ export function SettlementConsole({
   participants,
   passphrase,
   distributionBps = [6000, 3000, 1000],
+  pool = "0",
+  asset = "XLM",
 }: SettlementConsoleProps) {
   const router = useRouter();
   const [wallet, setWallet] = useState<string | null>(null);
@@ -120,6 +125,15 @@ export function SettlementConsole({
           <p className="mt-2 text-sm text-on-surface-variant">
             Referee-only: drag or use keyboard buttons to assign {slots.length} ranked winners.
           </p>
+
+          <div className="mt-6">
+            <PrizeBreakdown
+              distributionBps={distributionBps}
+              pool={pool}
+              asset={asset}
+              heading="Payout preview"
+            />
+          </div>
 
           {/* Podium slots */}
           <div

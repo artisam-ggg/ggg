@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Minus, Plus } from "lucide-react";
 import { WalletButton } from "./WalletButton";
+import { PrizeBreakdown } from "./PrizeBreakdown";
 import { Button } from "@/components/ui/button";
 import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
 import { signAndSubmit, SubmissionError } from "@/lib/wallet";
@@ -715,6 +716,15 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         <p className="data-mono mt-3 text-sm text-on-surface-variant" aria-live="polite">
           {bps.join(" / ")} bps
         </p>
+        {splitValid && (
+          <div className="mt-4">
+            <PrizeBreakdown
+              distributionBps={bps}
+              asset={asset}
+              heading="Configured prize breakdown"
+            />
+          </div>
+        )}
         {splits.length === 1 && (
           <p className="mt-1 text-sm text-on-surface-variant">
             Adding a second payout rank starts both ranks at 50%. You can adjust first place

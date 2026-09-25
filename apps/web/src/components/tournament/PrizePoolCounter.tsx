@@ -1,6 +1,7 @@
 "use client";
 import { useMemo } from "react";
 import { useTournamentEventContext } from "./TournamentEventsProvider";
+import { PrizeBreakdown } from "./PrizeBreakdown";
 import { formatStroops } from "@/lib/format-stroops";
 
 const EMPTY_PLAYERS: string[] = [];
@@ -20,6 +21,8 @@ export function PrizePoolCounter({
   entryFee,
   initialParticipants = EMPTY_PLAYERS, // new prop
   initialRefundPlayers = EMPTY_PLAYERS,
+  distributionBps,
+  confirmedPayouts,
 }: {
   initialPool: string;
   asset: "XLM" | "USDC";
@@ -27,6 +30,8 @@ export function PrizePoolCounter({
   entryFee: string;
   initialParticipants?: string[]; // addresses already counted
   initialRefundPlayers?: string[];
+  distributionBps?: readonly number[];
+  confirmedPayouts?: readonly { rank: number; amount: string }[];
 }) {
   const { events } = useTournamentEventContext();
 
@@ -107,6 +112,16 @@ export function PrizePoolCounter({
           entry {formatStroops(entryFee)} {asset}
         </span>
       </div>
+      {distributionBps && (
+        <div className="mt-6">
+          <PrizeBreakdown
+            distributionBps={distributionBps}
+            pool={pool.toString()}
+            asset={asset}
+            {...(confirmedPayouts ? { confirmedPayouts } : {})}
+          />
+        </div>
+      )}
     </div>
   );
 }
