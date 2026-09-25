@@ -2,6 +2,10 @@
 
 Running log of shipped features (append one entry per change), per the auto-dev workflow.
 
+## Issue #337 — Refresh refund status automatically
+
+After a cancellation or deadline refund is submitted, the claim UI now keeps the action disabled while it refreshes the canonical server snapshot with bounded exponential backoff. Confirmed subscriber data ends the refresh cycle and updates the refund view without a manual browser reload. A transaction with a retryable confirmation error and known hash remains in the non-resubmittable pending state, while a definite submission failure is labeled separately and can be retried. After the automatic window expires, the page reports that processing is still underway and offers an explicit status-only refresh; timers are cleaned up on navigation and no refresh path prepares, signs, or submits another transaction.
+
 ## Issue #336 — Show prize shares and amounts by rank
 
 Tournament creation, the public tournament page, and the referee settlement console now show every configured payout rank with its exact basis-point-derived percentage. When a confirmed prize pool is available, the public and referee views show token amounts using Stellar's seven-decimal precision; active-tournament estimates update from the same confirmed live pool events as the prize counter and mirror the contract's rank-one rounding-dust rule. Finished tournaments label and display persisted confirmed payout amounts instead of recalculating final results in the client. Each breakdown also makes the required 10,000 BPS / 100% total explicit and supports the full 1–10 rank range without changing contract or settlement policy.
