@@ -3,12 +3,14 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Minus, Plus } from "lucide-react";
 import { WalletButton } from "./WalletButton";
+import { PrizeBreakdown } from "./PrizeBreakdown";
 import { Button } from "@/components/ui/button";
 import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
 import { signAndSubmit, SubmissionError } from "@/lib/wallet";
 import { createTournamentSchema } from "@/lib/validation/tournament";
 import { apiResponseSchema } from "@/lib/api";
 import {
+  calculateDescendingPayoutDistribution,
   calculateEqualPayoutDistribution,
   isValidEscrowDistribution,
 } from "@goodgameguild/escrow-sdk";
@@ -40,6 +42,19 @@ const toExactBps = (percentage: number) => {
   return Math.abs(scaled - rounded) < 1e-6 ? rounded : null;
 };
 
+const distributionModeSchema = z.enum(["equal", "descending", "custom"]);
+type DistributionMode = z.infer<typeof distributionModeSchema>;
+type CalculatedDistributionMode = Exclude<DistributionMode, "custom">;
+
+const calculateDistribution = (
+  mode: CalculatedDistributionMode,
+  firstPlaceBps: number,
+  winnerCount: number,
+) =>
+  mode === "descending"
+    ? calculateDescendingPayoutDistribution(firstPlaceBps, winnerCount)
+    : calculateEqualPayoutDistribution(firstPlaceBps, winnerCount);
+
 const draftSchema = z.object({
   name: z.string().max(120),
   gameTitle: z.string().max(120),
@@ -48,6 +63,7 @@ const draftSchema = z.object({
   refereeAddress: z.string().max(56),
   settlementDeadline: z.string().max(32),
   splits: z.array(z.number().min(0.01).max(100)).min(1).max(10),
+  distributionMode: distributionModeSchema.default("custom"),
 });
 
 type TournamentDraft = z.infer<typeof draftSchema>;
@@ -59,7 +75,8 @@ const emptyDraft: TournamentDraft = {
   asset: "XLM",
   refereeAddress: "",
   settlementDeadline: "",
-  splits: [60, 30, 10],
+  splits: [60, 20, 20],
+  distributionMode: "equal",
 };
 
 function loadDraft(): TournamentDraft {
@@ -137,7 +154,8 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   const [refereeAddress, setRefereeAddress] = useState("");
   const [organizerAddress, setOrganizerAddress] = useState("");
   const [settlementDeadline, setSettlementDeadline] = useState("");
-  const [splits, setSplits] = useState<number[]>([60, 30, 10]);
+  const [splits, setSplits] = useState<number[]>([60, 20, 20]);
+  const [distributionMode, setDistributionMode] = useState<DistributionMode>("equal");
   const [coverImageKey, setCoverImageKey] = useState<string | undefined>();
   const [coverUploadStatus, setCoverUploadStatus] = useState<CoverUploadStatus>("idle");
   const coverUploadRequest = useRef(0);
@@ -158,7 +176,8 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     !!refereeAddress ||
     !!settlementDeadline ||
     asset !== "XLM" ||
-    splits.join(",") !== "60,30,10";
+    splits.join(",") !== "60,20,20" ||
+    distributionMode !== "equal";
 
   useEffect(() => {
     const draft = loadDraft();
@@ -170,6 +189,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     setRefereeAddress(draft.refereeAddress);
     setSettlementDeadline(draft.settlementDeadline);
     setSplits(draft.splits);
+    setDistributionMode(draft.distributionMode);
     setRestored(true);
   }, []);
 
@@ -177,7 +197,16 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     if (!restored) return;
 
     // Wallet and upload state are deliberately excluded; both must be fetched live.
-    const draft = { name, gameTitle, entryFee, asset, refereeAddress, settlementDeadline, splits };
+    const draft = {
+      name,
+      gameTitle,
+      entryFee,
+      asset,
+      refereeAddress,
+      settlementDeadline,
+      splits,
+      distributionMode,
+    };
     if (!hasDraft) {
       removeStoredDraft();
     } else {
@@ -189,6 +218,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     }
   }, [
     asset,
+    distributionMode,
     entryFee,
     gameTitle,
     hasDraft,
@@ -207,17 +237,40 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     setAsset("XLM");
     setRefereeAddress("");
     setSettlementDeadline("");
-    setSplits([60, 30, 10]);
+    setSplits([60, 20, 20]);
+    setDistributionMode("equal");
+  }
+
+  function calculateSplits(mode: CalculatedDistributionMode, winnerCount: number) {
+    const firstPlaceBps = splits.length === 1 ? 5_000 : toExactBps(splits[0]!);
+    return calculateDistribution(mode, firstPlaceBps ?? Number.NaN, winnerCount).map(
+      (value) => value / 100,
+    );
+  }
+
+  function changeDistributionMode(mode: DistributionMode) {
+    if (mode === "custom") {
+      setDistributionMode(mode);
+      return;
+    }
+    try {
+      setSplits(calculateSplits(mode, splits.length));
+      setDistributionMode(mode);
+    } catch {
+      // Keep the current values so the inline first-place error remains actionable.
+    }
   }
 
   function changeWinnerCount(winnerCount: number) {
-    const firstPlaceBps = splits.length === 1 ? 5_000 : toExactBps(splits[0]!);
+    if (distributionMode === "custom") {
+      if (winnerCount === 1) setSplits([100]);
+      else if (splits.length === 1) setSplits([50, 50]);
+      else if (winnerCount > splits.length) setSplits([...splits, 1]);
+      else setSplits(splits.slice(0, winnerCount));
+      return;
+    }
     try {
-      setSplits(
-        calculateEqualPayoutDistribution(firstPlaceBps ?? Number.NaN, winnerCount).map(
-          (value) => value / 100,
-        ),
-      );
+      setSplits(calculateSplits(distributionMode, winnerCount));
     } catch {
       // The inline first-place error explains why the rank count cannot change yet.
     }
@@ -228,10 +281,14 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       setSplits([0, ...splits.slice(1)]);
       return;
     }
+    if (distributionMode === "custom") {
+      setSplits([value, ...splits.slice(1)]);
+      return;
+    }
     const firstPlaceBps = toExactBps(value);
     try {
       setSplits(
-        calculateEqualPayoutDistribution(firstPlaceBps ?? Number.NaN, splits.length).map(
+        calculateDistribution(distributionMode, firstPlaceBps ?? Number.NaN, splits.length).map(
           (share) => share / 100,
         ),
       );
@@ -247,10 +304,17 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     isValidEscrowDistribution(bps) && splits.every((value) => toExactBps(value) !== null);
   let firstPlaceError: string | null = null;
   try {
-    calculateEqualPayoutDistribution(toExactBps(splits[0]!) ?? Number.NaN, splits.length);
+    calculateDistribution(
+      distributionMode === "descending" ? "descending" : "equal",
+      toExactBps(splits[0]!) ?? Number.NaN,
+      splits.length,
+    );
   } catch {
     const max = (10_000 - (splits.length - 1)) / 100;
-    firstPlaceError = `First place must use at most two decimal places and be between 0.01% and ${max.toFixed(2)}% for ${splits.length} winners`;
+    firstPlaceError =
+      distributionMode === "descending"
+        ? "First place must use at most two decimal places and be at least as large as second place"
+        : `First place must use at most two decimal places and be between 0.01% and ${max.toFixed(2)}% for ${splits.length} winners`;
   }
 
   async function handleCoverUpload(file: File) {
@@ -571,6 +635,25 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       {/* Prize Split */}
       <fieldset className="mt-6">
         <legend className={labelClass}>Prize Split (%)</legend>
+        <div className="mb-4 w-full max-w-[24rem]">
+          <label className={labelClass} htmlFor="distributionMode">
+            Payout calculation
+          </label>
+          <select
+            id="distributionMode"
+            className={fieldClass}
+            value={distributionMode}
+            onChange={(event) => changeDistributionMode(event.target.value as DistributionMode)}
+          >
+            <option value="equal">Equal remainder</option>
+            <option value="descending">Descending ranked</option>
+            <option value="custom">Custom</option>
+          </select>
+          <p className="mt-1 text-sm text-on-surface-variant">
+            Equal and Descending recalculate lower ranks when first place or the winner count
+            changes. Editing a lower rank switches to Custom.
+          </p>
+        </div>
         <div className="grid gap-4 sm:grid-cols-3">
           {splits.map((split, i) => (
             <div key={i}>
@@ -594,6 +677,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
                   const next = [...splits];
                   next[i] = Number(e.target.value);
                   setSplits(next);
+                  setDistributionMode("custom");
                 }}
                 aria-describedby={
                   i === 0 && firstPlaceError
@@ -632,6 +716,15 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         <p className="data-mono mt-3 text-sm text-on-surface-variant" aria-live="polite">
           {bps.join(" / ")} bps
         </p>
+        {splitValid && (
+          <div className="mt-4">
+            <PrizeBreakdown
+              distributionBps={bps}
+              asset={asset}
+              heading="Configured prize breakdown"
+            />
+          </div>
+        )}
         {splits.length === 1 && (
           <p className="mt-1 text-sm text-on-surface-variant">
             Adding a second payout rank starts both ranks at 50%. You can adjust first place

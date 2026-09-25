@@ -2,6 +2,20 @@
 
 Running log of shipped features (append one entry per change), per the auto-dev workflow.
 
+## Issue #337 — Refresh refund status automatically
+
+After a cancellation or deadline refund is submitted, the claim UI now keeps the action disabled while it refreshes the canonical server snapshot with bounded exponential backoff. Confirmed subscriber data ends the refresh cycle and updates the refund view without a manual browser reload. A transaction with a retryable confirmation error and known hash remains in the non-resubmittable pending state, while a definite submission failure is labeled separately and can be retried. After the automatic window expires, the page reports that processing is still underway and offers an explicit status-only refresh; timers are cleaned up on navigation and no refresh path prepares, signs, or submits another transaction.
+
+## Issue #336 — Show prize shares and amounts by rank
+
+Tournament creation, the public tournament page, and the referee settlement console now show every configured payout rank with its exact basis-point-derived percentage. When a confirmed prize pool is available, the public and referee views show token amounts using Stellar's seven-decimal precision; active-tournament estimates update from the same confirmed live pool events as the prize counter and mirror the contract's rank-one rounding-dust rule. Finished tournaments label and display persisted confirmed payout amounts instead of recalculating final results in the client. Each breakdown also makes the required 10,000 BPS / 100% total explicit and supports the full 1–10 rank range without changing contract or settlement policy.
+
+The referee settlement console is available from the public tournament link without requiring a GGG account. Building a finalization still requires the configured connected referee wallet, and submitting it validates the signed XDR against the server-recorded prepared finalization before the contract independently checks the referee signature. Account authentication remains required for deploy, cancel, refund, and other protected mutations; public finalization retains per-tournament rate limiting and signed-transaction-derived idempotency.
+
+## Issue #323 — Descending ranked prize shares
+
+Tournament creation now offers Equal remainder, Descending ranked, and Custom payout modes. Descending mode divides the amount left after first place with descending integer weights, keeps every lower rank at or below the rank above it, recalculates when the first-place share or winner count changes, and assigns indivisible basis points to higher ranks. Drafts retain their exact mode and distribution, while editing a lower rank switches safely to Custom. The additive public SDK helper advances the workspace package source to `0.2.0`; registry publication remains a separate approved release action.
+
 ## Issue #309 — Epic 3 GitBook closeout
 
 Added a public SDK integration guide for `@goodgameguild/escrow-sdk@0.1.0` covering Node.js/Testnet setup, constructor deployment, the build → simulate/assemble → external sign → submit → confirm boundary, joins, 1–10 winner settlement, reads, cancellation and delegated deadline refunds, safe pending-transaction recovery, and Testnet resets. Refreshed the GitBook landing page, D2/D3 deliverables, Weeks 3–4, evidence index, reviewer path, flow/timeline, metrics, and changelog with the final npm, public source, matching deployment, health, demo, CI, contract, transaction, payout, and refund evidence. Retained the existing `gitbook-docs.yaml` space mapping. Live GitBook sync, desktop/mobile rendering, and published-link verification remain post-merge acceptance checks before #309 closes.

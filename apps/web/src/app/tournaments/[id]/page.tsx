@@ -141,6 +141,8 @@ export default async function TournamentDetailPage({
               entryFee={t.entryFee}
               initialParticipants={participantAddresses}
               initialRefundPlayers={t.refundClaimedPlayers}
+              {...(!t.refundsClaimable ? { distributionBps: t.distributionBps } : {})}
+              {...(t.status === "FINISHED" ? { confirmedPayouts: t.winners } : {})}
             />
 
             {t.status === "ACTIVE" &&

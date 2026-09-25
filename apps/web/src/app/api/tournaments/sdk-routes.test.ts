@@ -584,7 +584,7 @@ describe("SDK-backed tournament routes", () => {
     expect(mocks.participantUpsert).toHaveBeenCalledOnce();
   });
 
-  it.each(["deploy", "cancel", "finalize", "claim_refund"] as const)(
+  it.each(["deploy", "cancel", "claim_refund"] as const)(
     "requires an app session for %s submission",
     async (intent) => {
       vi.mocked(requireUser).mockRejectedValueOnce(new AuthError("Authentication required", 401));
@@ -596,6 +596,16 @@ describe("SDK-backed tournament routes", () => {
       expect(mocks.submit).not.toHaveBeenCalled();
     },
   );
+
+  it("submits a wallet-signed referee finalization without an app session", async () => {
+    const response = await deployOrSubmit(
+      request(`/${tournamentId}/submit`, { ...signed, intent: "finalize" }),
+      ctx,
+    );
+    expect(response.status).toBe(200);
+    expect(requireUser).not.toHaveBeenCalled();
+    expect(mocks.validate).toHaveBeenCalledOnce();
+  });
 
   it("rejects oversized submit bodies before authentication or submission", async () => {
     const response = await deployOrSubmit(
@@ -618,6 +628,20 @@ describe("SDK-backed tournament routes", () => {
     const keys = vi.mocked(withIdempotency).mock.calls.map(([key]) => key);
     expect(keys[0]).toBe(keys[1]);
     expect(keys[2]).not.toBe(keys[0]);
+  });
+
+  it("scopes public referee finalization idempotency to the signed transaction", async () => {
+    const body = { ...signed, intent: "finalize" };
+    await deployOrSubmit(request(`/${tournamentId}/submit`, body), ctx);
+    await deployOrSubmit(request(`/${tournamentId}/submit`, body), ctx);
+    await deployOrSubmit(
+      request(`/${tournamentId}/submit`, { ...body, signedXdr: "AAAAAgAAAAB=" }),
+      ctx,
+    );
+    const keys = vi.mocked(withIdempotency).mock.calls.map(([key]) => key);
+    expect(keys[0]).toBe(keys[1]);
+    expect(keys[2]).not.toBe(keys[0]);
+    expect(keys[0]).toContain(`${tournamentId}:finalize:`);
   });
 
   it("scopes non-deployment idempotency results to the user and intent", async () => {

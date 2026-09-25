@@ -2,6 +2,8 @@
 
 Typed Stellar Soroban bindings and keyless transaction APIs for the GGG escrow contract. This package is MIT licensed and works in Node.js 22+ and browser projects. It does not hold keys, read app environment variables, or depend on Next.js or Prisma.
 
+The published baseline is `0.1.0`. The workspace source is now `0.2.0`, adding deterministic Equal remainder and Descending ranked distribution helpers; publishing that version is a separate release action.
+
 Version `0.1.0` distributes the finalized contract ABI from issues #215–#220 and the keyless transaction APIs from #223. npm publication is tracked in #226.
 
 ## Build, sign, submit, reconcile
@@ -32,6 +34,10 @@ Keep the `BuiltEscrowTransaction` returned by the SDK alongside the user request
 `submit` returns `{ hash, status: "SUCCESS" | "FAILED", contractId? }` after confirmation. `lookup(hash, "deploy"?)` additionally returns `PENDING` for an unresolved transaction and extracts a deployed contract ID when available. Preserve the hash on `TX_TIMEOUT` or `CONFIRMATION_FAILED`; an uncertain broadcast can have reached the network. `EscrowSdkError` exposes only stable codes `INVALID_INPUT`, `NETWORK_MISMATCH`, `SIMULATION_FAILED`, `SUBMIT_REJECTED`, `TX_TIMEOUT`, and `CONFIRMATION_FAILED`, plus a safe message and optional hash. A `FAILED` confirmed result means the ledger rejected execution. The SDK does not decide whether an app user is authorized or update an app database.
 
 For consumers that handle existing instances, `getEscrowWasmHash(rpcUrl, contractId)` reads the executable hash before selecting a generated binding. `CURRENT_ESCROW_WASM_HASH` identifies this package's current ABI; do not use its binding to decode or mutate an instance with another hash. Executable metadata and generated-client read results are runtime-validated before the SDK returns them; malformed RPC data fails closed with a safe `EscrowSdkError`. The root also exports `escrowTransactionHash` and the shared public-key, contract-ID, amount, and distribution validators for app-level input and prepared-XDR persistence.
+
+## Payout distribution helpers
+
+`calculateEqualPayoutDistribution(firstPlaceBps, winnerCount)` divides the remainder evenly by rank. `calculateDescendingPayoutDistribution(firstPlaceBps, winnerCount)` uses descending integer weights and rejects inputs that would pay a lower rank more than the rank above it. Both return 1–10 positive integer-BPS shares totaling exactly 10,000.
 
 ## Imports
 

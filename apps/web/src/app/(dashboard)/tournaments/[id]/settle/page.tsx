@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import { env } from "@/lib/env";
-import { requireUser } from "@/lib/auth-guards";
 import { getTournamentDetail } from "@/server/services/tournaments";
 import { SettlementConsole } from "@/components/settlement/SettlementConsole";
 
@@ -9,10 +8,6 @@ interface SettlePageProps {
 }
 
 export default async function SettlePage({ params }: SettlePageProps) {
-  // Require an authenticated session (dashboard group guard).
-  // The authoritative referee gate is wallet-based (x-wallet-address header) + on-chain.
-  await requireUser();
-
   const { id } = await params;
   const t = await getTournamentDetail(id);
 
@@ -25,6 +20,8 @@ export default async function SettlePage({ params }: SettlePageProps) {
         refereeAddr={t.refereeAddr}
         participants={t.participants}
         distributionBps={t.distributionBps}
+        pool={t.pool}
+        asset={t.asset}
         passphrase={env.NETWORK_PASSPHRASE}
       />
     </main>
