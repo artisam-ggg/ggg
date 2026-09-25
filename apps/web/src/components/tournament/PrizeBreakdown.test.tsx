@@ -70,4 +70,22 @@ describe("PrizeBreakdown", () => {
     expect(screen.getByText("0.0000003 XLM")).toBeInTheDocument();
     expect(screen.queryByText("59.9999999 XLM")).not.toBeInTheDocument();
   });
+
+  it("labels an empty persisted payout list as syncing without showing estimates", () => {
+    render(
+      <PrizeBreakdown
+        distributionBps={[6000, 3000, 1000]}
+        pool="30000000"
+        asset="XLM"
+        confirmedPayouts={[]}
+      />,
+    );
+
+    expect(screen.getByText("Payout confirmation is syncing")).toBeInTheDocument();
+    expect(screen.getAllByText("Awaiting confirmation")).toHaveLength(3);
+    expect(
+      screen.queryByText("Estimated from the current confirmed prize pool"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("1.8000000 XLM")).not.toBeInTheDocument();
+  });
 });

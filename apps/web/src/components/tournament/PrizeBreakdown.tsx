@@ -41,7 +41,8 @@ export function PrizeBreakdown({
     confirmedPayouts?.map((payout) => [payout.rank, BigInt(payout.amount)]) ?? [],
   );
   const estimates = pool === undefined ? null : estimatedPayouts(pool, distributionBps);
-  const isConfirmed = confirmedPayouts !== undefined;
+  const isSettled = confirmedPayouts !== undefined;
+  const hasConfirmedPayouts = (confirmedPayouts?.length ?? 0) > 0;
 
   return (
     <section
@@ -58,17 +59,19 @@ export function PrizeBreakdown({
       </div>
 
       <p className="mt-2 text-sm text-on-surface-variant">
-        {isConfirmed
+        {hasConfirmedPayouts
           ? "Confirmed on-chain payouts"
-          : estimates
-            ? "Estimated from the current confirmed prize pool"
-            : "Amounts appear when a prize pool is available"}
+          : isSettled
+            ? "Payout confirmation is syncing"
+            : estimates
+              ? "Estimated from the current confirmed prize pool"
+              : "Amounts appear when a prize pool is available"}
       </p>
 
       <ul className="mt-4 grid gap-2 sm:grid-cols-2" aria-label="Prize distribution by rank">
         {distributionBps.map((bps, index) => {
           const rank = index + 1;
-          const amount = isConfirmed ? confirmedByRank.get(rank) : estimates?.[index];
+          const amount = isSettled ? confirmedByRank.get(rank) : estimates?.[index];
           return (
             <li
               key={rank}
@@ -82,7 +85,7 @@ export function PrizeBreakdown({
                     {formatStroops(amount.toString())} {asset}
                   </span>
                 )}
-                {isConfirmed && amount === undefined && (
+                {isSettled && amount === undefined && (
                   <span className="block text-xs text-on-surface-variant">
                     Awaiting confirmation
                   </span>
