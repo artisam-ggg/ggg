@@ -2,6 +2,10 @@
 
 Running log of shipped features (append one entry per change), per the auto-dev workflow.
 
+## Issue #323 — Descending ranked prize shares
+
+Tournament creation now offers Equal remainder, Descending ranked, and Custom payout modes. Descending mode divides the amount left after first place with descending integer weights, keeps every lower rank at or below the rank above it, recalculates when the first-place share or winner count changes, and assigns indivisible basis points to higher ranks. Drafts retain their exact mode and distribution, while editing a lower rank switches safely to Custom. The additive public SDK helper advances the workspace package source to `0.2.0`; registry publication remains a separate approved release action.
+
 ## Issue #309 — Epic 3 GitBook closeout
 
 Added a public SDK integration guide for `@goodgameguild/escrow-sdk@0.1.0` covering Node.js/Testnet setup, constructor deployment, the build → simulate/assemble → external sign → submit → confirm boundary, joins, 1–10 winner settlement, reads, cancellation and delegated deadline refunds, safe pending-transaction recovery, and Testnet resets. Refreshed the GitBook landing page, D2/D3 deliverables, Weeks 3–4, evidence index, reviewer path, flow/timeline, metrics, and changelog with the final npm, public source, matching deployment, health, demo, CI, contract, transaction, payout, and refund evidence. Retained the existing `gitbook-docs.yaml` space mapping. Live GitBook sync, desktop/mobile rendering, and published-link verification remain post-merge acceptance checks before #309 closes.

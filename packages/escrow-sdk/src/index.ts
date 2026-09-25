@@ -15,7 +15,11 @@ export {
   getEscrowWasmHash,
   CURRENT_ESCROW_WASM_HASH,
 } from "./sdk.js";
-export { calculateEqualPayoutDistribution, isValidEscrowDistribution } from "./distribution.js";
+export {
+  calculateDescendingPayoutDistribution,
+  calculateEqualPayoutDistribution,
+  isValidEscrowDistribution,
+} from "./distribution.js";
 export type {
   EscrowSdkConfig,
   BuiltEscrowTransaction,
