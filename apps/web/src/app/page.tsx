@@ -11,13 +11,25 @@ export default function Page() {
         Create an on-chain escrow for any game. Players join by paying a crypto entry fee, a referee
         submits the final ranking, and a Soroban contract settles the split automatically.
       </p>
-      <Link
-        href="/tournaments/new"
-        prefetch={false}
-        className="brutalist-border label-caps mt-10 inline-block bg-electric-violet-strong px-8 py-4 italic text-background transition-transform hover:-translate-y-0.5 active:translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acid-yellow"
-      >
-        Create Tournament
-      </Link>
+      <div className="mt-10 flex flex-wrap gap-4">
+        <Link
+          href="/tournaments/new"
+          prefetch={false}
+          className="brutalist-border label-caps inline-block bg-electric-violet-strong px-8 py-4 italic text-background transition-transform hover:-translate-y-0.5 active:translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acid-yellow"
+        >
+          Create Tournament
+        </Link>
+        <a
+          href="https://www.npmjs.com/package/@goodgameguild/escrow-sdk"
+          target="_blank"
+          rel="noreferrer"
+          aria-label="View the reusable GGG Stellar escrow SDK on npm"
+          className="brutalist-border inline-block px-8 py-4 text-left text-on-surface transition-transform hover:-translate-y-0.5 active:translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acid-yellow"
+        >
+          <span className="label-caps block text-acid-yellow">For developers</span>
+          <span className="mt-1 block text-sm">Get the reusable Stellar escrow SDK on npm</span>
+        </a>
+      </div>
     </main>
   );
 }
