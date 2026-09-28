@@ -32,9 +32,6 @@ export async function applyEvent(
   tournament: {
     id: string;
     contractId: string;
-    firstBps?: number;
-    secondBps?: number;
-    thirdBps?: number;
   },
   evt: DecodedEvent,
 ): Promise<Change | null> {
@@ -86,9 +83,17 @@ export async function applyEvent(
         });
       }
     } else if (evt.type === "FINALIZED") {
-      const winners = [evt.data.first, evt.data.second, evt.data.third].map(String);
+      const winners = evt.data.winners as string[];
       const amounts = (evt.data.amounts as string[]).map((a) => BigInt(a));
-      for (let i = 0; i < 3; i++) {
+      if (
+        !Array.isArray(winners) ||
+        winners.length < 1 ||
+        winners.length > 10 ||
+        winners.length !== amounts.length
+      ) {
+        throw new Error("Invalid finalized event payout vector");
+      }
+      for (let i = 0; i < winners.length; i++) {
         await tx.payout.create({
           data: {
             tournamentId: tournament.id,

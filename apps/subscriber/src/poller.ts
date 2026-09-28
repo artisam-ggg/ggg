@@ -1,4 +1,4 @@
-import { getEvents, decodeScVal } from "./stellar";
+import { getEvents, decodeScVal, getEscrowAbi, type EscrowAbi } from "./stellar";
 import { getCursor, setCursor } from "./cursor";
 import { applyEvent, type DecodedEvent, type EventType, type Change } from "./reconcile";
 import { publishChange } from "./publish";
@@ -16,7 +16,13 @@ const TOPIC_TO_TYPE: Record<string, EventType> = {
 };
 
 const amountSchema = z.bigint().nonnegative();
-const finalizedValueSchema = z.tuple([
+const finalizedValueSchema = z
+  .tuple([z.array(stellarAddressSchema).min(1).max(10), z.array(amountSchema).min(1).max(10)])
+  .refine(
+    ([winners, amounts]) =>
+      winners.length === amounts.length && new Set(winners).size === winners.length,
+  );
+const legacyFinalizedValueSchema = z.tuple([
   z.array(stellarAddressSchema).length(3),
   z.array(amountSchema).length(3),
 ]);
@@ -30,13 +36,16 @@ const finalizedValueSchema = z.tuple([
 // losing a late-indexed event.
 const SAFETY_LAG = 100;
 
-function decodeEvent(raw: {
-  eventId: string;
-  ledger: number;
-  txHash: string;
-  topic: string[];
-  value: string;
-}): DecodedEvent | null {
+function decodeEvent(
+  raw: {
+    eventId: string;
+    ledger: number;
+    txHash: string;
+    topic: string[];
+    value: string;
+  },
+  abi: EscrowAbi,
+): DecodedEvent | null {
   try {
     const symbol = String(decodeScVal(raw.topic[0]!));
     const type = TOPIC_TO_TYPE[symbol];
@@ -53,9 +62,10 @@ function decodeEvent(raw: {
     } else if (type === "FINALIZED") {
       // The contract publishes `(winners, amounts)` as the value under the
       // single `finalized` topic.
-      const [winners, amounts] = finalizedValueSchema.parse(value);
-      const [first, second, third] = winners;
-      data = { first, second, third, amounts: amounts.map((a) => a.toString()) };
+      const [winners, amounts] = (
+        abi === "LEGACY" ? legacyFinalizedValueSchema : finalizedValueSchema
+      ).parse(value);
+      data = { winners, amounts: amounts.map((a) => a.toString()) };
     } else if (type === "CANCELLED") {
       data = { claimableCount: z.coerce.number().int().nonnegative().parse(value) };
     } else {
@@ -66,13 +76,13 @@ function decodeEvent(raw: {
     }
     return { type, ledger: raw.ledger, txHash: raw.txHash, eventId: raw.eventId, data };
   } catch (err) {
-    console.warn("[subscriber] dropped undecodable event", {
+    console.error("[subscriber] could not decode event; cursor will not advance", {
       txHash: raw.txHash,
       eventId: raw.eventId,
       ledger: raw.ledger,
       err,
     });
-    return null;
+    throw err;
   }
 }
 
@@ -87,12 +97,13 @@ export async function pollTournament(tournament: {
   id: string;
   contractId: string;
 }): Promise<Change[]> {
+  const abi = await getEscrowAbi(tournament.contractId);
   const cursor = await getCursor(tournament.contractId);
   const changes: Change[] = [];
 
   const res = await getEvents(tournament.contractId, cursor.ledger + 1);
   for (const raw of res.events) {
-    const decoded = decodeEvent(raw);
+    const decoded = decodeEvent(raw, abi);
     if (!decoded) continue;
     const change = await applyEvent(tournament, decoded);
     if (change) {

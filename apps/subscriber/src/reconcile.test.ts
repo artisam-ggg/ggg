@@ -109,9 +109,6 @@ import { applyEvent } from "./reconcile";
 const tournament = {
   id: "t1",
   contractId: "CABC",
-  firstBps: 6000,
-  secondBps: 3000,
-  thirdBps: 1000,
 };
 
 beforeEach(() => {
@@ -206,12 +203,37 @@ describe("applyEvent", () => {
       ledger: 20,
       txHash: "tx-fin-1",
       eventId: "event-fin-1",
-      data: { first: "GA", second: "GB", third: "GC", amounts: ["6000000", "3000000", "1000000"] },
+      data: { winners: ["GA", "GB", "GC"], amounts: ["6000000", "3000000", "1000000"] },
     });
     expect(payouts).toHaveLength(3);
     expect(payouts[0]).toMatchObject({ rank: 1, playerAddr: "GA", amount: 6000000n });
     expect(tournaments.t1?.status).toBe("FINISHED");
     expect(tournaments.t1?.finalizedAt).toBeInstanceOf(Date);
+  });
+
+  it("persists a single winner with its full confirmed payout", async () => {
+    await applyEvent(tournament, {
+      type: "FINALIZED",
+      ledger: 21,
+      txHash: "tx-fin-single",
+      eventId: "event-fin-single",
+      data: { winners: ["GA"], amounts: ["10000000"] },
+    });
+    expect(payouts).toMatchObject([{ rank: 1, playerAddr: "GA", amount: 10000000n }]);
+  });
+
+  it("persists all ten ranks in confirmed event order", async () => {
+    const winners = Array.from({ length: 10 }, (_, rank) => `GPLAYER${rank + 1}`);
+    await applyEvent(tournament, {
+      type: "FINALIZED",
+      ledger: 22,
+      txHash: "tx-fin-ten",
+      eventId: "event-fin-ten",
+      data: { winners, amounts: winners.map(() => "1000000") },
+    });
+    expect(payouts).toHaveLength(10);
+    expect(payouts.map((payout) => payout.rank)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(payouts.map((payout) => payout.playerAddr)).toEqual(winners);
   });
 
   it("ingests a cancelled event → CANCELLED", async () => {

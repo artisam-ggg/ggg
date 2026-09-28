@@ -2,7 +2,7 @@
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "pnpm install --frozen-lockfile && pnpm --filter web db:generate"
+    "buildCommand": "pnpm install --frozen-lockfile && pnpm --filter web db:generate && pnpm --filter @goodgameguild/escrow-sdk build"
   },
   "deploy": {
     "startCommand": "pnpm --filter subscriber start",

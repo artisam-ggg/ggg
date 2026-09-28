@@ -27,6 +27,8 @@ export async function tick(): Promise<void> {
         { status: "ACTIVE" },
         { status: "FINISHED", finalizedAt: { gt: graceSince } },
         { status: "CANCELLED", cancelledAt: { gt: graceSince } },
+        { status: "FINISHED", events: { none: { type: "FINALIZED" } } },
+        { status: "CANCELLED", events: { none: { type: "CANCELLED" } } },
       ],
     },
     select: { id: true, contractId: true },

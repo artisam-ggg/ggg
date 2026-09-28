@@ -1,10 +1,11 @@
 "use client";
 import { useState } from "react";
 
-const RANK_LABELS = ["1st", "2nd", "3rd"] as const;
+const rankLabel = (rank: number) =>
+  `${rank}${rank % 100 >= 11 && rank % 100 <= 13 ? "th" : rank % 10 === 1 ? "st" : rank % 10 === 2 ? "nd" : rank % 10 === 3 ? "rd" : "th"}`;
 
 interface PodiumSlotProps {
-  rank: 1 | 2 | 3;
+  rank: number;
   addr: string | null;
   onAssign: (addr: string) => void;
   onClear: () => void;
@@ -12,7 +13,7 @@ interface PodiumSlotProps {
 
 export function PodiumSlot({ rank, addr, onAssign, onClear }: PodiumSlotProps) {
   const [active, setActive] = useState(false);
-  const label = RANK_LABELS[rank - 1];
+  const label = rankLabel(rank);
 
   return (
     <div

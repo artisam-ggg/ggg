@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "pnpm --filter @goodgameguild/escrow-sdk build && next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
@@ -21,12 +21,13 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@goodgameguild/escrow-sdk": "workspace:*",
     "@aws-sdk/client-s3": "^3.1075.0",
     "@aws-sdk/s3-request-presigner": "^3.1075.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "@stellar/freighter-api": "^6.0.1",
-    "@stellar/stellar-sdk": "15",
+    "@stellar/stellar-sdk": "16.3.0",
     "argon2": "^0.44.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

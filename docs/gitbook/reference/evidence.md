@@ -1,6 +1,54 @@
 # Evidence Index
 
-## Recorded Testnet artifacts
+## Final SDK-backed release run
+
+The Epic 3 release completed on 24 September 2026 from public revision
+[`15902cf`](https://github.com/artisam-ggg/ggg/commit/15902cfdd626d0d5e6629f10b01990dc9dc5cd4c).
+
+| Evidence | Public artifact | What it proves |
+| --- | --- | --- |
+| Published SDK | [`@goodgameguild/escrow-sdk@0.1.0`](https://www.npmjs.com/package/@goodgameguild/escrow-sdk/v/0.1.0) · [immutable source tag](https://github.com/artisam-ggg/ggg/tree/goodgameguild-escrow-sdk-v0.1.0/packages/escrow-sdk) | The reviewed package is publicly installable from source revision `26f41f0` |
+| Standalone consumer | [Node.js example](https://github.com/artisam-ggg/ggg/tree/goodgameguild-escrow-sdk-v0.1.0/examples/nodejs-escrow) · [recorded Testnet run](https://github.com/artisam-ggg/ggg/blob/staging/docs/verification/issue-225-node-example-testnet.md) | A consumer outside the web app uses the package for settlement and both refund paths |
+| Matching deployment | [Public app](https://app.ggg.quest/) · [health](https://app.ggg.quest/api/health) · WASM `b704f577…a46dd9` | The SDK-backed web/subscriber release was available at revision `15902cf`; health returned HTTP 200 |
+| Public CI | [`develop` run 35977199117](https://github.com/artisam-ggg/ggg/actions/runs/35977199117) · [`staging` run 35977199084](https://github.com/artisam-ggg/ggg/actions/runs/35977199084) | App and contract jobs passed against the exact public release revision |
+| Demo | [Edited full-flow video](https://drive.google.com/file/d/1NvTigSXywA8Uk5PpIhEwdjDpWx_DfKmd/view?usp=sharing) | Reviewer-facing recording of the deployed Testnet flows; anonymous access was verified |
+
+### Ranked settlement
+
+Contract [`CBY7…OK3B`](https://stellar.expert/explorer/testnet/contract/CBY7HPZHB3LNCZOB6LP6HAL5YF6DI3VZCACLI6H5K72ETI6ZFKDKOK3B):
+[deploy](https://stellar.expert/explorer/testnet/tx/22762e0b0bdc585d2b66ab1846a50e1875f49556be3666330eab3b06d6795f84),
+[join 1](https://stellar.expert/explorer/testnet/tx/2fb64da7396627d320391af23a37392a1bcad2fd72356c398f0d09846fc1fa33),
+[join 2](https://stellar.expert/explorer/testnet/tx/bb7675d732cbe378ac9688352adb61f05564c6b7d9c2ac06b8c334c3dd24eca8),
+[join 3](https://stellar.expert/explorer/testnet/tx/7f6f04488a2e347911200e33b93acd9e756f603b8c371c554b58757000918ae5), and
+[finalize](https://stellar.expert/explorer/testnet/tx/90993d06843ab13368384105a51caba3fef4d48d3ebc1f134e5a19f4b72ef2df).
+The decoded event and SDK reads confirm ordered 60/30/10 rewards of 18,000,000,
+9,000,000, and 3,000,000 stroops and a zero remaining pool.
+
+### Delegated deadline refund
+
+Contract [`CDMX…XTMG`](https://stellar.expert/explorer/testnet/contract/CDMX6F5ORKJW4QC6XNIQUWKRNCVVXISDW3JPIMQHHCYCFCPV6ZX3XTMG):
+[deploy](https://stellar.expert/explorer/testnet/tx/d5db990d9b63c2616491d93f2ee111c1265bf37b91fa98ccf421991d168cf1d6),
+[join](https://stellar.expert/explorer/testnet/tx/12950cfa1d90a7e1be15f34867b2cc6d9a69c75ec6a313a81f277ad44fbd208e), and
+[delegated refund](https://stellar.expert/explorer/testnet/tx/6dfba78cadd0d795da9732a6313a0f4563440d571a6930b89f4944c81ba8fefc).
+The claim succeeded after the inclusive `2026-09-24T07:41:00Z` deadline,
+paid the registered player 10,000,000 stroops, and left a zero pool.
+
+### Cancellation and refund
+
+Contract [`CCGV…RMZM`](https://stellar.expert/explorer/testnet/contract/CCGVI63KHBRG4CVKM7VPAGBPCER3EJKCN5LDI4NH5ONSR3FQU3ZQRMZM):
+[deploy](https://stellar.expert/explorer/testnet/tx/91f22c59e8afceb0ce38589672b5ae670172c587201333177f3c105bf7d03aa1),
+[join](https://stellar.expert/explorer/testnet/tx/fb8d4930063f7e1ec7c6554b01d9d17aae6129bbb7a8cfb0a2e8b15c3a05830b),
+[cancel](https://stellar.expert/explorer/testnet/tx/678402a0947dff30a4740091d4bf75ff249075d2feca4690709ee411c8a568fc), and
+[refund](https://stellar.expert/explorer/testnet/tx/36cf32d24698a5c83b6312ae1d5920349fea3587b1d810b699fe626091110c57).
+The decoded events and SDK reads confirm cancellation, one claimed refund of
+10,000,000 stroops, and a zero pool.
+
+The [full release record](https://github.com/artisam-ggg/ggg/blob/staging/docs/instawards-evidence.md)
+contains role addresses, balances, deployment IDs, event values, and proof
+boundaries. Testnet resets can invalidate these artifacts as current
+configuration; they remain historical evidence of the recorded run.
+
+## Earlier Testnet artifacts
 
 | Evidence | Source revision | Testnet artifact | What it proves | What it does not prove |
 | --- | --- | --- | --- | --- |
@@ -11,7 +59,11 @@
 
 ## Public endpoint observation
 
-The book lists [ggg.quest](https://ggg.quest/) and [beta.ggg.quest](https://beta.ggg.quest/) as public endpoints. An unauthenticated check of the beta root URL, [`https://beta.ggg.quest/`](https://beta.ggg.quest/), returned HTTP 200 on 18 September 2026. The `/health` endpoint was not checked. This is an availability observation only; it does not establish which contract artifact is configured or that an SOW acceptance flow has completed.
+The SDK-backed application is [app.ggg.quest](https://app.ggg.quest/). Its
+[`/api/health`](https://app.ggg.quest/api/health) endpoint returned HTTP 200
+after the matching web and subscriber deployments on 24 September 2026. The
+health result establishes availability; the transaction and event trail above
+separately establishes the live escrow flows.
 
 ## Evidence at a glance
 
@@ -21,12 +73,20 @@ flowchart LR
     B[#219 N-winner WASM upload] --> D
     C[#220 TTL WASM upload] --> D
     D --> E[D1 deployed contract and successful refund claims]
-    E -. still missing .-> F[Public pre-deadline rejection and remaining live acceptance trail]
+    E --> F[Final SDK-backed deploy, joins, settlement, and both refund paths]
 ```
 
-The three public uploads independently verify code artifacts. Separately, D1 has a deployed-contract event trail with successful refund claims. Public proof of the pre-deadline rejection and the remaining deliverables' live flows is still required.
+The three earlier public uploads independently verify code artifacts. D1 has a
+separate deployed-contract event trail with successful refund claims. The final
+Epic 3 run adds public SDK-backed deployment, join, settlement, deadline-refund,
+and cancellation-refund evidence. Public proof of a rejected pre-deadline D1
+call remains outside the completed D3 trail.
 
-**Text alternative:** Three separate public Testnet uploads (#218 constructor, #219 N-winner, and #220 TTL) establish code artifacts. D1 also has a public deployed contract with two successful refund-claim transactions. The public event history and source support the deadline route, while a pre-deadline rejection and the other deliverables' live flows remain unproven.
+**Text alternative:** Three earlier Testnet uploads establish constructor,
+N-winner, and TTL code artifacts. D1 separately records successful refund
+claims. The final Epic 3 run records SDK-backed deployment, three joins and
+ranked settlement, a delegated deadline refund, and a cancellation refund on
+three distinct contracts. A rejected pre-deadline D1 call is still not public.
 
 ## Evidence sources
 
@@ -36,11 +96,9 @@ The three public uploads independently verify code artifacts. Separately, D1 has
 - [Regression evidence — #221](https://github.com/artisam-ggg/ggg/blob/33c8d68ed28f1a4cdce17d2a513c136106f27347/docs/verification/issue-221-regression-evidence.md)
 - [End-to-end acceptance record](https://github.com/artisam-ggg/ggg/blob/89f831993f9a4a75eb7b30fbf1c481666bbb3c73/docs/verification/e2e-acceptance.md)
 
-## Add before marking final completion
+## Remaining proof boundary outside D3
 
-- Atomic deploy-and-initialize transaction and resulting contract ID
-- Public evidence of a rejected D1 refund before the deadline
-- A live N-winner payout transaction
-- SDK package URL, version, and successful example output
-- Redeployed app health check and end-to-end Testnet flow
-- Public demo and integration guide, if submitted as the Week 4 package
+- D1 still lacks a public transaction result showing rejection before the
+  inclusive deadline. Contract tests cover that boundary, but it is not claimed
+  as public live evidence here.
+- Mainnet deployment and a third-party security audit remain out of scope.

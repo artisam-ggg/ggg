@@ -48,11 +48,10 @@ describe("middleware", () => {
       expect(res.headers.get("location")).toContain("/login");
     });
 
-    it("redirects unauthenticated from /tournaments/abc/settle", async () => {
+    it("allows unauthenticated referee settlement from the public tournament link", async () => {
       const req = new NextRequest(new URL("http://localhost/tournaments/abc/settle"));
       const res = await middleware(req);
-      expect(res.status).toBe(307);
-      expect(res.headers.get("location")).toContain("/login");
+      expect(res.status).toBe(200);
     });
 
     it("redirects unauthenticated from /admin", async () => {

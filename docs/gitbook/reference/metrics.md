@@ -13,3 +13,11 @@ This Testnet milestone report uses evidence quality rather than product or adopt
 ## Recorded verification snapshot
 
 The #221 regression record dated 15 September 2026 reports 72 passing contract tests, 14 focused builder-unit tests, 635 web-unit tests across 78 files, and six app-integration tests. It also records successful contract build, typecheck, lint, production build, formatting, and diff checks. The network-dependent live Testnet test was intentionally skipped. These are repository-recorded local/CI results, not a substitute for the required live transaction evidence.
+
+The final 24 September release adds that live evidence: three ranked joins and
+a 60/30/10 settlement, a delegated post-deadline refund, and a cancellation
+refund on three distinct contracts. Exact public revision `15902cf` passed both
+the [`develop` CI run](https://github.com/artisam-ggg/ggg/actions/runs/35977199117)
+and [`staging` CI run](https://github.com/artisam-ggg/ggg/actions/runs/35977199084),
+including SDK packaging, generated bindings, application tests/integration,
+production build, audit, contract build, and contract tests.

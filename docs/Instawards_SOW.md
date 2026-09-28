@@ -33,7 +33,7 @@ The purpose of this Instaward is to take the next practical step with GGG's tour
 |---|---|---|
 | Deliverable 1 — Deadline-enforced escrow | Add a settlement deadline, after which any player can permissionlessly call claim_refund_after_deadline() if the tournament was never finalized or cancelled; enforce not-finalized/not-cancelled checks; harden the contract through expanded edge-case testing and failure-path verification covering the deadline and refund path. | Funds can no longer remain permanently locked when an organizer or referee becomes inactive. The deadline-based refund path is the strongest trust improvement in this sprint. |
 | Deliverable 2 — Single-sig + N-winner + TTL | Perform single-transaction deploy and initialize; add configurable N-winner payout distribution; add TTL bumping with storage lifecycle validation; add get_players() / get_tournament() read helpers; harden the contract to 30+ tests covering edge cases and failure paths. | Removes the two-signature UX wart and supports more tournament formats |
-| Deliverable 3 — SDK extraction + npm + live redeploy | Extract the contract client, transaction builders, and validation helpers into a standalone package; publish @ggg/escrow-sdk@0.1.0 to npm with a Node.js example (examples/nodejs-escrow/) and a public GitHub repo with a README covering installation and usage; redeploy the Testnet app with the updated WASM as the reference consumer. | Turns the in-app Stellar code into a reusable public good other developers can install directly, and proves it works live. |
+| Deliverable 3 — SDK extraction + npm + live redeploy | Extract the contract client, transaction builders, and validation helpers into a standalone package; publish @goodgameguild/escrow-sdk@0.1.0 to npm with a Node.js example (examples/nodejs-escrow/) and a public GitHub repo with a README covering installation and usage; redeploy the Testnet app with the updated WASM as the reference consumer. | Turns the in-app Stellar code into a reusable public good other developers can install directly, and proves it works live. |
 | **Out-of-Scope (Explicitly Not Included)**<br>List anything that might be assumed but is not included in this Instaward scope. |||
 | StellarWalletsKit multi-wallet support | A wallet abstraction layer that supports multiple Stellar wallets beyond Freighter (xBull, LOBSTR, etc.) through the StellarWalletsKit SDK. | Requires new signer abstraction, UI changes, and per-wallet testing; out of scope for this 30-day sprint |
 | Mainnet deployment | Deploying the escrow contract and web app to Stellar Mainnet. | This sprint targets Testnet only; Mainnet deployment is planned as a future step once the hardened contract and SDK are validated. |
@@ -54,7 +54,7 @@ Success for this Instaward means a third-party developer can install the SDK, de
 |---|---|
 | Deliverable 1 — Deadline-enforced escrow | Refund via claim_refund_after_deadline() succeeds after the settlement deadline passes; refund attempt fails/reverts before the deadline; contract tests covering both paths pass. |
 | Deliverable 2 — Single-sig + N-winner + TTL | Deploy and initialize complete via single-transaction deploy and initialize on Testnet; configurable N-winner payout distributes correctly for a tested winner count; 30+ contract tests passing, covering TTL bumping and the get_players() / get_tournament() read helpers. |
-| Deliverable 3 — SDK extraction + npm + live redeploy | @ggg/escrow-sdk installs successfully from npm; Node.js example (examples/nodejs-escrow/) runs against it; redeployed Testnet app's public /health endpoint returns HTTP 200; full create-join-settle flow completes on the live app using the SDK. |
+| Deliverable 3 — SDK extraction + npm + live redeploy | @goodgameguild/escrow-sdk installs successfully from npm; Node.js example (examples/nodejs-escrow/) runs against it; redeployed Testnet app's public /health endpoint returns HTTP 200; full create-join-settle flow completes on the live app using the SDK. |
 | End-to-End Validation | The complete create → join → settle → payout flow executes successfully on Stellar Testnet without any manual contract intervention. |
 
 **4.4 Risk & Mitigation**
@@ -74,7 +74,7 @@ Success for this Instaward means a third-party developer can install the SDK, de
 |---|---|---|
 | Week 1 | Deadline-enforced escrow | Contract builds; new refund-after-deadline path tested; cargo test still passes. |
 | Week 2 | Single-sig + N-winner + TTL | New WASM builds; single-transaction deploy and initialize creates the escrow contract on Testnet; SDK bindings updated; configurable N-winner payout distribution simulates correctly. |
-| Week 3 | SDK extraction + npm + live redeploy | SDK packs and imports; npm install @ggg/escrow-sdk works; Node.js example runs successfully; public /health endpoint returns HTTP 200 on the redeployed app. |
+| Week 3 | SDK extraction + npm + live redeploy | SDK packs and imports; npm install @goodgameguild/escrow-sdk works; Node.js example runs successfully; public /health endpoint returns HTTP 200 on the redeployed app. |
 | Week 4 | Validation Package | Public demo video URL + integration guide URL + tx hash list on Stellar Expert (Testnet) |
 
 **6. Evidence of Completion (Required)**
@@ -87,7 +87,7 @@ Success for this Instaward means a third-party developer can install the SDK, de
 |---|---|---|
 | Deliverable 1 — Deadline-enforced escrow | Repo / Tx hash / Test output | Stellar Explorer link showing a refund executed via claim_refund_after_deadline() after the deadline passes; contract repo showing the new function; CI/test output showing passing tests for the deadline-refund path. |
 | Deliverable 2 — Single-sig + N-winner + TTL | Repo / Tx hash / Test output | Stellar Explorer link showing the single-transaction deploy and initialize; resulting Contract ID (Testnet) and deployed WASM hash; contract repo showing the configurable N-winner payout distribution and TTL bumping logic; CI/test output confirming 30+ total passing contract tests, covering TTL bumping and the get_players() / get_tournament() read helpers. |
-| Deliverable 3 — SDK extraction + npm + live redeploy | Link / Demo Tx hash | npm package link for @ggg/escrow-sdk; public GitHub repo link with README (installation + usage instructions); public app URL; demo video showing the full flow live on the redeployed Testnet app. |
+| Deliverable 3 — SDK extraction + npm + live redeploy | Link / Demo Tx hash | npm package link for @goodgameguild/escrow-sdk; public GitHub repo link with README (installation + usage instructions); public app URL; demo video showing the full flow live on the redeployed Testnet app. |
 
 **6.2 Evidence Verification Checklist (For Ambassador Use)**
 

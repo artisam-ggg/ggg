@@ -2,7 +2,7 @@
 import freighter from "@stellar/freighter-api";
 import { apiResponseSchema } from "@/lib/api";
 import { captureWalletTransactionSucceeded, type WalletTransactionType } from "@/lib/analytics";
-import { stellarPublicKey } from "@/lib/stellar/validation";
+import { stellarPublicKey } from "@/lib/validation/tournament";
 import { z } from "zod";
 
 export type SubmitResult = {

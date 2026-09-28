@@ -1,17 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { getEvents, decodeScVal, getCursor, setCursor, applyEvent, publishChange } = vi.hoisted(
-  () => ({
+const { getEvents, decodeScVal, getEscrowAbi, getCursor, setCursor, applyEvent, publishChange } =
+  vi.hoisted(() => ({
     getEvents: vi.fn(),
     decodeScVal: vi.fn(),
+    getEscrowAbi: vi.fn(),
     getCursor: vi.fn(),
     setCursor: vi.fn(),
     applyEvent: vi.fn(),
     publishChange: vi.fn(),
-  }),
-);
+  }));
 
-vi.mock("./stellar", () => ({ getEvents, decodeScVal }));
+vi.mock("./stellar", () => ({ getEvents, decodeScVal, getEscrowAbi }));
 vi.mock("./cursor", () => ({ getCursor, setCursor }));
 vi.mock("./reconcile", () => ({ applyEvent }));
 vi.mock("./publish", () => ({ publishChange }));
@@ -24,6 +24,7 @@ const PLAYER_2 = "GCFXHS4GXL6BVUCXBWXGTITROWLVYXQKQLF4YH5O5JT3YZXCYPAFBJZB";
 const PLAYER_3 = "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN";
 
 beforeEach(() => {
+  getEscrowAbi.mockResolvedValue("CURRENT");
   getCursor.mockResolvedValue({ ledger: 100, hzCursor: null });
   getEvents.mockResolvedValue({
     latestLedger: 300,
@@ -107,16 +108,14 @@ describe("pollTournament", () => {
       expect.objectContaining({
         type: "FINALIZED",
         data: {
-          first: PLAYER,
-          second: PLAYER_2,
-          third: PLAYER_3,
+          winners: [PLAYER, PLAYER_2, PLAYER_3],
           amounts: ["6000000", "3000000", "1000000"],
         },
       }),
     );
   });
 
-  it("drops malformed finalized event values before reconciliation", async () => {
+  it("stops before advancing the cursor for malformed finalized values", async () => {
     getEvents.mockResolvedValue({
       latestLedger: 300,
       events: [
@@ -139,40 +138,42 @@ describe("pollTournament", () => {
     });
     const applyCallsBefore = applyEvent.mock.calls.length;
     const publishCallsBefore = publishChange.mock.calls.length;
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-    await pollTournament(tournament);
+    await expect(pollTournament(tournament)).rejects.toThrow();
 
     expect(applyEvent).toHaveBeenCalledTimes(applyCallsBefore);
     expect(publishChange).toHaveBeenCalledTimes(publishCallsBefore);
-    expect(warn).toHaveBeenCalledWith(
-      "[subscriber] dropped undecodable event",
+    expect(setCursor).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledWith(
+      "[subscriber] could not decode event; cursor will not advance",
       expect.objectContaining({
         txHash: "tx-finalized-malformed",
         eventId: "event-finalized-malformed",
         ledger: 105,
       }),
     );
-    warn.mockRestore();
+    error.mockRestore();
   });
 
-  it("drops malformed external event payloads", async () => {
+  it("stops before advancing the cursor for malformed external event payloads", async () => {
     decodeScVal.mockImplementation((b64: string) => {
       if (b64 === "REG") return "registered";
       if (b64 === "PLY") return "not-a-stellar-address";
       return 10000000n;
     });
     const callsBefore = applyEvent.mock.calls.length;
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-    await pollTournament(tournament);
+    await expect(pollTournament(tournament)).rejects.toThrow();
 
     expect(applyEvent).toHaveBeenCalledTimes(callsBefore);
-    expect(warn).toHaveBeenCalledWith(
-      "[subscriber] dropped undecodable event",
+    expect(setCursor).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledWith(
+      "[subscriber] could not decode event; cursor will not advance",
       expect.objectContaining({ txHash: "tx-reg-1", eventId: "event-reg-1", ledger: 105 }),
     );
-    warn.mockRestore();
+    error.mockRestore();
   });
 
   it("decodes cancellation availability and refund-claim events", async () => {

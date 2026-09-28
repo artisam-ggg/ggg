@@ -1,6 +1,7 @@
 packages:
   - "apps/*"
   - "contracts/*"
+  - "packages/*"
 
 # Allow native build scripts for these deps (pnpm 10 blocks build scripts by default).
 onlyBuiltDependencies:

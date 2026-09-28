@@ -2,6 +2,7 @@
 
 - [GGG — Instawards Milestone Reports](README.md)
 - [Statement of Work](sow.md)
+- [Escrow SDK integration guide](guides/sdk-integration.md)
 - [Weekly Reports](weekly-reports/README.md)
   - [Week 1 — Deadline-enforced escrow](weekly-reports/week-1.md)
   - [Week 2 — Single-sig, N-winner, and TTL](weekly-reports/week-2.md)

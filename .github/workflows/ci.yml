@@ -43,6 +43,8 @@ jobs:
       SOROBAN_RPC_URL: https://soroban-testnet.stellar.org
       HORIZON_URL: https://horizon-testnet.stellar.org
       NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+      ESCROW_WASM_HASH: b704f577f1715d965f9ba24f2cebf49df52735d42c9a4cd2a93781d612a46dd9
+      NATIVE_SAC_ADDRESS: CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC
       S3_ENDPOINT: http://localhost:9000
       S3_REGION: us-east-1
       S3_BUCKET: ggg-uploads
@@ -62,6 +64,22 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Build escrow SDK
+        run: pnpm --filter @goodgameguild/escrow-sdk build
+
+      - name: Verify escrow SDK package
+        run: |
+          pnpm --dir packages/escrow-sdk pack --pack-destination "$RUNNER_TEMP"
+          tarball="$(find "$RUNNER_TEMP" -maxdepth 1 -name 'goodgameguild-escrow-sdk-*.tgz' -print -quit)"
+          test -n "$tarball"
+          consumer="$RUNNER_TEMP/escrow-sdk-consumer"
+          mkdir "$consumer"
+          cd "$consumer"
+          npm init --yes
+          npm install "$tarball"
+          npm audit --omit=dev --audit-level=high
+          node --input-type=module -e 'await Promise.all([import("@goodgameguild/escrow-sdk"), import("@goodgameguild/escrow-sdk/contract")])'
 
       - name: Generate Prisma client
         run: pnpm --filter web db:generate
@@ -164,11 +182,9 @@ jobs:
             --wasm contracts/escrow/target/wasm32v1-none/release/ggg_escrow.wasm \
             --output-dir /tmp/ggg-escrow-bindings \
             --overwrite
-          sed -i '1i// @ts-nocheck -- Stellar CLI generated binding includes unused SDK template imports.' \
-            /tmp/ggg-escrow-bindings/src/index.ts
           diff -u \
-            apps/web/src/contract-client/src/index.ts \
-            /tmp/ggg-escrow-bindings/src/index.ts
+            <(awk 'NR > 1' packages/escrow-sdk/src/contract/index.ts) \
+            <(awk '1' /tmp/ggg-escrow-bindings/src/index.ts)
 
       - name: Contract tests
         run: cd contracts/escrow && cargo test

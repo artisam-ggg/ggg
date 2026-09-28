@@ -4,6 +4,7 @@ import { requireUser, AuthError } from "@/lib/auth-guards";
 import { assertSameOrigin, CsrfError } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
 import { StellarError } from "@/lib/stellar";
+import { EscrowSdkError } from "@goodgameguild/escrow-sdk";
 import { createTournamentSchema, listQuerySchema } from "@/lib/validation/tournament";
 import { createTournament, listTournaments } from "@/server/services/tournaments";
 
@@ -80,7 +81,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   try {
     data = await createTournament(parsed.data, user.id);
   } catch (e) {
-    if (e instanceof StellarError) {
+    if (e instanceof StellarError || e instanceof EscrowSdkError) {
       return err("STELLAR_ERROR", e.message, 422);
     }
     return err("INTERNAL_ERROR", "Could not create tournament", 500);

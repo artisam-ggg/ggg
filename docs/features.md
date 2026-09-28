@@ -2,6 +2,62 @@
 
 Running log of shipped features (append one entry per change), per the auto-dev workflow.
 
+## Issue #337 — Refresh refund status automatically
+
+After a cancellation or deadline refund is submitted, the claim UI now keeps the action disabled while it refreshes the canonical server snapshot with bounded exponential backoff. Confirmed subscriber data ends the refresh cycle and updates the refund view without a manual browser reload. A transaction with a retryable confirmation error and known hash remains in the non-resubmittable pending state, while a definite submission failure is labeled separately and can be retried. After the automatic window expires, the page reports that processing is still underway and offers an explicit status-only refresh; timers are cleaned up on navigation and no refresh path prepares, signs, or submits another transaction.
+
+## Issue #336 — Show prize shares and amounts by rank
+
+Tournament creation, the public tournament page, and the referee settlement console now show every configured payout rank with its exact basis-point-derived percentage. When a confirmed prize pool is available, the public and referee views show token amounts using Stellar's seven-decimal precision; active-tournament estimates update from the same confirmed live pool events as the prize counter and mirror the contract's rank-one rounding-dust rule. Finished tournaments label and display persisted confirmed payout amounts instead of recalculating final results in the client. Each breakdown also makes the required 10,000 BPS / 100% total explicit and supports the full 1–10 rank range without changing contract or settlement policy.
+
+The referee settlement console is available from the public tournament link without requiring a GGG account. Building a finalization still requires the configured connected referee wallet, and submitting it validates the signed XDR against the server-recorded prepared finalization before the contract independently checks the referee signature. Account authentication remains required for deploy, cancel, refund, and other protected mutations; public finalization retains per-tournament rate limiting and signed-transaction-derived idempotency.
+
+## Issue #323 — Descending ranked prize shares
+
+Tournament creation now offers Equal remainder, Descending ranked, and Custom payout modes. Descending mode divides the amount left after first place with descending integer weights, keeps every lower rank at or below the rank above it, recalculates when the first-place share or winner count changes, and assigns indivisible basis points to higher ranks. Drafts retain their exact mode and distribution, while editing a lower rank switches safely to Custom. The additive public SDK helper advances the workspace package source to `0.2.0`; registry publication remains a separate approved release action.
+
+## Issue #309 — Epic 3 GitBook closeout
+
+Added a public SDK integration guide for `@goodgameguild/escrow-sdk@0.1.0` covering Node.js/Testnet setup, constructor deployment, the build → simulate/assemble → external sign → submit → confirm boundary, joins, 1–10 winner settlement, reads, cancellation and delegated deadline refunds, safe pending-transaction recovery, and Testnet resets. Refreshed the GitBook landing page, D2/D3 deliverables, Weeks 3–4, evidence index, reviewer path, flow/timeline, metrics, and changelog with the final npm, public source, matching deployment, health, demo, CI, contract, transaction, payout, and refund evidence. Retained the existing `gitbook-docs.yaml` space mapping. Live GitBook sync, desktop/mobile rendering, and published-link verification remain post-merge acceptance checks before #309 closes.
+
+## Issue #226 — Release readiness (SDK published and staging deployed)
+
+Prepared and published [`@goodgameguild/escrow-sdk@0.1.0`](https://www.npmjs.com/package/@goodgameguild/escrow-sdk/v/0.1.0) from exact reviewed revision `26f41f0` and immutable tag `goodgameguild-escrow-sdk-v0.1.0`. The registry artifact matches the reviewed tarball integrity, installs in a clean external consumer, passes the standalone SDK smoke test, and audits with zero production vulnerabilities. Local SDK, contract, subscriber, web, integration, typecheck, lint, build, audit, and health checks pass. The two #224 migrations were applied after a named Railway backup, and both Railway services run the reviewed application tree with the matching escrow WASM hash. The public health endpoint returned HTTP 200 after deployment.
+
+The final funded Testnet run exercised the redeployed SDK-backed app with fresh in-memory-only identities: three ranked joins settled to exact 60/30/10 payouts, a distinct active instance paid a delegated post-deadline refund, and a third instance completed cancellation followed by its refund claim. Independent RPC reads confirmed every transaction and contract event, while app and SDK reads confirmed terminal state and zero remaining pools. Public transaction, contract, application, role, input, payout/refund, event, balance, and [edited demo-video evidence](https://drive.google.com/file/d/1NvTigSXywA8Uk5PpIhEwdjDpWx_DfKmd/view?usp=sharing) is in [the release and evidence record](instawards-evidence.md).
+
+The subscriber initially crashed because its Railway build command installed the workspace package without building its `dist` output. The live command was corrected and the replacement deployment is healthy; the repository Railway configuration now builds `@goodgameguild/escrow-sdk` before starting the subscriber so future deployments retain that fix.
+
+Corrected the SDK scope from the unavailable `@ggg` organization to the project-owned `@goodgameguild` organization across package metadata, workspace consumers, CI, examples, and documentation. The original Git tag remains immutable as a superseded candidate; the published release uses the new scope-specific tag created after merge and exact-revision CI.
+
+## Issue #319 — Make payout-rank actions visibly interactive
+
+Tournament creation now uses the shared button design system for adding and removing payout ranks. The controls have distinct plus/minus icons and treatments, responsive full-width mobile targets, and the design system's hover, focus-visible, pressed, and disabled states while preserving the existing 1–10 rank limits and keyboard-accessible names.
+
+## Issue #320 — Automatic ranked prize shares
+
+Changing first place or the number of payout ranks now divides the remaining integer basis points equally across later ranks, assigning indivisible BPS in rank order so every generated split totals exactly 10,000. One-winner tournaments stay at 100%; adding a second rank explicitly starts at 50/50, after which first place can be adjusted. Saved drafts retain valid calculated shares and in-progress manual edits, while invalid first-place values are rejected inline before submission. The reusable calculation and distribution validation live in `@goodgameguild/escrow-sdk`; the contract ABI and payout policy are unchanged.
+
+## Issue #225 — Standalone Node escrow consumer
+
+Added a package-only Node example that demonstrates Testnet constructor deployment, registration, 1–10 winner settlement with confirmed payout reads, and separate deadline-delegated and cancellation refund instances. Its external signer contract keeps account secrets outside the repository. The documented pack/install path and isolated mocked-RPC smoke exercise the SDK as a third-party consumer. An approved live Testnet run confirmed the one-winner settlement, delegated deadline refund, and cancellation/refund paths on separate instances; public hashes and on-chain read results are recorded in [the verification record](verification/issue-225-node-example-testnet.md).
+
+## Issue #224 — SDK-backed reference app and ranked payouts
+
+Tournament creation, joining, settlement, cancellation, refunds, reads, and signed submission now use `@goodgameguild/escrow-sdk`. The app retains its session, role and owner checks, prepared-transaction persistence, event reconciliation, and UI. New tournaments store ordered 1–10 positive payout shares, and a forward migration converts existing three-rank rows without changing payout records. The subscriber persists all ranks from confirmed finalized events. The creation form and settlement console support the same range; confirmed payouts display their rank. The app checks each deployed contract's WASM hash before using the current ABI, and older or unavailable instances are read-only in the UI. See `docs/verification/issue-224-reference-consumer.md` for migration, compatibility, and rollout notes.
+
+The #315 review follow-up bounds prepared-transaction storage with one-hour opportunistic pruning and removes confirmed rows while retaining uncertain deployment rows for retry. Deployment recovery now preserves a pending hash when a rejected submission's lookup remains uncertain. Route regression coverage includes deployment recovery and common request-guard failures.
+
+The follow-up integration suite also exercises the actual tournament HTTP handlers, SDK transaction builders and validators, PostgreSQL persistence, and Redis sessions/idempotency against disposable local services. Only the wallet-cookie boundary and Stellar RPC responses are simulated. It covers constructor-only deployment (with no legacy `initialize` operation), confirmed versus uncertain submission, join reconciliation, single- and multi-winner finalization, cancellation, refund claims, owner/IDOR checks, contract mismatch, and read-only legacy-WASM handling. CI runs it through the existing web integration gate; live Testnet transaction evidence remains separately operator-gated.
+
+## SOW deadline-refund entrypoint
+
+The escrow contract now exposes `claim_refund_after_deadline(player)` for active, unfinished tournaments at or after the inclusive deadline, matching the SOW's named entrypoint while preserving the existing `claim_refund(player)` ABI used by the app. Both paths pay only the registered player and share the same one-claim storage key and `refund_claimed` event. The generated SDK binding includes both methods; existing deployed instances retain their original WASM ABI. Contract tests cover the deadline boundary, permissionless caller, cancellation/finalization rejection, payout, event, and cross-entrypoint double-claim prevention. A fresh Testnet instance records a successful invocation of the named method in [transaction `813ec5f…325a6`](https://stellar.expert/explorer/testnet/tx/813ec5f5703a6e0504cae3d19fa602ba24e89420fab6c4f675eb49bb127325a6); the complete evidence is in the [verification record](verification/sow-deadline-refund-entrypoint.md).
+
+## Issue #223 — Reusable escrow transaction APIs
+
+The `@goodgameguild/escrow-sdk` package now exposes explicit RPC/network configuration, keyless build and simulation for constructor deployment, join, 1–10 winner settlement, cancellation, and refund claims, plus typed contract reads and explicit SAC resolution. Signed-XDR submission compares the signed body with the simulated build and checks the wallet-reported network before RPC; confirmed, failed, pending, and uncertain transactions can be reconciled by hash. Public errors use stable safe codes and omit RPC bodies and signed XDR. Mocked-RPC tests and a standalone packed-package consumer cover the exported surface. App authorization and persistence remain in the web app for #224.
+
 ## Issue #245 — Clear duplicate tournament participation
 
 The join endpoint now checks the persisted participant record before building an unsigned join transaction. A wallet already recorded for the tournament receives a clear `409 CONFLICT` response (`You are already a participant in this tournament.`), avoiding an unnecessary signature and generic submission error. The Soroban contract remains the source of truth for races or subscriber lag.
@@ -214,3 +270,7 @@ Confirmed joins now preserve the server timestamp from the signed app submission
 ## Issue #292 — Public homepage analytics
 
 The static homepage includes an aggregate-only App pageviews metric for the last 30 days, defined as the number of PostHog `$pageview` events. It reads a rate-limited public endpoint hosted by the web app, cached for five minutes; that endpoint queries PostHog using server-only credentials and exposes neither a PostHog key nor user-level data. Cross-origin access is limited to `ggg.quest` and the dedicated `PUBLIC_ANALYTICS_ALLOWED_ORIGINS` setting, without expanding the app's CSRF trust list. Missing, delayed, empty, malformed, or unavailable upstream data is not cached and leaves the homepage working with a temporary-unavailability message.
+
+## Issue #222 — Publishable escrow SDK package and bindings
+
+Added `@goodgameguild/escrow-sdk@0.1.0` as a public MIT-licensed workspace package with a built root entry point, a separate generated-contract export, declarations, and a restricted publication tarball. The finalized constructor, 1–10 winner vector, read helpers, deadline, and refund ABI now live in the SDK; the web app imports those bindings from the workspace package. CI checks the binding against freshly built contract WASM, and package tests cover the current ABI. Higher-level transaction APIs and app migration remain tracked in #223 and #224; npm publication remains in #226.

@@ -1,0 +1,12 @@
+{
+  "name": "ggg-nodejs-escrow-example",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "live": "node --env-file=.env live.mjs",
+    "smoke": "node smoke.mjs"
+  }
+}

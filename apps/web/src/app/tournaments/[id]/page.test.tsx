@@ -53,6 +53,7 @@ const ACTIVE_TOURNAMENT = {
   asset: "XLM" as const,
   entryFee: "10000000",
   distributionBps: [6000, 3000, 1000] as const,
+  contractVersion: "CURRENT" as const,
   contractId: "CONTRACTCONTRACTCONTRACTCONTRACTCONTRACTCONTRACTCONTRACTAB",
   contractUrl: "https://stellar.expert/c/C1",
   tokenAddr: "CSAC",

@@ -1,0 +1,27 @@
+# Issue #224: SDK reference consumer
+
+## Data migration
+
+`20260922000000_sdk_vectors_and_prepared_transactions` adds an ordered `distributionBps` integer array, copies every existing `[firstBps, secondBps, thirdBps]` into it, makes it required, and removes the three fixed columns. It does not rewrite `Payout`, so existing amounts and ranks remain unchanged. It also adds `PreparedEscrowTransaction`, keyed by the transaction hash, to retain the exact simulated SDK XDR and its tournament, intent, and source between the build and submit HTTP requests. Prepared rows follow tournament deletion; they do not represent confirmed ledger state.
+
+`20260922010000_prepared_escrow_created_at_idx` adds a timestamp index for opportunistic retention cleanup. Each new prepare request prunes rows older than one hour, except a deployment still referenced by `pendingDeployTxHash`; confirmed successes and failures remove their prepared row after reconciliation. Uncertain deployments remain recoverable even after the hour. This migration is additive and does not alter payouts or existing transactions.
+
+Apply this forward migration before deploying the web or subscriber changes. The new Prisma client cannot read the old columns, and the old app cannot read the new array. This requires a coordinated release. Take a database backup before migration. A database rollback requires restoring that backup, or a new reverse migration that is valid only if all tournament arrays still have exactly three entries; arrays with 1, 2, or 4–10 entries cannot fit the old schema without losing information.
+
+The migration was exercised on disposable Postgres 17 with two legacy rows: `[6000,3000,1000]` and `[1000,6000,3000]`. Both retained exact order. The migrated table accepted new one-rank and ten-rank arrays. A fresh disposable database also passed the full `prisma migrate deploy` chain. Production application data and backup/release coordination have not been exercised.
+
+## ABI compatibility and rollout
+
+The app only builds or submits SDK transactions for the #313 WASM hash `b704f577f1715d965f9ba24f2cebf49df52735d42c9a4cd2a93781d612a46dd9`. It reads an existing instance's executable WASM hash before using the SDK binding. Older instances remain visible from previously reconciled database records, with wallet mutation controls hidden and a read-only legacy label. If the hash cannot be checked, the UI also disables mutation controls. Do not decode an older instance with the current binding. An operator who needs to move funds from an older instance must use a client matching that instance's ABI; this release does not provide such a signer. The subscriber selects only explicitly known current, vector, and legacy hashes; an unknown hash stops polling for that instance. A malformed known event stops cursor advancement so it can be retried after investigation.
+
+New deployments require `ESCROW_WASM_HASH` to equal the #313 hash on the selected network. Deploy the web and subscriber code together, then change that environment value only after the migration succeeds. The subscriber accepts finalized vectors with 1–10 equal-length winner and amount entries for current/vector ABIs and exactly three entries for the known legacy ABI, writing payout rows only from confirmed events. No contract payout policy changes are included. The constructor remains one assembled transaction and one wallet signature; `initialize` remains rejected.
+
+## Local verification
+
+### PR #315 route-integration follow-up
+
+Twelve new cases run under the existing `web test:integration` command. They invoke the real create, join, finalize, cancel, refund, and submit HTTP handlers with the real SDK, generated ABI, PostgreSQL, and Redis; only the NextAuth cookie return and Stellar RPC methods are simulated. They cover confirmed and uncertain constructor deployment without `initialize`, confirmed and failed joins, one- and two-winner finalization, cancellation, refund claims, authorization/IDOR, contract mismatch, and legacy-WASM write rejection.
+
+Run these tests against an isolated Postgres 17 database with `prisma migrate deploy` and `prisma db seed`, plus an isolated Redis 7 database: the integration suite clears its configured Redis database. The follow-up local run passed the full migration chain, 590 web unit tests, 18 web integration tests, web typecheck/lint, changed-file formatting, and the production build. A real RPC/Testnet signing and subscriber run remains operator-gated under the prerequisites below.
+
+Use `pnpm install --frozen-lockfile`, `pnpm --filter web db:generate`, `pnpm --filter @goodgameguild/escrow-sdk build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm format:check`, `pnpm --filter @goodgameguild/escrow-sdk test`, `pnpm --filter subscriber test`, `pnpm --filter web test`, `pnpm --filter web test:integration`, and `pnpm --filter web build`. Database-backed checks need PostgreSQL 17, Redis 7, and the required `apps/web` environment variables; seed the disposable database before the full web suite. The final pre-PR run passed 567 web tests, 6 integration tests, the complete migration chain, typecheck, lint, and the production build. Repository-wide `format:check` still reports 210 pre-existing files on Windows; changed code was formatted separately. A live Testnet acceptance run additionally needs the #313 WASM configured on Testnet, funded organizer, referee and player wallets, Freighter, RPC/Horizon access, and a running subscriber. No live transaction is sent by the local unit suites.

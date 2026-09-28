@@ -50,6 +50,7 @@ function renderCounter(
         asset="XLM"
         participantCount={participantCount}
         entryFee="10000000"
+        distributionBps={[6000, 3000, 1000]}
         {...(initialRefundPlayers ? { initialRefundPlayers } : {})}
       />
     </TournamentEventsProvider>,
@@ -81,6 +82,7 @@ describe("PrizePoolCounter", () => {
     );
     expect(screen.getByTestId("pool-amount")).toHaveTextContent("5.0000000");
     expect(screen.getByText("4 players")).toBeInTheDocument();
+    expect(screen.getByText("3.0000000 XLM")).toBeInTheDocument();
   });
 
   it("ignores registrations without the contract-emitted poolAfter", () => {

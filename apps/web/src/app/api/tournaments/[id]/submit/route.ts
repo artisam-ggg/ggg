@@ -1,14 +1,17 @@
 import { type NextRequest } from "next/server";
+import { createHash } from "node:crypto";
 import { ok, err } from "@/lib/api";
 import { requireUser, AuthError } from "@/lib/auth-guards";
 import { assertSameOrigin, CsrfError } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
 import { StellarError } from "@/lib/stellar";
+import { EscrowSdkError } from "@goodgameguild/escrow-sdk";
 import { submitSchema } from "@/lib/validation/tournament";
 import { submitTournamentTx } from "@/server/services/tournaments";
 import { withIdempotency } from "@/server/services/idempotency";
 
 type Ctx = { params: Promise<{ id: string }> };
+const MAX_SUBMIT_BODY_BYTES = 16_384;
 
 function methodNotAllowed(): Response {
   return err("METHOD_NOT_ALLOWED", "Method not allowed", 405);
@@ -28,52 +31,95 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
     throw e;
   }
 
-  // 2. Auth: must be an authenticated user. requireUser redirects (NEXT_REDIRECT)
-  // when unauthenticated and throws AuthError(403) when wrong role.
-  let user: { id: string; username: string; role: string };
-  try {
-    user = await requireUser(undefined, false);
-  } catch (e) {
-    if (e instanceof AuthError) {
-      const code = e.status === 403 ? "FORBIDDEN" : "UNAUTHORIZED";
-      return err(code, e.message, e.status);
-    }
-    throw e; // re-throw NEXT_REDIRECT and any other non-auth errors
-  }
-
-  // 3. Idempotency key is required for all submit mutations.
+  // 2. Idempotency key is required for all submit mutations.
   const idemKey = req.headers.get("idempotency-key");
   if (!idemKey) {
     return err("MISSING_IDEMPOTENCY_KEY", "Idempotency-Key header is required", 400);
   }
 
-  // 4. Rate-limit per user.
-  const rl = await rateLimit(`submit:${user.id}`, { limit: 20, windowSec: 60 });
-  if (!rl.ok) return err("TOO_MANY_REQUESTS", "Too many requests. Try again later.", 429);
+  // 3. Apply an unspoofable public limit before reading any request body.
+  const { id } = await ctx.params;
+  const publicLimit = await rateLimit(`submit:${id}`, { limit: 30, windowSec: 60 });
+  if (!publicLimit.ok) return err("TOO_MANY_REQUESTS", "Too many requests. Try again later.", 429);
 
-  // 5. Parse + validate body.
+  // 4. Bound streamed input before parsing; Content-Length alone is not trustworthy.
+  const reader = req.body?.getReader();
+  if (!reader) return err("INVALID_REQUEST", "Invalid request body", 400);
   let body: unknown;
   try {
-    body = await req.json();
+    const decoder = new TextDecoder();
+    let raw = "";
+    let bytes = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > MAX_SUBMIT_BODY_BYTES) {
+        await reader.cancel();
+        return err("INVALID_REQUEST", "Request body too large", 400);
+      }
+      raw += decoder.decode(value, { stream: true });
+    }
+    body = JSON.parse(raw + decoder.decode());
   } catch {
     return err("INVALID_REQUEST", "Invalid request body", 400);
+  } finally {
+    reader.releaseLock();
   }
   const parsed = submitSchema.safeParse(body);
   if (!parsed.success) {
     return err("INVALID_REQUEST", parsed.error.issues[0]?.message ?? "Invalid input", 400);
   }
 
-  // 6. Resolve route param (Next 16: params is a Promise).
-  const { id } = await ctx.params;
+  // 5. Players authorize joins and referees authorize finalization with their
+  // wallet. The service validates the exact prepared XDR; the contract then
+  // enforces the signer's authorization on-chain.
+  let userId: string | null = null;
+  const walletAuthorized = parsed.data.intent === "join" || parsed.data.intent === "finalize";
+  if (!walletAuthorized) {
+    try {
+      userId = (await requireUser(undefined, false)).id;
+    } catch (e) {
+      if (e instanceof AuthError) {
+        const code = e.status === 403 ? "FORBIDDEN" : "UNAUTHORIZED";
+        return err(code, e.message, e.status);
+      }
+      throw e;
+    }
+  }
+
+  // 6. Authenticated mutations also retain their per-user limit.
+  if (userId !== null) {
+    const userLimit = await rateLimit(`submit:${userId}`, { limit: 20, windowSec: 60 });
+    if (!userLimit.ok) return err("TOO_MANY_REQUESTS", "Too many requests. Try again later.", 429);
+  }
 
   // 7. Submit with idempotency guarantee.
   try {
     const data = await withIdempotency(
-      parsed.data.intent === "deploy" ? `${id}:${user.id}:deploy` : `${id}:${idemKey}`,
-      () => submitTournamentTx(id, parsed.data, user.id),
+      walletAuthorized
+        ? `${id}:${parsed.data.intent}:${createHash("sha256").update(parsed.data.signedXdr).digest("hex")}`
+        : parsed.data.intent === "deploy"
+          ? `${id}:${userId}:deploy`
+          : `${id}:${userId}:${parsed.data.intent}:${idemKey}`,
+      () => submitTournamentTx(id, parsed.data, userId),
     );
     return ok(data);
   } catch (e) {
+    if (e instanceof EscrowSdkError) {
+      const status =
+        e.code === "TX_TIMEOUT"
+          ? 504
+          : e.code === "CONFIRMATION_FAILED"
+            ? 503
+            : e.code === "INVALID_INPUT" || e.code === "NETWORK_MISMATCH"
+              ? 400
+              : 422;
+      return err(e.code, e.message, status, {
+        ...(e.hash ? { txHash: e.hash } : {}),
+        retryable: e.code === "TX_TIMEOUT" || e.code === "CONFIRMATION_FAILED",
+      });
+    }
     if (e instanceof StellarError) {
       const stellarStatus =
         e.code === "TX_TIMEOUT"

@@ -5,64 +5,46 @@ import { UserCircle } from "lucide-react";
 interface CandidateCardProps {
   addr: string;
   used: boolean;
-  onAssign: (rank: 1 | 2 | 3) => void;
+  ranks?: number[];
+  onAssign: (rank: number) => void;
 }
 
-export function CandidateCard({ addr, used, onAssign }: CandidateCardProps) {
+const rankLabel = (rank: number) => ["1st", "2nd", "3rd"][rank - 1] ?? `rank ${rank}`;
+
+export function CandidateCard({ addr, used, ranks = [1, 2, 3], onAssign }: CandidateCardProps) {
+  const shortAddress = `${addr.slice(0, 6)}…${addr.slice(-6)}`;
   return (
     <div
       draggable={!used}
-      onDragStart={(e) => {
-        e.dataTransfer.setData("text/plain", addr);
-        e.dataTransfer.effectAllowed = "move";
+      onDragStart={(event) => {
+        event.dataTransfer.setData("text/plain", addr);
+        event.dataTransfer.effectAllowed = "move";
       }}
       data-addr={addr}
-      aria-label={`Participant ${addr.slice(0, 6)}…${addr.slice(-6)}`}
-      className={[
-        "brutalist-border flex flex-col gap-2 rounded-none bg-surface-container p-3",
-        used ? "opacity-30 grayscale" : "cursor-grab active:translate-x-0.5 active:translate-y-0.5",
-      ].join(" ")}
+      aria-label={`Participant ${shortAddress}`}
+      className={`brutalist-border flex flex-col gap-2 rounded-none bg-surface-container p-3 ${used ? "opacity-30 grayscale" : "cursor-grab"}`}
     >
       <div className="flex items-center gap-3">
-        {/* Rendered clean inline SVG primitive directly */}
-        <UserCircle className="h-5 w-5 text-on-surface-variant shrink-0" aria-hidden="true" />
-
-        <span className="data-mono text-on-surface">
-          {addr.slice(0, 6)}…{addr.slice(-6)}
-        </span>
+        <UserCircle className="h-5 w-5 shrink-0 text-on-surface-variant" aria-hidden="true" />
+        <span className="data-mono text-on-surface">{shortAddress}</span>
       </div>
-
-      {/* Keyboard-accessible assign buttons (a11y alternative to drag-and-drop) */}
       {!used && (
         <div
-          className="flex gap-1"
+          className="flex flex-wrap gap-1"
           role="group"
-          aria-label={`Assign ${addr.slice(0, 6)}…${addr.slice(-6)} to rank`}
+          aria-label={`Assign ${shortAddress} to rank`}
         >
-          <button
-            type="button"
-            onClick={() => onAssign(1)}
-            className="label-caps rounded-none border border-outline px-2 py-1 text-xs text-on-surface-variant hover:border-acid-yellow hover:text-acid-yellow focus-visible:outline focus-visible:outline-2 focus-visible:outline-acid-yellow"
-            aria-label={`Assign 1st to ${addr.slice(0, 6)}…${addr.slice(-6)}`}
-          >
-            Assign 1st
-          </button>
-          <button
-            type="button"
-            onClick={() => onAssign(2)}
-            className="label-caps rounded-none border border-outline px-2 py-1 text-xs text-on-surface-variant hover:border-acid-yellow hover:text-acid-yellow focus-visible:outline focus-visible:outline-2 focus-visible:outline-acid-yellow"
-            aria-label={`Assign 2nd to ${addr.slice(0, 6)}…${addr.slice(-6)}`}
-          >
-            Assign 2nd
-          </button>
-          <button
-            type="button"
-            onClick={() => onAssign(3)}
-            className="label-caps rounded-none border border-outline px-2 py-1 text-xs text-on-surface-variant hover:border-acid-yellow hover:text-acid-yellow focus-visible:outline focus-visible:outline-2 focus-visible:outline-acid-yellow"
-            aria-label={`Assign 3rd to ${addr.slice(0, 6)}…${addr.slice(-6)}`}
-          >
-            Assign 3rd
-          </button>
+          {ranks.map((rank) => (
+            <button
+              key={rank}
+              type="button"
+              onClick={() => onAssign(rank)}
+              className="label-caps rounded-none border border-outline px-2 py-1 text-xs text-on-surface-variant hover:border-acid-yellow hover:text-acid-yellow focus-visible:outline focus-visible:outline-2 focus-visible:outline-acid-yellow"
+              aria-label={`Assign ${rankLabel(rank)} to ${shortAddress}`}
+            >
+              Assign {rankLabel(rank)}
+            </button>
+          ))}
         </div>
       )}
     </div>
