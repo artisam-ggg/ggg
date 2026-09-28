@@ -4,7 +4,7 @@ Running log of shipped features (append one entry per change), per the auto-dev 
 
 ## Issue #345 - Homepage SDK call-to-action
 
-The public homepage now presents a developer-focused CTA beside the organizer flow. It links safely to the canonical `@goodgameguild/escrow-sdk` npm package page, explains that it is a reusable Stellar escrow SDK, and remains usable in the responsive hero layout without affecting wallets, sessions, contracts, or payouts.
+The public marketing homepage's Features grid now presents a developer-focused CTA. It links safely to the canonical `@goodgameguild/escrow-sdk` npm package page, explains that it is a reusable Stellar escrow SDK, and remains usable across responsive layouts without affecting wallets, sessions, contracts, or payouts.
 
 ## Homepage hero cover image
 
