@@ -8,7 +8,7 @@ export default function Page() {
         className="absolute inset-0 -z-10 bg-center bg-cover bg-no-repeat"
         style={{
           backgroundImage:
-            "linear-gradient(105deg, rgba(10, 10, 10, 0.4) 0%, rgba(19, 19, 19, 0.88) 62%, rgba(19, 19, 19, 0.96) 100%), url('/ggg-cover.png')",
+            "linear-gradient(105deg, rgba(10, 10, 10, 0.35) 0%, rgba(19, 19, 19, 0.83) 62%, rgba(19, 19, 19, 0.91) 100%), url('/ggg-cover.png')",
         }}
       />
       <div className="mx-auto max-w-(--spacing-container-max) px-4 md:px-(--spacing-margin-desktop)">
