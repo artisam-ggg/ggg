@@ -264,6 +264,9 @@ describe("CreateTournamentForm", () => {
     const calculation = screen.getByLabelText(/payout calculation/i);
     expect(calculation).toHaveValue("equal");
     expect(calculation.parentElement).toHaveClass("w-full", "max-w-[24rem]");
+    expect(
+      screen.getByText(/equal and descending update lower ranks; edit one to use custom/i),
+    ).toBeInTheDocument();
     expect(screen.getByText(/6000 \/ 2000 \/ 2000 bps/i)).toBeInTheDocument();
   });
 

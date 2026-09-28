@@ -646,7 +646,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
             <option value="custom">Custom</option>
           </select>
           <p className="mt-1 text-sm text-on-surface-variant">
-            Lower ranks update automatically; edit one to use Custom.
+            Equal and Descending update lower ranks; edit one to use Custom.
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
