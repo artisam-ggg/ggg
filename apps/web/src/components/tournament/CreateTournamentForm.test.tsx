@@ -264,6 +264,9 @@ describe("CreateTournamentForm", () => {
     const calculation = screen.getByLabelText(/payout calculation/i);
     expect(calculation).toHaveValue("equal");
     expect(calculation.parentElement).toHaveClass("w-full", "max-w-[24rem]");
+    expect(
+      screen.getByText(/equal and descending update lower ranks; edit one to use custom/i),
+    ).toBeInTheDocument();
     expect(screen.getByText(/6000 \/ 2000 \/ 2000 bps/i)).toBeInTheDocument();
   });
 
@@ -390,13 +393,14 @@ describe("CreateTournamentForm", () => {
     expect(screen.getByRole("button", { name: /deploy soroban contract/i })).toBeDisabled();
   });
 
-  it("explains that the deadline input is local and the saved instant is UTC", () => {
+  it("keeps concise local-time and on-chain deadline guidance", () => {
     render(<CreateTournamentForm expectedPassphrase="P" />);
     expect(screen.getByLabelText(/settlement deadline \(your local time\)/i)).toHaveAttribute(
       "type",
       "datetime-local",
     );
-    expect(screen.getByText(/the matching UTC instant is stored on-chain/i)).toBeInTheDocument();
+    expect(screen.getByText(/local time; stored on-chain as UTC/i)).toBeInTheDocument();
+    expect(screen.getByText(/choose 1 hour to 90 days ahead/i)).toBeInTheDocument();
   });
 
   it.each([

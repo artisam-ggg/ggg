@@ -2,6 +2,10 @@
 
 Running log of shipped features (append one entry per change), per the auto-dev workflow.
 
+## Issue #346 - Simplify Create Tournament copy
+
+The Create Tournament form now removes its redundant introductory sentence and condenses the deadline and payout-calculation helper copy. The form still identifies local-time input, on-chain UTC storage, the allowed one-hour-to-90-day window, automatic payout recalculation, and the Custom fallback; labels, validation, wallet signing, and deployment behavior are unchanged.
+
 ## Issue #345 - Homepage SDK call-to-action
 
 The public marketing homepage presents a compact, developer-focused hero CTA alongside the primary app action, with supporting detail in the Features grid. Both links safely lead to the canonical `@goodgameguild/escrow-sdk` npm package page, explain that it is a reusable Stellar escrow SDK, and remain usable across responsive layouts without affecting wallets, sessions, contracts, or payouts.
