@@ -2,6 +2,10 @@
 
 Running log of shipped features (append one entry per change), per the auto-dev workflow.
 
+## Issue #349 - Role-based operating guides
+
+GitBook now has separate Testnet-only organizer, player, referee, and administrator guides, with prerequisites, numbered steps, expected results, wallet/login boundaries, and troubleshooting for pending transactions, wrong wallets, deadlines, and delayed status updates. The future concise in-app Guidelines modal in #348 can link to these canonical manuals rather than repeat them.
+
 ## Issue #346 - Simplify Create Tournament copy
 
 The Create Tournament form now removes its redundant introductory sentence and condenses the deadline and payout-calculation helper copy. The form still identifies local-time input, on-chain UTC storage, the allowed one-hour-to-90-day window, automatic payout recalculation, and the Custom fallback; labels, validation, wallet signing, and deployment behavior are unchanged.
