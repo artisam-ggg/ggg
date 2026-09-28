@@ -509,9 +509,6 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       <h1 className="text-[32px] font-bold -tracking-[0.02em] text-on-surface">
         Create Tournament
       </h1>
-      <p className="mt-2 text-sm text-on-surface-variant">
-        Deploy a Soroban escrow contract for your tournament.
-      </p>
       {/* Tournament Name */}
       <div className="mt-8">
         <label className={labelClass} htmlFor="name">
@@ -627,8 +624,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
           aria-describedby="settlement-deadline-help"
         />
         <p id="settlement-deadline-help" className="mt-1 text-sm text-on-surface-variant">
-          Enter the date and time in your local timezone. The matching UTC instant is stored
-          on-chain. Choose a time at least one hour and no more than 90 days away.
+          Local time; stored on-chain as UTC. Choose 1 hour to 90 days ahead.
         </p>
       </div>
 
@@ -650,8 +646,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
             <option value="custom">Custom</option>
           </select>
           <p className="mt-1 text-sm text-on-surface-variant">
-            Equal and Descending recalculate lower ranks when first place or the winner count
-            changes. Editing a lower rank switches to Custom.
+            Lower ranks update automatically; edit one to use Custom.
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
