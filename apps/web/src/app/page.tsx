@@ -20,19 +20,6 @@ export default function Page() {
           Create Tournament
         </Link>
       </div>
-      <p className="mt-6 text-sm text-on-surface-variant">
-        For developers:{" "}
-        <a
-          href="https://www.npmjs.com/package/@goodgameguild/escrow-sdk"
-          target="_blank"
-          rel="noreferrer"
-          aria-label="View the reusable GGG Stellar escrow SDK on npm"
-          className="font-semibold text-acid-yellow underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acid-yellow"
-        >
-          use the reusable Stellar escrow SDK on npm
-        </a>
-        .
-      </p>
     </main>
   );
 }
