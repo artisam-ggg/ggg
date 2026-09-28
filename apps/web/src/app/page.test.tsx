@@ -11,7 +11,10 @@ describe("/ landing", () => {
     expect(cta.className).toMatch(/electric-violet/);
 
     const sdkCta = screen.getByRole("link", { name: /reusable ggg stellar escrow sdk on npm/i });
-    expect(sdkCta).toHaveAttribute("href", "https://www.npmjs.com/package/@goodgameguild/escrow-sdk");
+    expect(sdkCta).toHaveAttribute(
+      "href",
+      "https://www.npmjs.com/package/@goodgameguild/escrow-sdk",
+    );
     expect(sdkCta).toHaveAttribute("target", "_blank");
     expect(sdkCta).toHaveAttribute("rel", "noreferrer");
   });
