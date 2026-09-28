@@ -6,6 +6,7 @@ import { WalletButton } from "./WalletButton";
 import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
 import { signAndSubmit, SubmissionError } from "@/lib/wallet";
 import { formatStroops } from "@/lib/format-stroops";
+import { Guidelines } from "@/components/ui/Guidelines";
 
 type Phase = "idle" | "signing" | "submitting" | "awaitingConfirmation" | "error";
 const REFRESH_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000, 30_000, 30_000] as const;
@@ -102,6 +103,7 @@ export function ClaimRefundButton({
 
   return (
     <div className="mt-4 flex flex-wrap items-center gap-3">
+      <Guidelines journey="refund" />
       <WalletButton expectedPassphrase={passphrase} onConnected={setPlayer} />
       {player && (
         <p className="text-sm text-on-surface-variant">

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 import { ensureWallet } from "@/lib/wallet";
 import { captureWalletConnected } from "@/lib/analytics";
+import { Guidelines } from "@/components/ui/Guidelines";
 
 type State = "idle" | "match" | "mismatch" | "error";
 
@@ -36,6 +37,9 @@ export function RefereePanel({
   return (
     <div className="violet-accent rounded-xl bg-surface-container p-6">
       <p className="label-caps text-electric-violet">Referee</p>
+      <div className="mt-3">
+        <Guidelines journey="referee" />
+      </div>
 
       {state === "match" ? (
         <Link

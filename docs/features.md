@@ -290,3 +290,9 @@ The static homepage includes an aggregate-only App pageviews metric for the last
 ## Issue #222 — Publishable escrow SDK package and bindings
 
 Added `@goodgameguild/escrow-sdk@0.1.0` as a public MIT-licensed workspace package with a built root entry point, a separate generated-contract export, declarations, and a restricted publication tarball. The finalized constructor, 1–10 winner vector, read helpers, deadline, and refund ABI now live in the SDK; the web app imports those bindings from the workspace package. CI checks the binding against freshly built contract WASM, and package tests cover the current ABI. Higher-level transaction APIs and app migration remain tracked in #223 and #224; npm publication remains in #226.
+## Issue #348 - Contextual platform guidelines
+
+The organizer, player, referee, and refund interfaces now include a shared
+keyboard-accessible Guidelines modal. Each entry point offers concise,
+role-specific steps, a link to the relevant full GitBook guide, Escape-to-close,
+and focus management that returns people to the control that opened the modal.

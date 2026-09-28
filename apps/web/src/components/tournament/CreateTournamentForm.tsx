@@ -6,6 +6,7 @@ import { WalletButton } from "./WalletButton";
 import { PrizeBreakdown } from "./PrizeBreakdown";
 import { Button } from "@/components/ui/button";
 import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
+import { Guidelines } from "@/components/ui/Guidelines";
 import { signAndSubmit, SubmissionError } from "@/lib/wallet";
 import { createTournamentSchema } from "@/lib/validation/tournament";
 import { apiResponseSchema } from "@/lib/api";
@@ -509,6 +510,9 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       <h1 className="text-[32px] font-bold -tracking-[0.02em] text-on-surface">
         Create Tournament
       </h1>
+      <div className="mt-4">
+        <Guidelines journey="organizer" />
+      </div>
       {/* Tournament Name */}
       <div className="mt-8">
         <label className={labelClass} htmlFor="name">

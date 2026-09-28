@@ -6,6 +6,7 @@ import { QrTile } from "./QrTile";
 import { WalletButton } from "./WalletButton";
 import { ContractAddress } from "./ContractAddress";
 import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
+import { Guidelines } from "@/components/ui/Guidelines";
 import { signAndSubmit } from "@/lib/wallet";
 
 interface JoinCardProps {
@@ -100,6 +101,9 @@ export function JoinCard(props: JoinCardProps) {
   return (
     <div className="kinetic-glass rounded-2xl p-6">
       <p className="label-caps text-on-surface-variant">Scan to join</p>
+      <div className="mt-3">
+        <Guidelines journey="player" />
+      </div>
 
       <div className="mt-4 flex flex-col items-start gap-4">
         <QrTile value={props.joinUrl} />
