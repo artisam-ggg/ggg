@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - A GGG organizer account and access to the **Tournaments** dashboard.
-- A Stellar Testnet wallet with enough test XLM for transaction fees.
+- A Freighter wallet on Stellar Testnet with enough test XLM for transaction fees.
 - The exact public wallet address for the referee.
 
 ## Create and deploy a tournament

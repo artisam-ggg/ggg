@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - The public tournament link.
-- The exact Stellar Testnet wallet configured by the organizer as the referee.
+- The exact Freighter wallet on Stellar Testnet configured by the organizer as the referee.
 - A completed ranking of distinct registered players.
 
 Referees do not need a GGG app login for settlement. Settlement authority comes from the configured wallet, and the app checks that wallet before opening the console.

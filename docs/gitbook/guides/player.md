@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - The organizer's public tournament link.
-- A Stellar Testnet wallet with test XLM for the entry fee and transaction fee.
+- A Freighter wallet on Stellar Testnet with the tournament's selected entry asset (XLM or USDC) and enough test XLM for transaction fees.
 
 You do **not** need a GGG app account to view or join a public tournament. You do need the wallet that will pay the entry fee and later receive any payout or refund.
 

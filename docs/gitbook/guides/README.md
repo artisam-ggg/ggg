@@ -4,7 +4,7 @@ These Testnet-only guides explain the GGG tournament lifecycle from each role's 
 
 ## Before you begin
 
-- Use the Stellar **Testnet** network in Freighter or another supported Stellar wallet.
+- Use the Stellar **Testnet** network in Freighter.
 - Never share a seed phrase, recovery phrase, private key, session cookie, or signed XDR.
 - App sign-in and wallet approval are different: sign-in controls dashboard access; the wallet signs on-chain actions.
 
