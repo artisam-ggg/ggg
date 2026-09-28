@@ -6,6 +6,10 @@ Running log of shipped features (append one entry per change), per the auto-dev 
 
 The public homepage now presents a developer-focused CTA beside the organizer flow. It links safely to the canonical `@goodgameguild/escrow-sdk` npm package page, explains that it is a reusable Stellar escrow SDK, and remains usable in the responsive hero layout without affecting wallets, sessions, contracts, or payouts.
 
+## Homepage hero cover image
+
+The supplied GGG cover image now replaces the public marketing homepage hero placeholder and provides the app landing-page hero background. Both keep contrast-preserving overlays so the tournament-creation copy and primary action remain readable.
+
 ## Issue #337 — Refresh refund status automatically
 
 After a cancellation or deadline refund is submitted, the claim UI now keeps the action disabled while it refreshes the canonical server snapshot with bounded exponential backoff. Confirmed subscriber data ends the refresh cycle and updates the refund view without a manual browser reload. A transaction with a retryable confirmation error and known hash remains in the non-resubmittable pending state, while a definite submission failure is labeled separately and can be retried. After the automatic window expires, the page reports that processing is still underway and offers an explicit status-only refresh; timers are cleaned up on navigation and no refresh path prepares, signs, or submits another transaction.
