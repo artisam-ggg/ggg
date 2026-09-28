@@ -4,7 +4,7 @@ Running log of shipped features (append one entry per change), per the auto-dev 
 
 ## Issue #349 - Role-based operating guides
 
-GitBook now has separate Testnet-only organizer, player, referee, and administrator guides, with prerequisites, numbered steps, expected results, wallet/login boundaries, and troubleshooting for pending transactions, wrong wallets, deadlines, and delayed status updates. The future concise in-app Guidelines modal in #348 can link to these canonical manuals rather than repeat them.
+GitBook now has separate Testnet-only organizer, player, and referee guides, with prerequisites, numbered steps, expected results, wallet/login boundaries, and troubleshooting for pending transactions, wrong wallets, deadlines, and delayed status updates. The future concise in-app Guidelines modal in #348 can link to these canonical manuals rather than repeat them.
 
 ## Issue #346 - Simplify Create Tournament copy
 

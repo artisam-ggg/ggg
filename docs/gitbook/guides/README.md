@@ -21,4 +21,4 @@ These Testnet-only guides explain the GGG tournament lifecycle from each role's 
 | Refunds open | The deadline passed without finalization; eligible players can claim refunds. |
 | Refunded | All confirmed registered players have claimed their refunds. |
 
-Choose your guide: [Organizer](organizer.md), [Player](player.md), [Referee](referee.md), or [Administrator](administrator.md).
+Choose your guide: [Organizer](organizer.md), [Player](player.md), or [Referee](referee.md).

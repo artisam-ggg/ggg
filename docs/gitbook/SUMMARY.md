@@ -16,7 +16,6 @@
   - [Organizer guide](guides/organizer.md)
   - [Player guide](guides/player.md)
   - [Referee guide](guides/referee.md)
-  - [Administrator guide](guides/administrator.md)
 - [Reference](reference/README.md)
   - [Evidence index](reference/evidence.md)
   - [Verification metrics](reference/metrics.md)
