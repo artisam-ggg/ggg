@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { act } from "react";
 import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
@@ -46,6 +46,17 @@ async function fillValidTournament() {
   await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
 }
 
+async function expectCreationSuccess(tournamentId: string) {
+  const heading = await screen.findByRole("heading", { name: /your escrow is live/i });
+  expect(heading.closest("section")).toHaveClass("rounded-xl");
+  const publicLink = screen.getByRole("link", { name: /view public tournament/i });
+  expect(publicLink).toHaveAttribute("href", `/tournaments/${tournamentId}`);
+  expect(publicLink).toHaveClass("bg-primary", "text-on-primary");
+  expect(screen.getByText(/confirm the referee has the correct wallet/i)).toBeInTheDocument();
+  expect(screen.getByText(/monitor confirmed entrants/i)).toBeInTheDocument();
+  expect(screen.getByText(/ask the referee to settle/i)).toBeInTheDocument();
+}
+
 describe("CreateTournamentForm", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -59,7 +70,7 @@ describe("CreateTournamentForm", () => {
     push.mockReset();
   });
 
-  it("restores a saved draft after reload without persisting the organizer wallet", async () => {
+  it("restores public draft fields without persisting organizer or referee wallets", async () => {
     localStorage.setItem(
       "ggg:tournament-create-draft",
       JSON.stringify({
@@ -79,11 +90,32 @@ describe("CreateTournamentForm", () => {
     expect(screen.getByDisplayValue("SF6")).toBeInTheDocument();
     expect(screen.getByDisplayValue("1.5")).toBeInTheDocument();
     expect(screen.getByDisplayValue("USDC")).toBeInTheDocument();
-    expect(screen.getByDisplayValue(REF)).toBeInTheDocument();
+    expect(screen.getByLabelText(/referee/i)).toHaveValue("");
     expect(screen.getByDisplayValue("50")).toBeInTheDocument();
     expect(screen.getByText(/5000 \/ 3000 \/ 2000 bps/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/payout calculation/i)).toHaveValue("custom");
-    expect(localStorage.getItem("ggg:tournament-create-draft")).not.toContain(MOCK_ORGANIZER);
+    await waitFor(() => {
+      const stored = localStorage.getItem("ggg:tournament-create-draft");
+      expect(stored).not.toContain(MOCK_ORGANIZER);
+      expect(stored).not.toContain(REF);
+    });
+    const privacyNotice = screen
+      .getByText(/only non-wallet public tournament fields/i)
+      .closest("div");
+    expect(privacyNotice).not.toHaveAttribute("role", "status");
+    expect(privacyNotice).toHaveTextContent(/organizer wallet, referee wallet.*never.*stored/i);
+    expect(
+      within(privacyNotice!).getByText(/only non-wallet public tournament fields/i),
+    ).toHaveClass("text-on-surface");
+  });
+
+  it("does not create a recoverable draft for a referee wallet alone", async () => {
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+
+    fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+
+    await waitFor(() => expect(localStorage.getItem("ggg:tournament-create-draft")).toBeNull());
+    expect(screen.queryByRole("button", { name: /clear draft/i })).not.toBeInTheDocument();
   });
 
   it("restores a descending mode draft without recalculating it", async () => {
@@ -269,6 +301,28 @@ describe("CreateTournamentForm", () => {
     expect(screen.getByLabelText(/settlement deadline/i)).toBeInTheDocument();
   });
 
+  it("previews the public tournament details before deployment", () => {
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/tournament name/i), {
+      target: { value: "Preview Cup" },
+    });
+    fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
+    fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "2.5" } });
+    fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fireEvent.change(screen.getByLabelText(/settlement deadline/i), {
+      target: { value: "2026-10-01T12:00" },
+    });
+
+    const preview = screen.getByRole("region", { name: /public tournament preview/i });
+    expect(within(preview).getByText("Preview Cup")).toBeInTheDocument();
+    expect(within(preview).getByText("SF6")).toBeInTheDocument();
+    expect(within(preview).getByText("2.5 XLM")).toBeInTheDocument();
+    expect(within(preview).getByText("2026-10-01 12:00 local time")).toBeInTheDocument();
+    expect(within(preview).getByText(REF)).toBeInTheDocument();
+    expect(within(preview).getByText("#1 60% · #2 20% · #3 20%")).toBeInTheDocument();
+    expect(within(preview).getByText(/default tournament cover/i)).toBeInTheDocument();
+  });
+
   it("keeps organizer safety guidance, validation, wallet access, and the role guide discoverable", () => {
     render(<CreateTournamentForm expectedPassphrase="P" />);
 
@@ -297,6 +351,69 @@ describe("CreateTournamentForm", () => {
       screen.getByText(/equal and descending update lower ranks; edit one to use custom/i),
     ).toBeInTheDocument();
     expect(screen.getByText(/6000 \/ 2000 \/ 2000 bps/i)).toBeInTheDocument();
+  });
+
+  it("applies every payout preset without changing other submitted fields", async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          data: { tournamentId: "t_preset", unsignedXdr: "XDR", network: "testnet" },
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", mockFetch);
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Winner takes all" }));
+    expect(screen.getByText("10000 bps")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/2nd %/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Top 3" }));
+    expect(screen.getByText("6000 / 2000 / 2000 bps")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Top 4" }));
+    expect(screen.getByText("5000 / 1667 / 1667 / 1666 bps")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Top 8" }));
+    expect(
+      screen.getByText("3000 / 1000 / 1000 / 1000 / 1000 / 1000 / 1000 / 1000 bps"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Rank 8 %")).toHaveValue(10);
+    expect(screen.getByText(/local time; stored on-chain as UTC/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /deploy soroban contract/i })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Top 4" }));
+    await fillValidTournament();
+    fireEvent.click(screen.getByRole("button", { name: /deploy soroban contract/i }));
+
+    await waitFor(() => expect(signAndSubmit).toHaveBeenCalled());
+    const tournamentCall = mockFetch.mock.calls.find(([url]) => url === "/api/tournaments");
+    const body = JSON.parse((tournamentCall![1] as RequestInit).body as string);
+    expect(body).toMatchObject({
+      name: "Cup",
+      gameTitle: "SF6",
+      entryFee: "10000000",
+      asset: "XLM",
+      refereeAddress: REF,
+      organizerAddress: MOCK_ORGANIZER,
+      distributionBps: [5000, 1667, 1667, 1666],
+    });
+    expect(body.settlementDeadline).toBeGreaterThan(Math.floor(Date.now() / 1000));
+    vi.unstubAllGlobals();
+  });
+
+  it("applies payout presets in descending mode", () => {
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/payout calculation/i), {
+      target: { value: "descending" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Top 4" }));
+
+    expect(screen.getByText("5000 / 2501 / 1666 / 833 bps")).toBeInTheDocument();
+    expect(screen.getByLabelText(/payout calculation/i)).toHaveValue("descending");
   });
 
   it("renders accessible payout-rank buttons and enforces the 1–10 rank limits", () => {
@@ -649,8 +766,7 @@ describe("CreateTournamentForm", () => {
       ),
     );
 
-    // Redirect on success
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/tournaments/t_1"));
+    await expectCreationSuccess("t_1");
     expect(localStorage.getItem("ggg:tournament-create-draft")).toBeNull();
 
     vi.unstubAllGlobals();
@@ -798,7 +914,7 @@ describe("CreateTournamentForm", () => {
     fireEvent.click(screen.getByRole("button", { name: /close/i }));
     fireEvent.click(screen.getByRole("button", { name: /retry deployment/i }));
 
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/tournaments/t_recover"));
+    await expectCreationSuccess("t_recover");
     expect(signAndSubmit).toHaveBeenCalledTimes(2);
     expect(signAndSubmit).toHaveBeenNthCalledWith(
       2,
@@ -844,7 +960,7 @@ describe("CreateTournamentForm", () => {
     vi.unstubAllGlobals();
   });
 
-  it("redirects after a pending deployment is confirmed", async () => {
+  it("shows follow-up guidance after a pending deployment is confirmed", async () => {
     const mockFetch = vi
       .fn()
       .mockResolvedValueOnce(
@@ -876,7 +992,7 @@ describe("CreateTournamentForm", () => {
     fireEvent.click(screen.getByRole("button", { name: /deploy soroban contract/i }));
     fireEvent.click(await screen.findByRole("button", { name: /check deployment status/i }));
 
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/tournaments/t_pending"));
+    await expectCreationSuccess("t_pending");
     vi.unstubAllGlobals();
   });
 
@@ -956,6 +1072,7 @@ describe("CreateTournamentForm", () => {
         expect.objectContaining({ method: "POST" }),
       );
     });
+    expect(await screen.findByAltText(/tournament cover preview/i)).toBeInTheDocument();
 
     // Connect wallet and submit
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
@@ -972,7 +1089,6 @@ describe("CreateTournamentForm", () => {
       const body = JSON.parse((tournamentCall![1] as RequestInit).body as string);
       expect(body.coverImageKey).toBe("covers/123e4567-e89b-12d3-a456-426614174000.png");
     });
-
     vi.unstubAllGlobals();
   });
 
@@ -1011,7 +1127,7 @@ describe("CreateTournamentForm", () => {
 
     // Resolve signing to unblock
     resolveSign!({ txHash: "TX", contractId: "C1", status: "ACTIVE" });
-    await waitFor(() => expect(push).toHaveBeenCalled());
+    await expectCreationSuccess("t_modal");
 
     vi.unstubAllGlobals();
   });
@@ -1214,6 +1330,7 @@ describe("CreateTournamentForm", () => {
 
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Invalid file type."));
     expect(screen.queryByText(/Uploaded:/i)).not.toBeInTheDocument();
+    expect(screen.queryByAltText(/tournament cover preview/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /deploy soroban contract/i })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: /remove cover image/i }));

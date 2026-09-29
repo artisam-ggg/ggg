@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import Image from "next/image";
+import Link from "next/link";
 import { Minus, Plus } from "lucide-react";
 import { WalletButton } from "./WalletButton";
 import { WalletActionNotice } from "./WalletActionNotice";
@@ -63,7 +64,6 @@ const draftSchema = z.object({
   gameTitle: z.string().max(120),
   entryFee: z.string().max(32),
   asset: z.enum(["XLM", "USDC"]),
-  refereeAddress: z.string().max(56),
   settlementDeadline: z.string().max(32),
   splits: z.array(z.number().min(0.01).max(100)).min(1).max(10),
   distributionMode: distributionModeSchema.default("custom"),
@@ -76,7 +76,6 @@ const emptyDraft: TournamentDraft = {
   gameTitle: "",
   entryFee: "",
   asset: "XLM",
-  refereeAddress: "",
   settlementDeadline: "",
   splits: [60, 20, 20],
   distributionMode: "equal",
@@ -147,14 +146,18 @@ type PendingDeployment = {
 };
 
 const REFRESH_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000];
+const PAYOUT_PRESETS = [
+  { label: "Winner takes all", winnerCount: 1, firstPlaceBps: 10_000 },
+  { label: "Top 3", winnerCount: 3, firstPlaceBps: 6_000 },
+  { label: "Top 4", winnerCount: 4, firstPlaceBps: 5_000 },
+  { label: "Top 8", winnerCount: 8, firstPlaceBps: 3_000 },
+] as const;
 
 interface CreateTournamentFormProps {
   expectedPassphrase: string;
 }
 
 export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFormProps) {
-  const router = useRouter();
-
   // Form state
   const [name, setName] = useState("");
   const [gameTitle, setGameTitle] = useState("");
@@ -166,6 +169,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   const [splits, setSplits] = useState<number[]>([60, 20, 20]);
   const [distributionMode, setDistributionMode] = useState<DistributionMode>("equal");
   const [coverImageKey, setCoverImageKey] = useState<string | undefined>();
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [coverUploadStatus, setCoverUploadStatus] = useState<CoverUploadStatus>("idle");
   const coverUploadRequest = useRef(0);
   const coverImageInput = useRef<HTMLInputElement>(null);
@@ -177,13 +181,13 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   const [errorTxHash, setErrorTxHash] = useState<string | null>(null);
   const [pendingDeployment, setPendingDeployment] = useState<PendingDeployment | null>(null);
   const [confirmationAttempts, setConfirmationAttempts] = useState(0);
+  const [createdTournamentId, setCreatedTournamentId] = useState<string | null>(null);
   const [entryFeeError, setEntryFeeError] = useState<string | null>(null);
   const [refereeError, setRefereeError] = useState<string | null>(null);
   const hasDraft =
     !!name ||
     !!gameTitle ||
     !!entryFee ||
-    !!refereeAddress ||
     !!settlementDeadline ||
     asset !== "XLM" ||
     splits.join(",") !== "60,20,20" ||
@@ -196,7 +200,6 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     setGameTitle(draft.gameTitle);
     setEntryFee(draft.entryFee);
     setAsset(draft.asset);
-    setRefereeAddress(draft.refereeAddress);
     setSettlementDeadline(draft.settlementDeadline);
     setSplits(draft.splits);
     setDistributionMode(draft.distributionMode);
@@ -206,13 +209,12 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   useEffect(() => {
     if (!restored) return;
 
-    // Wallet and upload state are deliberately excluded; both must be fetched live.
+    // Wallet and upload state are deliberately excluded; both must be provided live.
     const draft = {
       name,
       gameTitle,
       entryFee,
       asset,
-      refereeAddress,
       settlementDeadline,
       splits,
       distributionMode,
@@ -233,7 +235,6 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     gameTitle,
     hasDraft,
     name,
-    refereeAddress,
     restored,
     settlementDeadline,
     splits,
@@ -259,8 +260,8 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         if (status === "ACTIVE") {
           removeStoredDraft();
           setPendingDeployment(null);
+          setCreatedTournamentId(pendingDeployment.tournamentId);
           setPhase("success");
-          router.push(`/tournaments/${pendingDeployment.tournamentId}`);
           return;
         }
         setConfirmationAttempts((attempts) => attempts + 1);
@@ -271,7 +272,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       cancelled = true;
       window.clearTimeout(timeout);
     };
-  }, [awaitingConfirmation, confirmationAttempts, pendingDeployment, router]);
+  }, [awaitingConfirmation, confirmationAttempts, pendingDeployment]);
 
   function clearDraft() {
     removeStoredDraft();
@@ -320,6 +321,12 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     }
   }
 
+  function applyPayoutPreset({ winnerCount, firstPlaceBps }: (typeof PAYOUT_PRESETS)[number]) {
+    const mode = distributionMode === "custom" ? "equal" : distributionMode;
+    setSplits(calculateDistribution(mode, firstPlaceBps, winnerCount).map((share) => share / 100));
+    setDistributionMode(mode);
+  }
+
   function changeFirstPlace(value: number) {
     if (!Number.isFinite(value)) {
       setSplits([0, ...splits.slice(1)]);
@@ -365,6 +372,13 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     const request = ++coverUploadRequest.current;
     setError(null);
     setCoverUploadStatus("uploading");
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      if (request === coverUploadRequest.current && typeof reader.result === "string") {
+        setCoverPreviewUrl(reader.result);
+      }
+    });
+    reader.readAsDataURL(file);
     try {
       const form = new FormData();
       form.set("file", file);
@@ -390,6 +404,8 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       }
     } catch (err: unknown) {
       if (request === coverUploadRequest.current) {
+        reader.abort();
+        setCoverPreviewUrl(null);
         setCoverUploadStatus("failed");
         setError(err instanceof Error ? err.message : "Upload failed");
       }
@@ -399,6 +415,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   function removeCoverImage() {
     ++coverUploadRequest.current;
     setCoverImageKey(undefined);
+    setCoverPreviewUrl(null);
     setCoverUploadStatus("idle");
     setError(null);
     if (coverImageInput.current) coverImageInput.current.value = "";
@@ -416,8 +433,8 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
 
     setPendingDeployment(null);
     removeStoredDraft();
+    setCreatedTournamentId(pending.tournamentId);
     setPhase("success");
-    router.push(`/tournaments/${pending.tournamentId}`);
   }
 
   function handleDeploymentError(e: unknown) {
@@ -450,8 +467,8 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       removeStoredDraft();
       const tournamentId = pendingDeployment.tournamentId;
       setPendingDeployment(null);
+      setCreatedTournamentId(tournamentId);
       setPhase("success");
-      router.push(`/tournaments/${tournamentId}`);
       return;
     }
     setConfirmationAttempts((attempts) => Math.min(attempts + 1, REFRESH_DELAYS_MS.length));
@@ -567,6 +584,44 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     coverUploadStatus !== "failed" &&
     phase === "idle";
 
+  if (phase === "success" && createdTournamentId) {
+    const publicTournamentPath = `/tournaments/${encodeURIComponent(createdTournamentId)}`;
+    return (
+      <section className="kinetic-glass rounded-xl p-8" aria-labelledby="creation-success-title">
+        <p className="label-caps text-primary">Tournament created</p>
+        <h1
+          id="creation-success-title"
+          className="mt-2 text-[32px] font-bold -tracking-[0.02em] text-on-surface"
+        >
+          Your escrow is live
+        </h1>
+        <p className="mt-3 text-on-surface-variant">
+          The deployment is confirmed. Complete these organizer steps before the event starts.
+        </p>
+        <ol className="mt-6 list-decimal space-y-3 pl-6 text-on-surface">
+          <li>Open the public tournament and share its Copy tournament link with players.</li>
+          <li>Confirm the referee has the correct wallet and knows the settlement deadline.</li>
+          <li>Monitor confirmed entrants and the escrow prize pool from the tournament page.</li>
+          <li>After results are final, ask the referee to settle the ranked payouts.</li>
+        </ol>
+        <div className="mt-8 flex flex-wrap gap-4">
+          <Link
+            href={publicTournamentPath}
+            className="brutalist-border label-caps bg-primary px-6 py-3 text-on-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-acid-yellow"
+          >
+            View public tournament
+          </Link>
+          <Link
+            href="/tournaments"
+            className="brutalist-border label-caps px-6 py-3 text-on-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+          >
+            Organizer dashboard
+          </Link>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <form
       className="kinetic-glass rounded-2xl p-8"
@@ -582,6 +637,22 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       <div className="mt-4">
         <Guidelines journey="organizer" />
       </div>
+      {restored && hasDraft && (
+        <div className="mt-4 rounded-xl border border-outline-variant p-4">
+          <p className="text-sm text-on-surface">
+            This browser saves and restores only non-wallet public tournament fields. The connected
+            organizer wallet, referee wallet, uploaded cover, and secret data are never stored in
+            the draft.
+          </p>
+          <button
+            type="button"
+            onClick={clearDraft}
+            className="label-caps mt-2 text-sm text-on-surface-variant underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+          >
+            Clear Draft
+          </button>
+        </div>
+      )}
       {/* Tournament Name */}
       <div className="mt-8">
         <label className={labelClass} htmlFor="name">
@@ -721,6 +792,19 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
           <p className="mt-1 text-sm text-on-surface-variant">
             Equal and Descending update lower ranks; edit one to use Custom.
           </p>
+          <div className="mt-3 flex flex-wrap gap-2" aria-label="Payout presets">
+            {PAYOUT_PRESETS.map((preset) => (
+              <Button
+                key={preset.label}
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => applyPayoutPreset(preset)}
+              >
+                {preset.label}
+              </Button>
+            ))}
+          </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
           {splits.map((split, i) => (
@@ -834,6 +918,16 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
             Uploaded: {coverImageKey}
           </p>
         )}
+        {coverPreviewUrl && (
+          <Image
+            src={coverPreviewUrl}
+            alt="Tournament cover preview"
+            width={640}
+            height={240}
+            unoptimized
+            className="mt-3 aspect-[8/3] w-full rounded-xl object-cover"
+          />
+        )}
         {coverUploadStatus !== "idle" && (
           <button
             type="button"
@@ -844,6 +938,70 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
           </button>
         )}
       </div>
+
+      <section
+        className="mt-8 rounded-xl border border-outline-variant bg-surface-container-low p-6"
+        aria-labelledby="tournament-preview-title"
+      >
+        <p className="label-caps text-primary">Pre-deployment review</p>
+        <h2 id="tournament-preview-title" className="mt-1 text-2xl font-bold text-on-surface">
+          Public tournament preview
+        </h2>
+        <p className="mt-2 text-sm text-on-surface-variant">
+          Review what players will use before asking Freighter to sign. The safeguards and final
+          validation below still apply.
+        </p>
+        <dl className="mt-5 grid gap-4 sm:grid-cols-2">
+          <div>
+            <dt className="label-caps text-on-surface-variant">Tournament</dt>
+            <dd className="mt-1 text-on-surface">{name || "Not set"}</dd>
+          </div>
+          <div>
+            <dt className="label-caps text-on-surface-variant">Game</dt>
+            <dd className="mt-1 text-on-surface">{gameTitle || "Not set"}</dd>
+          </div>
+          <div>
+            <dt className="label-caps text-on-surface-variant">Entry fee</dt>
+            <dd className="data-mono mt-1 text-on-surface">
+              {entryFee ? `${entryFee} ${asset}` : "Not set"}
+            </dd>
+          </div>
+          <div>
+            <dt className="label-caps text-on-surface-variant">Deadline</dt>
+            <dd className="mt-1 text-on-surface">
+              {settlementDeadline
+                ? `${settlementDeadline.replace("T", " ")} local time`
+                : "Not set"}
+            </dd>
+          </div>
+          <div className="sm:col-span-2">
+            <dt className="label-caps text-on-surface-variant">Referee</dt>
+            <dd className="data-mono mt-1 break-all text-on-surface">
+              {refereeAddress || "Not set"}
+            </dd>
+          </div>
+          <div>
+            <dt className="label-caps text-on-surface-variant">Payout ranks</dt>
+            <dd className="mt-1 text-on-surface">
+              {splitValid
+                ? splits.map((split, index) => `#${index + 1} ${split}%`).join(" · ")
+                : "Resolve the payout validation above"}
+            </dd>
+          </div>
+          <div>
+            <dt className="label-caps text-on-surface-variant">Cover</dt>
+            <dd className="mt-1 text-on-surface">
+              {coverUploadStatus === "complete"
+                ? "Uploaded and ready"
+                : coverUploadStatus === "uploading"
+                  ? "Uploading"
+                  : coverUploadStatus === "failed"
+                    ? "Upload needs attention"
+                    : "Default tournament cover"}
+            </dd>
+          </div>
+        </dl>
+      </section>
 
       {/* Wallet + Deploy */}
       <div className="mt-8">
@@ -863,15 +1021,6 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         >
           Deploy Soroban Contract
         </button>
-        {hasDraft && (
-          <button
-            type="button"
-            onClick={clearDraft}
-            className="brutalist-border label-caps px-3 py-2 text-sm text-on-surface-variant transition-colors hover:bg-surface-container-high focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
-          >
-            Clear Draft
-          </button>
-        )}
       </div>
 
       {/* Inline error */}
