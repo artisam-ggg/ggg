@@ -2,6 +2,15 @@
 
 Running log of shipped features (append one entry per change), per the auto-dev workflow.
 
+## Issue #363 - Player participation confidence and follow-through
+
+Confirmed joins now produce a persistent registration summary with the public tournament link,
+Stellar transaction receipt, settlement deadline, and explicit notice that the entry fee is held
+by the tournament's Soroban escrow rather than GGG. A public My Tournaments view lets a connected
+wallet find its confirmed registrations, payouts, and refund eligibility without an app login,
+signature, stored wallet claim, or personal profile. Pending and failed transactions remain
+distinct from confirmed participation, with safe explorer receipts and recovery guidance.
+
 ## Issue #360 - Wallet status, network recovery, and transaction guidance
 
 Create, join, referee, settlement, and refund journeys now share a compact wallet status that

@@ -162,14 +162,21 @@ export default async function TournamentDetailPage({
             {t.status === "ACTIVE" &&
               !t.refundsClaimable &&
               t.contractId &&
+              t.settlementDeadline != null &&
               t.contractVersion === "CURRENT" && (
                 <JoinCard
                   tournamentId={t.id}
                   contractId={t.contractId}
                   entryFee={t.entryFee}
+                  asset={t.asset}
                   joinUrl={joinUrl}
                   passphrase={passphrase}
-                  confirmedParticipantAddresses={participantAddresses}
+                  network={env.STELLAR_NETWORK}
+                  confirmedParticipants={t.participants.map((participant) => ({
+                    playerAddress: participant.playerAddr,
+                    txHash: participant.joinTxHash,
+                  }))}
+                  settlementDeadline={t.settlementDeadline}
                 />
               )}
 

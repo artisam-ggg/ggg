@@ -248,6 +248,14 @@ export async function submitTournamentTx(
       recoveredDeployment ?? (await sdk.submit(input.signedXdr, built, env.NETWORK_PASSPHRASE));
   } catch (error) {
     if (
+      input.intent === "join" &&
+      joinTxHash &&
+      error instanceof EscrowSdkError &&
+      error.code === "SUBMIT_REJECTED"
+    ) {
+      await prisma.joinSubmission.deleteMany({ where: { txHash: joinTxHash } });
+    }
+    if (
       input.intent === "deploy" &&
       error instanceof EscrowSdkError &&
       error.code === "SUBMIT_REJECTED"
@@ -429,6 +437,93 @@ export async function listTournaments(userId: string, q: ListQueryInput) {
   const nextCursor = rows.length > q.take ? (rows[q.take]?.id ?? null) : null;
 
   return { items, nextCursor };
+}
+
+export async function listPlayerParticipations(playerAddress: string) {
+  const rows = await prisma.participant.findMany({
+    where: { playerAddr: playerAddress },
+    include: {
+      tournament: {
+        include: {
+          participants: { select: { playerAddr: true } },
+          payouts: { orderBy: { rank: "asc" } },
+          events: {
+            where: { type: "REFUND_CLAIMED" },
+            select: { payload: true, txHash: true },
+          },
+        },
+      },
+    },
+    orderBy: { joinedAt: "desc" },
+  });
+
+  return rows.map((participation) => {
+    const tournament = participation.tournament;
+    const refundClaims = tournament.events.flatMap((event) =>
+      parseRefundClaims([event]).map((claim) => ({ ...claim, txHash: event.txHash })),
+    );
+    const refund = refundClaims.find((claim) => claim.player === playerAddress);
+    const payout =
+      tournament.payouts.find((candidate) => candidate.playerAddr === playerAddress) ?? null;
+    const displayStatus = getTournamentDisplayStatus({
+      status: tournament.status,
+      settlementDeadline: tournament.settlementDeadline,
+      deadlineConfirmedAt: tournament.deadlineConfirmedAt,
+      participantAddresses: tournament.participants.map((participant) => participant.playerAddr),
+      refundClaimedPlayers: [...new Set(refundClaims.map((claim) => claim.player))],
+    });
+    const refundAvailable = displayStatus === "REFUNDS_OPEN" && !refund;
+    const state = refund
+      ? "REFUNDED"
+      : payout
+        ? "PAYOUT_CONFIRMED"
+        : refundAvailable
+          ? "REFUND_AVAILABLE"
+          : tournament.status === "FINISHED"
+            ? tournament.payouts.length === 0
+              ? "PAYOUT_READY"
+              : "SETTLED"
+            : "REGISTERED";
+
+    return {
+      tournamentId: tournament.id,
+      name: tournament.name,
+      gameTitle: tournament.gameTitle,
+      asset: tournament.asset,
+      entryFee: tournament.entryFee.toString(),
+      displayStatus,
+      state,
+      refundReason: refundAvailable
+        ? tournament.status === "CANCELLED"
+          ? "CANCELLED"
+          : "DEADLINE"
+        : null,
+      joinedAt: participation.joinedAt.toISOString(),
+      settlementDeadline: tournament.settlementDeadline?.toISOString() ?? null,
+      joinExplorerUrl: participation.joinTxHash ? explorerTxUrl(participation.joinTxHash) : null,
+      payout: payout
+        ? {
+            rank: payout.rank,
+            amount: payout.amount.toString(),
+            explorerUrl: payout.txHash ? explorerTxUrl(payout.txHash) : null,
+          }
+        : null,
+      refund: refund
+        ? {
+            amount: refund.amount,
+            explorerUrl: refund.txHash ? explorerTxUrl(refund.txHash) : null,
+          }
+        : null,
+    };
+  });
+}
+
+export async function listPendingJoinSubmissions(playerAddress: string) {
+  return prisma.joinSubmission.findMany({
+    where: { playerAddr: playerAddress },
+    select: { tournamentId: true, txHash: true },
+    orderBy: { submittedAt: "desc" },
+  });
 }
 
 export async function buildJoin(

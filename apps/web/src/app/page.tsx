@@ -20,13 +20,19 @@ export default function Page() {
           Create an on-chain escrow for any game. Players join by paying a crypto entry fee, a
           referee submits the final ranking, and a Soroban contract settles the split automatically.
         </p>
-        <div className="mt-10">
+        <div className="mt-10 flex flex-wrap gap-4">
           <Link
             href="/tournaments/new"
             prefetch={false}
             className="brutalist-border label-caps inline-block bg-electric-violet-strong px-8 py-4 italic text-background transition-transform hover:-translate-y-0.5 active:translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acid-yellow"
           >
             Create Tournament
+          </Link>
+          <Link
+            href="/participations"
+            className="brutalist-border label-caps inline-block border border-outline bg-surface-container px-8 py-4 text-on-surface transition-transform hover:-translate-y-0.5 active:translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          >
+            My Tournaments
           </Link>
         </div>
       </div>

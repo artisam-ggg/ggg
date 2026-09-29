@@ -30,24 +30,50 @@ import { useRouter } from "next/navigation";
 const mockedEnsureWallet = ensureWallet as ReturnType<typeof vi.fn>;
 const mockedSignAndSubmit = signAndSubmit as ReturnType<typeof vi.fn>;
 const mockedUseRouter = useRouter as ReturnType<typeof vi.fn>;
+const PLAYER = "GPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERP";
+const OTHER_PLAYER = "GOTHEROTHEROTHEROTHEROTHEROTHEROTHEROTHEROTHEROTHEROT";
+
+function joinBuildResponse() {
+  return Response.json({ ok: true, data: { unsignedXdr: "JU", network: "testnet" } });
+}
+
+function mockJoinFetch(
+  joinHandler: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> = async () =>
+    joinBuildResponse(),
+  pendingJoinSubmissions: { tournamentId: string; txHash: string }[] = [],
+) {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).startsWith("/api/participations?")) {
+      return Response.json({
+        ok: true,
+        data: { items: [], pendingJoinSubmissions },
+      });
+    }
+    return joinHandler(input, init);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
 
 const baseProps = {
   tournamentId: "t_1",
   contractId: "CONTRACTCONTRACTCONTRACTCONTRACTCONTRACTCONTRACTCONTRACTAB",
   entryFee: "10000000",
+  asset: "XLM" as const,
   joinUrl: "https://ggg.quest/tournaments/t_1",
   passphrase: "P",
-  confirmedParticipantAddresses: [] as string[],
+  network: "testnet" as const,
+  confirmedParticipants: [] as { playerAddress: string; txHash: string | null }[],
+  settlementDeadline: 1_800_000_000,
 };
 
 describe("JoinCard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockedEnsureWallet.mockResolvedValue(
-      "GPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERP",
-    );
+    mockedEnsureWallet.mockResolvedValue(PLAYER);
     mockedSignAndSubmit.mockResolvedValue({ txHash: "TX" });
     mockedUseRouter.mockReturnValue({ refresh: vi.fn() });
+    mockJoinFetch();
   });
 
   it("encodes the tournament join URL instead of a direct payment URI", () => {
@@ -110,7 +136,7 @@ describe("JoinCard", () => {
     render(
       <JoinCard
         {...baseProps}
-        confirmedParticipantAddresses={["GPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERP"]}
+        confirmedParticipants={[{ playerAddress: PLAYER, txHash: "JOIN_TX" }]}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
@@ -122,17 +148,6 @@ describe("JoinCard", () => {
   it("builds + signs + submits join, then refreshes on success", async () => {
     const mockRefresh = vi.fn();
     mockedUseRouter.mockReturnValue({ refresh: mockRefresh });
-
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({ ok: true, data: { unsignedXdr: "JU", network: "testnet" } }),
-            { status: 200, headers: { "content-type": "application/json" } },
-          ),
-      ),
-    );
 
     render(<JoinCard {...baseProps} />);
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
@@ -149,28 +164,45 @@ describe("JoinCard", () => {
     );
 
     await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
+    expect(screen.getByRole("heading", { name: /registration confirmed/i })).toBeInTheDocument();
+    expect(
+      screen.getByText(/held by this tournament's soroban escrow, not by ggg/i),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /view public tournament/i })).toHaveAttribute(
+      "href",
+      baseProps.joinUrl,
+    );
+    expect(screen.getByRole("link", { name: /view transaction receipt/i })).toHaveAttribute(
+      "href",
+      "https://stellar.expert/explorer/testnet/tx/TX",
+    );
+    expect(screen.getByRole("link", { name: /view my tournaments/i })).toHaveAttribute(
+      "href",
+      "/participations",
+    );
   });
 
   it("POST /join sends { playerAddress } in the body", async () => {
-    const mockFetch = vi.fn(
+    const mockFetch = mockJoinFetch(
       async () =>
         new Response(
           JSON.stringify({ ok: true, data: { unsignedXdr: "JU", network: "testnet" } }),
           { status: 200, headers: { "content-type": "application/json" } },
         ),
     );
-    vi.stubGlobal("fetch", mockFetch);
-
     render(<JoinCard {...baseProps} />);
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     await screen.findByText(/GPLAYE…AYERP/);
     fireEvent.click(screen.getByRole("button", { name: /join tournament/i }));
 
     await waitFor(() => expect(mockFetch).toHaveBeenCalled());
-    const [url, init] = mockFetch.mock.calls[0] as unknown as [string, RequestInit];
+    const [url, init] = mockFetch.mock.calls.find(
+      ([request, requestInit]) =>
+        request === "/api/tournaments/t_1/join" && requestInit?.method === "POST",
+    ) as unknown as [string, RequestInit];
     expect(url).toBe("/api/tournaments/t_1/join");
     expect(JSON.parse(init.body as string)).toEqual({
-      playerAddress: "GPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERP",
+      playerAddress: PLAYER,
     });
   });
 
@@ -178,15 +210,8 @@ describe("JoinCard", () => {
     const mockRefresh = vi.fn();
     mockedUseRouter.mockReturnValue({ refresh: mockRefresh });
 
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ ok: false, error: "Tournament is full" }), {
-            status: 409,
-            headers: { "content-type": "application/json" },
-          }),
-      ),
+    mockJoinFetch(async () =>
+      Response.json({ ok: false, error: "Tournament is full" }, { status: 409 }),
     );
 
     render(<JoinCard {...baseProps} />);
@@ -200,20 +225,16 @@ describe("JoinCard", () => {
   });
 
   it("renders the duplicate-participant message from the API error envelope", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({
-              ok: false,
-              error: {
-                code: "CONFLICT",
-                message: "You are already a participant in this tournament.",
-              },
-            }),
-            { status: 409, headers: { "content-type": "application/json" } },
-          ),
+    mockJoinFetch(async () =>
+      Response.json(
+        {
+          ok: false,
+          error: {
+            code: "CONFLICT",
+            message: "You are already a participant in this tournament.",
+          },
+        },
+        { status: 409 },
       ),
     );
 
@@ -231,15 +252,12 @@ describe("JoinCard", () => {
   });
 
   it("Join button is disabled while pending (no double-click)", async () => {
-    let resolveFetch!: (v: unknown) => void;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        () =>
-          new Promise((resolve) => {
-            resolveFetch = resolve;
-          }),
-      ),
+    let resolveFetch!: (value: Response | PromiseLike<Response>) => void;
+    mockJoinFetch(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }),
     );
 
     render(<JoinCard {...baseProps} />);
@@ -262,16 +280,6 @@ describe("JoinCard", () => {
   });
 
   it("keeps a retryable submitted join disabled while confirmation is uncertain", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({ ok: true, data: { unsignedXdr: "JU", network: "testnet" } }),
-            { status: 200, headers: { "content-type": "application/json" } },
-          ),
-      ),
-    );
     mockedSignAndSubmit.mockRejectedValueOnce(
       new SubmissionError("Confirmation timed out", {
         code: "TX_TIMEOUT",
@@ -286,8 +294,97 @@ describe("JoinCard", () => {
     fireEvent.click(screen.getByRole("button", { name: /join tournament/i }));
 
     expect(await screen.findByText(/submitted and awaiting confirmation/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /view submitted transaction/i })).toHaveAttribute(
+      "href",
+      "https://stellar.expert/explorer/testnet/tx/TX_PENDING",
+    );
     expect(screen.getByRole("button", { name: /join tournament/i })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: /join tournament/i }));
     expect(mockedSignAndSubmit).toHaveBeenCalledOnce();
+  });
+
+  it("reconciles a delayed submitted join into the confirmed summary", async () => {
+    mockedSignAndSubmit.mockRejectedValueOnce(
+      new SubmissionError("Confirmation timed out", {
+        code: "TX_TIMEOUT",
+        txHash: "TX_PENDING",
+        retryable: true,
+      }),
+    );
+
+    const { rerender } = render(<JoinCard {...baseProps} />);
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await screen.findByText(/GPLAYE…AYERP/);
+    fireEvent.click(screen.getByRole("button", { name: /join tournament/i }));
+    expect(await screen.findByText(/submitted and awaiting confirmation/i)).toBeInTheDocument();
+
+    rerender(
+      <JoinCard
+        {...baseProps}
+        confirmedParticipants={[{ playerAddress: PLAYER, txHash: "TX_PENDING" }]}
+      />,
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: /registration confirmed/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/submitted and awaiting confirmation/i)).not.toBeInTheDocument();
+  });
+
+  it("restores a persisted pending guard after reload", async () => {
+    mockJoinFetch(undefined, [{ tournamentId: "t_1", txHash: "TX_PENDING" }]);
+    render(<JoinCard {...baseProps} />);
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+
+    expect(await screen.findByText(/submitted and awaiting confirmation/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /join tournament/i })).toBeDisabled();
+    expect(screen.getByRole("link", { name: /view submitted transaction/i })).toHaveAttribute(
+      "href",
+      "https://stellar.expert/explorer/testnet/tx/TX_PENDING",
+    );
+    expect(mockedSignAndSubmit).not.toHaveBeenCalled();
+  });
+
+  it("does not leak a confirmed transaction across wallet changes", async () => {
+    render(<JoinCard {...baseProps} />);
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await screen.findByText(/GPLAYE…AYERP/);
+    fireEvent.click(screen.getByRole("button", { name: /join tournament/i }));
+    expect(
+      await screen.findByRole("heading", { name: /registration confirmed/i }),
+    ).toBeInTheDocument();
+
+    mockedEnsureWallet.mockResolvedValueOnce(OTHER_PLAYER);
+    fireEvent.click(screen.getByRole("button", { name: /re-check wallet/i }));
+
+    await screen.findByText(/GOTHER…HEROT/);
+    expect(
+      screen.queryByRole("heading", { name: /registration confirmed/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /join tournament/i })).toBeEnabled();
+  });
+
+  it("shows a failed transaction receipt without marking registration confirmed", async () => {
+    mockedSignAndSubmit.mockRejectedValueOnce(
+      new SubmissionError("Transaction failed on-chain", {
+        code: "TX_FAILED",
+        txHash: "TX_FAILED",
+        retryable: false,
+      }),
+    );
+
+    render(<JoinCard {...baseProps} />);
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await screen.findByText(/GPLAYE…AYERP/);
+    fireEvent.click(screen.getByRole("button", { name: /join tournament/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/transaction failed on-chain/i);
+    expect(screen.getByRole("link", { name: /view failed transaction/i })).toHaveAttribute(
+      "href",
+      "https://stellar.expert/explorer/testnet/tx/TX_FAILED",
+    );
+    expect(
+      screen.queryByRole("heading", { name: /registration confirmed/i }),
+    ).not.toBeInTheDocument();
   });
 });
