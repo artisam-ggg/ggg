@@ -53,6 +53,9 @@ describe("Guidelines", () => {
     const guideLink = screen.getByRole("link", { name: /read the full guide/i });
     expect(closeButton).toHaveFocus();
 
+    fireEvent.keyDown(closeButton, { key: "Tab", shiftKey: true });
+    expect(guideLink).toHaveFocus();
+
     guideLink.focus();
     fireEvent.keyDown(guideLink, { key: "Tab" });
     expect(closeButton).toHaveFocus();
