@@ -18,6 +18,10 @@ import { SettlementSyncStatus } from "@/components/tournament/SettlementSyncStat
 import { RefundList } from "@/components/tournament/RefundList";
 import { CancelButton } from "@/components/tournament/CancelButton";
 import { ClaimRefundButton } from "@/components/tournament/ClaimRefundButton";
+import {
+  getTournamentLifecyclePresentation,
+  TournamentLifecycle,
+} from "@/components/tournament/TournamentLifecycle";
 import { BackButton } from "@/components/ui/BackButton";
 
 export const revalidate = 0;
@@ -48,6 +52,13 @@ export default async function TournamentDetailPage({
 
   // Extract participant wallet addresses for the counter
   const participantAddresses = t.participants.map((p) => p.playerAddr);
+  const lifecycleProps = {
+    status: t.status,
+    displayStatus: t.displayStatus,
+    contractVersion: t.contractVersion,
+    hasConfirmedPayouts: t.winners.length > 0,
+  };
+  const lifecycle = getTournamentLifecyclePresentation(lifecycleProps);
 
   return (
     <main
@@ -82,10 +93,12 @@ export default async function TournamentDetailPage({
             )}
           </div>
         </div>
-        <StatusChip status={t.displayStatus} />
+        <StatusChip status={t.displayStatus} label={lifecycle.title} />
       </header>
 
       {t.coverImageUrl && <TournamentCover src={t.coverImageUrl} name={t.name} />}
+
+      <TournamentLifecycle {...lifecycleProps} />
 
       <p className="data-mono mt-3 text-sm text-on-surface-variant">
         {t.settlementDeadline ? (
@@ -125,6 +138,7 @@ export default async function TournamentDetailPage({
               passphrase={passphrase}
               entryFee={t.entryFee}
               asset={t.asset}
+              confirmedParticipantAddresses={participantAddresses}
               confirmedClaimedPlayers={t.refundClaimedPlayers}
             />
           )}
@@ -155,6 +169,7 @@ export default async function TournamentDetailPage({
                   entryFee={t.entryFee}
                   joinUrl={joinUrl}
                   passphrase={passphrase}
+                  confirmedParticipantAddresses={participantAddresses}
                 />
               )}
 

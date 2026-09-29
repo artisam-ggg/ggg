@@ -41,6 +41,14 @@ export function getTournamentDisplayStatus(
   },
   now = Date.now(),
 ): TournamentDisplayStatus {
+  const claimedPlayers = new Set(tournament.refundClaimedPlayers);
+  const allRefunded =
+    tournament.participantAddresses.length > 0 &&
+    tournament.participantAddresses.every((player) => claimedPlayers.has(player));
+  if (tournament.status === "CANCELLED") {
+    if (tournament.participantAddresses.length === 0) return "CANCELLED";
+    return allRefunded ? "REFUNDED" : "REFUNDS_OPEN";
+  }
   if (tournament.status !== "ACTIVE") return tournament.status;
   if (
     !tournament.deadlineConfirmedAt ||
@@ -49,11 +57,7 @@ export function getTournamentDisplayStatus(
   ) {
     return "ACTIVE";
   }
-  const claimedPlayers = new Set(tournament.refundClaimedPlayers);
-  return tournament.participantAddresses.length > 0 &&
-    tournament.participantAddresses.every((player) => claimedPlayers.has(player))
-    ? "REFUNDED"
-    : "REFUNDS_OPEN";
+  return allRefunded ? "REFUNDED" : "REFUNDS_OPEN";
 }
 
 function parseRefundClaims(events: { payload: unknown }[]) {

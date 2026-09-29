@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { QrTile } from "./QrTile";
@@ -7,7 +7,7 @@ import { WalletButton } from "./WalletButton";
 import { ContractAddress } from "./ContractAddress";
 import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
 import { Guidelines } from "@/components/ui/Guidelines";
-import { signAndSubmit } from "@/lib/wallet";
+import { signAndSubmit, SubmissionError } from "@/lib/wallet";
 
 interface JoinCardProps {
   tournamentId: string;
@@ -18,9 +18,13 @@ interface JoinCardProps {
   joinUrl: string;
   /** Network passphrase — passed from the server shell, not imported here. */
   passphrase: string;
+  /** Confirmed participant wallets from server/subscriber state. */
+  confirmedParticipantAddresses: string[];
 }
 
-type Phase = "idle" | "signing" | "submitting" | "success" | "error";
+type Phase = "idle" | "signing" | "submitting" | "awaitingConfirmation" | "success" | "error";
+
+const REFRESH_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000, 30_000, 30_000] as const;
 
 const joinResponseSchema = z.object({
   ok: z.boolean(),
@@ -45,16 +49,30 @@ export function JoinCard(props: JoinCardProps) {
   const [player, setPlayer] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [refreshAttempts, setRefreshAttempts] = useState(0);
 
-  const isPending = phase === "signing" || phase === "submitting";
+  const submitting = phase === "signing" || phase === "submitting";
+  const awaitingConfirmation = phase === "awaitingConfirmation";
+  const alreadyJoined = player != null && props.confirmedParticipantAddresses.includes(player);
+  const refreshExhausted = refreshAttempts >= REFRESH_DELAYS_MS.length;
   const tournamentIdentifier =
     props.tournamentId.length > 14
       ? `${props.tournamentId.slice(0, 6)}…${props.tournamentId.slice(-6)}`
       : props.tournamentId;
 
+  useEffect(() => {
+    if (!awaitingConfirmation || alreadyJoined || refreshExhausted) return;
+    const timeout = setTimeout(() => {
+      router.refresh();
+      setRefreshAttempts((current) => current + 1);
+    }, REFRESH_DELAYS_MS[refreshAttempts]);
+    return () => clearTimeout(timeout);
+  }, [alreadyJoined, awaitingConfirmation, refreshAttempts, refreshExhausted, router]);
+
   async function onJoin() {
-    if (!player || isPending) return;
+    if (!player || submitting || awaitingConfirmation || alreadyJoined) return;
     setErrorMsg(null);
+    setRefreshAttempts(0);
     setPhase("submitting");
 
     try {
@@ -88,6 +106,14 @@ export function JoinCard(props: JoinCardProps) {
       setPhase("success");
       router.refresh();
     } catch (e: unknown) {
+      if (
+        e instanceof SubmissionError &&
+        e.details.retryable === true &&
+        e.details.txHash !== undefined
+      ) {
+        setPhase("awaitingConfirmation");
+        return;
+      }
       setPhase("error");
       setErrorMsg(e instanceof Error ? e.message : "Join failed");
     }
@@ -122,12 +148,34 @@ export function JoinCard(props: JoinCardProps) {
           <button
             type="button"
             onClick={onJoin}
-            disabled={!player || isPending}
+            disabled={!player || submitting || awaitingConfirmation || alreadyJoined}
             className="brutalist-border label-caps bg-electric-violet-strong px-6 py-3 italic text-background transition-transform hover:-translate-y-0.5 active:translate-y-0.5 disabled:opacity-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-acid-yellow"
           >
             Join Tournament
           </button>
         </div>
+        <p aria-live="polite" className="text-sm text-on-surface-variant">
+          {!player
+            ? "Connect Freighter to enable Join Tournament."
+            : alreadyJoined
+              ? "This wallet has already joined this tournament."
+              : awaitingConfirmation
+                ? refreshExhausted
+                  ? "Join submitted and still processing. Refresh the status; do not submit another transaction."
+                  : "Join submitted and awaiting confirmation. Do not submit another transaction."
+                : submitting
+                  ? "Join transaction is waiting for wallet or network confirmation."
+                  : "Wallet connected. Join Tournament will request the entry-fee transaction."}
+        </p>
+        {awaitingConfirmation && refreshExhausted && (
+          <button
+            type="button"
+            onClick={() => router.refresh()}
+            className="label-caps rounded-lg border-2 border-outline px-4 py-2 text-on-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-outline"
+          >
+            Refresh join status
+          </button>
+        )}
       </div>
 
       {/* Error display — role="alert" for screen readers */}
@@ -138,8 +186,8 @@ export function JoinCard(props: JoinCardProps) {
       )}
 
       <SubmitStateModal
-        open={isPending || phase === "success"}
-        phase={phase}
+        open={submitting || phase === "success"}
+        phase={phase === "awaitingConfirmation" ? "idle" : phase}
         {...(errorMsg !== null ? { message: errorMsg } : {})}
         onClose={onModalClose}
       />

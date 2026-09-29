@@ -83,8 +83,8 @@ describe("/tournaments page", () => {
     expect(screen.getByText("Winter League")).toBeInTheDocument();
 
     // StatusChip renders the status text
-    expect(screen.getByText("ACTIVE")).toBeInTheDocument();
-    expect(screen.getByText("DRAFT")).toBeInTheDocument();
+    expect(screen.getByText("OPEN FOR JOINING")).toBeInTheDocument();
+    expect(screen.getByText("PREPARING")).toBeInTheDocument();
   });
 
   it("shows pool amount and participant count for each row", async () => {

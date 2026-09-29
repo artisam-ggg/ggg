@@ -2,6 +2,14 @@
 
 Running log of shipped features (append one entry per change), per the auto-dev workflow.
 
+## Issue #357 - Public tournament lifecycle clarity
+
+Public tournament pages now summarize confirmed lifecycle state in plain language and explain
+when joining, settlement, or refunds are available, complete, syncing, read-only, or temporarily
+paused. Dashboard status chips use the same lifecycle wording, while Join, Referee, and Refund
+controls explain their wallet and confirmation boundaries without changing authorization or
+contract behavior.
+
 ## Issue #350 - Role-journey smoke coverage
 
 Focused local smoke tests now protect the public SDK CTA and organizer, player,

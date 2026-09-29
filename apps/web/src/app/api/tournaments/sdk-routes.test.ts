@@ -388,6 +388,24 @@ describe("SDK-backed tournament routes", () => {
     expect(getTournamentDisplayStatus({ ...base, deadlineConfirmedAt: null }, 1)).toBe("ACTIVE");
   });
 
+  it("derives cancelled refund progress from confirmed participants and events", () => {
+    const cancelled = {
+      status: "CANCELLED" as const,
+      settlementDeadline: new Date(0),
+      deadlineConfirmedAt: new Date(0),
+      participantAddresses: [players[0]!],
+      refundClaimedPlayers: [] as string[],
+    };
+
+    expect(getTournamentDisplayStatus(cancelled, 1)).toBe("REFUNDS_OPEN");
+    expect(
+      getTournamentDisplayStatus({ ...cancelled, refundClaimedPlayers: [players[0]!] }, 1),
+    ).toBe("REFUNDED");
+    expect(getTournamentDisplayStatus({ ...cancelled, participantAddresses: [] }, 1)).toBe(
+      "CANCELLED",
+    );
+  });
+
   it.each([[players[0]!], [players[0]!, players[1]!, players[2]!]])(
     "builds ordered finalize winners",
     async (...winners) => {

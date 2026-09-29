@@ -41,7 +41,7 @@ describe("TournamentListRow", () => {
     );
 
     expect(screen.getByText("Cup")).toBeInTheDocument();
-    expect(screen.getByText("ACTIVE")).toBeInTheDocument();
+    expect(screen.getByText("OPEN FOR JOINING")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
 
     const [pool] = screen.getAllByText(/3\.0000000 XLM/);
@@ -98,7 +98,7 @@ describe("TournamentListRow", () => {
 
     expect(screen.getAllByText(/0\.0000000 USDC/)).toHaveLength(1);
     expect(screen.queryByText("Total collected")).not.toBeInTheDocument();
-    expect(screen.getByText("DRAFT")).toBeInTheDocument();
+    expect(screen.getByText("PREPARING")).toBeInTheDocument();
   });
 
   it("shows the game title with label-caps", () => {
@@ -147,7 +147,7 @@ describe("TournamentListRow", () => {
       />,
     );
 
-    expect(screen.getByText("REFUNDS OPEN")).toBeInTheDocument();
+    expect(screen.getByText("REFUNDS AVAILABLE")).toBeInTheDocument();
     expect(screen.getByLabelText("1 of 2 refunds claimed")).toHaveTextContent("1/2 refunds");
   });
 

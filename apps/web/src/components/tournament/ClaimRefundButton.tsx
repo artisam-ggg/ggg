@@ -16,12 +16,14 @@ export function ClaimRefundButton({
   passphrase,
   entryFee,
   asset,
+  confirmedParticipantAddresses,
   confirmedClaimedPlayers = [],
 }: {
   tournamentId: string;
   passphrase: string;
   entryFee: string;
   asset: "XLM" | "USDC";
+  confirmedParticipantAddresses: string[];
   confirmedClaimedPlayers?: string[];
 }) {
   const router = useRouter();
@@ -30,6 +32,7 @@ export function ClaimRefundButton({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [refreshAttempts, setRefreshAttempts] = useState(0);
+  const hasRefundEntitlement = player != null && confirmedParticipantAddresses.includes(player);
   const alreadyClaimed = player != null && confirmedClaimedPlayers.includes(player);
   const displayPhase = phase === "awaitingConfirmation" && alreadyClaimed ? "idle" : phase;
   const submitting = displayPhase === "signing" || displayPhase === "submitting";
@@ -52,7 +55,8 @@ export function ClaimRefundButton({
   }, [alreadyClaimed, awaitingConfirmation, refreshAttempts, refreshExhausted, router]);
 
   async function claim() {
-    if (!player || submitting || awaitingConfirmation || alreadyClaimed) return;
+    if (!player || !hasRefundEntitlement || submitting || awaitingConfirmation || alreadyClaimed)
+      return;
     setError(null);
     setNotice(null);
     setRefreshAttempts(0);
@@ -105,7 +109,7 @@ export function ClaimRefundButton({
     <div className="mt-4 flex flex-wrap items-center gap-3">
       <Guidelines journey="refund" />
       <WalletButton expectedPassphrase={passphrase} onConnected={setPlayer} />
-      {player && (
+      {hasRefundEntitlement && (
         <p className="text-sm text-on-surface-variant">
           You will sign a {formatStroops(entryFee)} {asset} refund to {player} on {passphrase}.
         </p>
@@ -113,7 +117,9 @@ export function ClaimRefundButton({
       <button
         type="button"
         onClick={claim}
-        disabled={!player || submitting || awaitingConfirmation || alreadyClaimed}
+        disabled={
+          !player || !hasRefundEntitlement || submitting || awaitingConfirmation || alreadyClaimed
+        }
         className="label-caps rounded-lg bg-error px-4 py-2 text-on-error disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-error"
       >
         Claim Refund
@@ -126,6 +132,17 @@ export function ClaimRefundButton({
       {displayNotice && (
         <p role="status" className="text-sm text-on-surface-variant">
           {displayNotice}
+        </p>
+      )}
+      {!displayNotice && !error && (
+        <p aria-live="polite" className="text-sm text-on-surface-variant">
+          {!player
+            ? "Connect the wallet that joined this tournament to check and claim its refund."
+            : !hasRefundEntitlement
+              ? "This wallet has no confirmed refund entitlement for this tournament."
+              : alreadyClaimed
+                ? "This wallet has a confirmed refund. No further claim is available."
+                : "Wallet connected. Claim Refund will request one refund transaction."}
         </p>
       )}
       {awaitingConfirmation && refreshExhausted && (

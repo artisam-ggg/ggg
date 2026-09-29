@@ -41,6 +41,10 @@ describe("RefereePanel", () => {
     render(<RefereePanel tournamentId="t_1" refereeAddr={REF} passphrase="P" />);
     expect(screen.getByRole("button", { name: /verify referee/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /settlement console/i })).toBeNull();
+    expect(screen.getByText(/verify the configured referee wallet/i)).toHaveAttribute(
+      "aria-live",
+      "polite",
+    );
   });
 
   it("offers public referee guidance while preserving the configured-wallet settlement boundary", async () => {
@@ -72,6 +76,10 @@ describe("RefereePanel", () => {
       ),
     );
     expect(captureWalletConnected).toHaveBeenCalledWith(REF);
+    expect(screen.getByText(/configured referee wallet verified/i)).toHaveAttribute(
+      "aria-live",
+      "polite",
+    );
   });
 
   it("shows a mismatch message for a non-referee wallet", async () => {

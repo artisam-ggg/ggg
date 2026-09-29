@@ -69,6 +69,14 @@ export function RefereePanel({
           Failed to connect wallet. Please try again.
         </p>
       )}
+
+      {(state === "idle" || state === "match") && (
+        <p aria-live="polite" className="mt-3 text-sm text-on-surface-variant">
+          {state === "match"
+            ? "Configured referee wallet verified. Settlement Console is available."
+            : "Verify the configured referee wallet to open Settlement Console."}
+        </p>
+      )}
     </div>
   );
 }
