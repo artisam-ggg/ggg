@@ -47,6 +47,7 @@ describe("TournamentLifecycle", () => {
       /records are still syncing/i,
     ],
     ["ACTIVE", "ACTIVE", "UNAVAILABLE", false, "ACTIONS TEMPORARILY PAUSED", /refresh later/i],
+    ["ACTIVE", "ACTIVE", "UNSUPPORTED", false, "READ-ONLY TOURNAMENT", /older contract version/i],
   ] as const)(
     "explains %s/%s as %s",
     (status, displayStatus, contractVersion, hasConfirmedPayouts, title, detail) => {

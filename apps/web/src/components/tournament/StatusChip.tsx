@@ -11,14 +11,14 @@ const styles: Record<TournamentDisplayStatus, string> = {
   CANCELLED: "border-error text-error",
 };
 
-export function StatusChip({ status }: { status: TournamentDisplayStatus }) {
+export function StatusChip({ status, label }: { status: TournamentDisplayStatus; label?: string }) {
   return (
     <span
       className={`label-caps inline-flex items-center rounded-full border-2 px-3 py-1 ${styles[status]}`}
       data-testid="status-chip"
       data-status={status}
     >
-      {lifecycleLabels[status]}
+      {label ?? lifecycleLabels[status]}
     </span>
   );
 }

@@ -296,6 +296,7 @@ describe("/tournaments/[id] — public detail page", () => {
       });
       render(await Page({ params: Promise.resolve({ id: "t_2" }) }));
 
+      expect(screen.getAllByText("PAYOUT CONFIRMATION PENDING")).toHaveLength(2);
       expect(screen.getByText(/settlement processing/i)).toBeInTheDocument();
       expect(screen.getByText(/winner and payout data is still syncing/i)).toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: /retry winner sync/i }));

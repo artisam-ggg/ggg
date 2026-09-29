@@ -27,17 +27,31 @@ vi.mock("./WalletButton", () => ({
 
 import { ClaimRefundButton } from "./ClaimRefundButton";
 
+const baseProps = {
+  tournamentId: "t1",
+  passphrase: "Testnet",
+  entryFee: "10000000",
+  asset: "XLM" as const,
+  confirmedParticipantAddresses: ["GPLAYER"],
+};
+
 describe("ClaimRefundButton", () => {
   it("explains why the claim action starts disabled", () => {
-    render(
-      <ClaimRefundButton tournamentId="t1" passphrase="Testnet" entryFee="10000000" asset="XLM" />,
-    );
+    render(<ClaimRefundButton {...baseProps} />);
 
     expect(screen.getByRole("button", { name: /claim refund/i })).toBeDisabled();
     expect(screen.getByText(/connect the wallet that joined/i)).toHaveAttribute(
       "aria-live",
       "polite",
     );
+  });
+
+  it("keeps Claim Refund disabled for a wallet without confirmed entitlement", () => {
+    render(<ClaimRefundButton {...baseProps} confirmedParticipantAddresses={[]} />);
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+
+    expect(screen.getByText(/no confirmed refund entitlement/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /claim refund/i })).toBeDisabled();
   });
   beforeEach(() => {
     vi.clearAllMocks();
@@ -57,9 +71,7 @@ describe("ClaimRefundButton", () => {
   });
 
   it("keeps the claim disabled until subscriber confirmation reaches the component", async () => {
-    const { rerender } = render(
-      <ClaimRefundButton tournamentId="t1" passphrase="Testnet" entryFee="10000000" asset="XLM" />,
-    );
+    const { rerender } = render(<ClaimRefundButton {...baseProps} />);
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     fireEvent.click(screen.getByRole("button", { name: /claim refund/i }));
 
@@ -69,15 +81,7 @@ describe("ClaimRefundButton", () => {
     expect(screen.getByRole("button", { name: /claim refund/i })).toBeDisabled();
     expect(screen.queryByText("SETTLED")).not.toBeInTheDocument();
 
-    rerender(
-      <ClaimRefundButton
-        tournamentId="t1"
-        passphrase="Testnet"
-        entryFee="10000000"
-        asset="XLM"
-        confirmedClaimedPlayers={["GPLAYER"]}
-      />,
-    );
+    rerender(<ClaimRefundButton {...baseProps} confirmedClaimedPlayers={["GPLAYER"]} />);
 
     expect(screen.getByRole("status")).toHaveTextContent(/refund confirmed/i);
     expect(screen.getByRole("button", { name: /claim refund/i })).toBeDisabled();
@@ -85,9 +89,7 @@ describe("ClaimRefundButton", () => {
 
   it("refreshes canonical state with bounded backoff until confirmation arrives", async () => {
     vi.useFakeTimers();
-    const { rerender } = render(
-      <ClaimRefundButton tournamentId="t1" passphrase="Testnet" entryFee="10000000" asset="XLM" />,
-    );
+    const { rerender } = render(<ClaimRefundButton {...baseProps} />);
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     fireEvent.click(screen.getByRole("button", { name: /claim refund/i }));
     await act(async () => Promise.resolve());
@@ -99,15 +101,7 @@ describe("ClaimRefundButton", () => {
     act(() => vi.advanceTimersByTime(2_000));
     expect(refresh).toHaveBeenCalledTimes(2);
 
-    rerender(
-      <ClaimRefundButton
-        tournamentId="t1"
-        passphrase="Testnet"
-        entryFee="10000000"
-        asset="XLM"
-        confirmedClaimedPlayers={["GPLAYER"]}
-      />,
-    );
+    rerender(<ClaimRefundButton {...baseProps} confirmedClaimedPlayers={["GPLAYER"]} />);
     act(() => vi.advanceTimersByTime(60_000));
     expect(refresh).toHaveBeenCalledTimes(2);
     expect(screen.getByRole("status")).toHaveTextContent(/refund confirmed/i);
@@ -115,9 +109,7 @@ describe("ClaimRefundButton", () => {
 
   it("stops after the bounded polling window and offers a manual status refresh", async () => {
     vi.useFakeTimers();
-    render(
-      <ClaimRefundButton tournamentId="t1" passphrase="Testnet" entryFee="10000000" asset="XLM" />,
-    );
+    render(<ClaimRefundButton {...baseProps} />);
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     fireEvent.click(screen.getByRole("button", { name: /claim refund/i }));
     await act(async () => Promise.resolve());
@@ -138,9 +130,7 @@ describe("ClaimRefundButton", () => {
 
   it("cleans up automatic refresh when the component unmounts", async () => {
     vi.useFakeTimers();
-    const { unmount } = render(
-      <ClaimRefundButton tournamentId="t1" passphrase="Testnet" entryFee="10000000" asset="XLM" />,
-    );
+    const { unmount } = render(<ClaimRefundButton {...baseProps} />);
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     fireEvent.click(screen.getByRole("button", { name: /claim refund/i }));
     await act(async () => Promise.resolve());
@@ -159,9 +149,7 @@ describe("ClaimRefundButton", () => {
         retryable: true,
       }),
     );
-    render(
-      <ClaimRefundButton tournamentId="t1" passphrase="Testnet" entryFee="10000000" asset="XLM" />,
-    );
+    render(<ClaimRefundButton {...baseProps} />);
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     fireEvent.click(screen.getByRole("button", { name: /claim refund/i }));
 
@@ -181,9 +169,7 @@ describe("ClaimRefundButton", () => {
         retryable: false,
       }),
     );
-    render(
-      <ClaimRefundButton tournamentId="t1" passphrase="Testnet" entryFee="10000000" asset="XLM" />,
-    );
+    render(<ClaimRefundButton {...baseProps} />);
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     fireEvent.click(screen.getByRole("button", { name: /claim refund/i }));
 

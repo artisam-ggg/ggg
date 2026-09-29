@@ -51,4 +51,10 @@ describe("StatusChip", () => {
     const chip = screen.getByText("OPEN FOR JOINING");
     expect(chip.tagName.toLowerCase()).toBe("span");
   });
+
+  it("uses an effective lifecycle label when supplied", () => {
+    render(<StatusChip status="ACTIVE" label="ACTIONS TEMPORARILY PAUSED" />);
+
+    expect(screen.getByText("ACTIONS TEMPORARILY PAUSED")).toHaveAttribute("data-status", "ACTIVE");
+  });
 });

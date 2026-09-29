@@ -8,6 +8,15 @@ vi.mock("qrcode.react", () => ({
 vi.mock("@/lib/wallet", () => ({
   ensureWallet: vi.fn(async () => "GPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERP"),
   signAndSubmit: vi.fn(async () => ({ txHash: "TX" })),
+  SubmissionError: class SubmissionError extends Error {
+    constructor(
+      message: string,
+      readonly details: { code: string; txHash?: string; retryable?: boolean },
+    ) {
+      super(message);
+      this.name = "SubmissionError";
+    }
+  },
 }));
 
 vi.mock("next/navigation", () => ({
@@ -15,7 +24,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { JoinCard } from "./JoinCard";
-import { ensureWallet, signAndSubmit } from "@/lib/wallet";
+import { ensureWallet, signAndSubmit, SubmissionError } from "@/lib/wallet";
 import { useRouter } from "next/navigation";
 
 const mockedEnsureWallet = ensureWallet as ReturnType<typeof vi.fn>;
@@ -28,6 +37,7 @@ const baseProps = {
   entryFee: "10000000",
   joinUrl: "https://ggg.quest/tournaments/t_1",
   passphrase: "P",
+  confirmedParticipantAddresses: [] as string[],
 };
 
 describe("JoinCard", () => {
@@ -91,6 +101,19 @@ describe("JoinCard", () => {
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     // GPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERP → slice(0,6)=GPLAYE, slice(-5)=AYERP
     await waitFor(() => expect(screen.getByText(/GPLAYE…AYERP/)).toBeInTheDocument());
+  });
+
+  it("disables Join when the connected wallet already joined", async () => {
+    render(
+      <JoinCard
+        {...baseProps}
+        confirmedParticipantAddresses={["GPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERP"]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+
+    expect(await screen.findByText(/this wallet has already joined/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /join tournament/i })).toBeDisabled();
   });
 
   it("builds + signs + submits join, then refreshes on success", async () => {
@@ -233,5 +256,35 @@ describe("JoinCard", () => {
         headers: { "content-type": "application/json" },
       }),
     );
+  });
+
+  it("keeps a retryable submitted join disabled while confirmation is uncertain", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ ok: true, data: { unsignedXdr: "JU", network: "testnet" } }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+      ),
+    );
+    mockedSignAndSubmit.mockRejectedValueOnce(
+      new SubmissionError("Confirmation timed out", {
+        code: "TX_TIMEOUT",
+        txHash: "TX_PENDING",
+        retryable: true,
+      }),
+    );
+
+    render(<JoinCard {...baseProps} />);
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await screen.findByText(/GPLAYE…AYERP/);
+    fireEvent.click(screen.getByRole("button", { name: /join tournament/i }));
+
+    expect(await screen.findByText(/submitted and awaiting confirmation/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /join tournament/i })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /join tournament/i }));
+    expect(mockedSignAndSubmit).toHaveBeenCalledOnce();
   });
 });

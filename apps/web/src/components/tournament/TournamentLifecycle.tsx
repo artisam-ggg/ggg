@@ -12,17 +12,19 @@ export const lifecycleLabels: Record<TournamentDisplayStatus, string> = {
 type PersistedStatus = "DRAFT" | "ACTIVE" | "CANCELLED" | "FINISHED";
 type ContractVersion = "CURRENT" | "UNSUPPORTED" | "UNAVAILABLE" | "PENDING";
 
-export function TournamentLifecycle({
-  status,
-  displayStatus,
-  contractVersion,
-  hasConfirmedPayouts,
-}: {
+type TournamentLifecycleProps = {
   status: PersistedStatus;
   displayStatus: TournamentDisplayStatus;
   contractVersion: ContractVersion;
   hasConfirmedPayouts: boolean;
-}) {
+};
+
+export function getTournamentLifecyclePresentation({
+  status,
+  displayStatus,
+  contractVersion,
+  hasConfirmedPayouts,
+}: TournamentLifecycleProps) {
   let title = lifecycleLabels[displayStatus];
   let detail: string;
 
@@ -54,6 +56,12 @@ export function TournamentLifecycle({
     detail =
       "Players can join with Freighter. The configured referee wallet can finalize the ranked payouts.";
   }
+
+  return { title, detail };
+}
+
+export function TournamentLifecycle(props: TournamentLifecycleProps) {
+  const { title, detail } = getTournamentLifecyclePresentation(props);
 
   return (
     <section
