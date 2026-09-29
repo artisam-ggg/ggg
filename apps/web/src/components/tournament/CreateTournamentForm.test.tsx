@@ -99,11 +99,23 @@ describe("CreateTournamentForm", () => {
       expect(stored).not.toContain(MOCK_ORGANIZER);
       expect(stored).not.toContain(REF);
     });
-    const privacyNotice = screen.getByRole("status");
+    const privacyNotice = screen
+      .getByText(/only non-wallet public tournament fields/i)
+      .closest("div");
+    expect(privacyNotice).not.toHaveAttribute("role", "status");
     expect(privacyNotice).toHaveTextContent(/organizer wallet, referee wallet.*never.*stored/i);
     expect(
-      within(privacyNotice).getByText(/only non-wallet public tournament fields/i),
+      within(privacyNotice!).getByText(/only non-wallet public tournament fields/i),
     ).toHaveClass("text-on-surface");
+  });
+
+  it("does not create a recoverable draft for a referee wallet alone", async () => {
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+
+    fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+
+    await waitFor(() => expect(localStorage.getItem("ggg:tournament-create-draft")).toBeNull());
+    expect(screen.queryByRole("button", { name: /clear draft/i })).not.toBeInTheDocument();
   });
 
   it("restores a descending mode draft without recalculating it", async () => {
@@ -390,6 +402,18 @@ describe("CreateTournamentForm", () => {
     });
     expect(body.settlementDeadline).toBeGreaterThan(Math.floor(Date.now() / 1000));
     vi.unstubAllGlobals();
+  });
+
+  it("applies payout presets in descending mode", () => {
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/payout calculation/i), {
+      target: { value: "descending" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Top 4" }));
+
+    expect(screen.getByText("5000 / 2501 / 1666 / 833 bps")).toBeInTheDocument();
+    expect(screen.getByLabelText(/payout calculation/i)).toHaveValue("descending");
   });
 
   it("renders accessible payout-rank buttons and enforces the 1–10 rank limits", () => {
@@ -1306,6 +1330,7 @@ describe("CreateTournamentForm", () => {
 
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Invalid file type."));
     expect(screen.queryByText(/Uploaded:/i)).not.toBeInTheDocument();
+    expect(screen.queryByAltText(/tournament cover preview/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /deploy soroban contract/i })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: /remove cover image/i }));

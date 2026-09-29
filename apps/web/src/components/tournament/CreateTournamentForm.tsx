@@ -188,7 +188,6 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     !!name ||
     !!gameTitle ||
     !!entryFee ||
-    !!refereeAddress ||
     !!settlementDeadline ||
     asset !== "XLM" ||
     splits.join(",") !== "60,20,20" ||
@@ -405,6 +404,8 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       }
     } catch (err: unknown) {
       if (request === coverUploadRequest.current) {
+        reader.abort();
+        setCoverPreviewUrl(null);
         setCoverUploadStatus("failed");
         setError(err instanceof Error ? err.message : "Upload failed");
       }
@@ -637,7 +638,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         <Guidelines journey="organizer" />
       </div>
       {restored && hasDraft && (
-        <div className="mt-4 rounded-xl border border-outline-variant p-4" role="status">
+        <div className="mt-4 rounded-xl border border-outline-variant p-4">
           <p className="text-sm text-on-surface">
             This browser saves and restores only non-wallet public tournament fields. The connected
             organizer wallet, referee wallet, uploaded cover, and secret data are never stored in
