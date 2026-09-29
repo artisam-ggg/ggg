@@ -64,7 +64,6 @@ const draftSchema = z.object({
   gameTitle: z.string().max(120),
   entryFee: z.string().max(32),
   asset: z.enum(["XLM", "USDC"]),
-  refereeAddress: z.string().max(56),
   settlementDeadline: z.string().max(32),
   splits: z.array(z.number().min(0.01).max(100)).min(1).max(10),
   distributionMode: distributionModeSchema.default("custom"),
@@ -77,7 +76,6 @@ const emptyDraft: TournamentDraft = {
   gameTitle: "",
   entryFee: "",
   asset: "XLM",
-  refereeAddress: "",
   settlementDeadline: "",
   splits: [60, 20, 20],
   distributionMode: "equal",
@@ -203,7 +201,6 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     setGameTitle(draft.gameTitle);
     setEntryFee(draft.entryFee);
     setAsset(draft.asset);
-    setRefereeAddress(draft.refereeAddress);
     setSettlementDeadline(draft.settlementDeadline);
     setSplits(draft.splits);
     setDistributionMode(draft.distributionMode);
@@ -213,13 +210,12 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   useEffect(() => {
     if (!restored) return;
 
-    // Wallet and upload state are deliberately excluded; both must be fetched live.
+    // Wallet and upload state are deliberately excluded; both must be provided live.
     const draft = {
       name,
       gameTitle,
       entryFee,
       asset,
-      refereeAddress,
       settlementDeadline,
       splits,
       distributionMode,
@@ -240,7 +236,6 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     gameTitle,
     hasDraft,
     name,
-    refereeAddress,
     restored,
     settlementDeadline,
     splits,
@@ -591,8 +586,8 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   if (phase === "success" && createdTournamentId) {
     const publicTournamentPath = `/tournaments/${encodeURIComponent(createdTournamentId)}`;
     return (
-      <section className="kinetic-glass rounded-2xl p-8" aria-labelledby="creation-success-title">
-        <p className="label-caps text-acid-yellow">Tournament created</p>
+      <section className="kinetic-glass rounded-xl p-8" aria-labelledby="creation-success-title">
+        <p className="label-caps text-primary">Tournament created</p>
         <h1
           id="creation-success-title"
           className="mt-2 text-[32px] font-bold -tracking-[0.02em] text-on-surface"
@@ -611,7 +606,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         <div className="mt-8 flex flex-wrap gap-4">
           <Link
             href={publicTournamentPath}
-            className="brutalist-border label-caps bg-electric-violet-strong px-6 py-3 text-background focus-visible:outline focus-visible:outline-2 focus-visible:outline-acid-yellow"
+            className="brutalist-border label-caps bg-primary px-6 py-3 text-on-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-acid-yellow"
           >
             View public tournament
           </Link>
@@ -643,9 +638,10 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       </div>
       {restored && hasDraft && (
         <div className="mt-4 rounded-xl border border-outline-variant p-4" role="status">
-          <p className="text-sm text-on-surface-variant">
-            This browser saves and restores your public tournament draft. Wallet addresses from
-            Freighter, uploaded covers, and secret data are never stored in the draft.
+          <p className="text-sm text-on-surface">
+            This browser saves and restores only non-wallet public tournament fields. The connected
+            organizer wallet, referee wallet, uploaded cover, and secret data are never stored in
+            the draft.
           </p>
           <button
             type="button"
@@ -946,7 +942,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         className="mt-8 rounded-xl border border-outline-variant bg-surface-container-low p-6"
         aria-labelledby="tournament-preview-title"
       >
-        <p className="label-caps text-electric-violet-strong">Pre-deployment review</p>
+        <p className="label-caps text-primary">Pre-deployment review</p>
         <h2 id="tournament-preview-title" className="mt-1 text-2xl font-bold text-on-surface">
           Public tournament preview
         </h2>

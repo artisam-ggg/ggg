@@ -47,11 +47,11 @@ async function fillValidTournament() {
 }
 
 async function expectCreationSuccess(tournamentId: string) {
-  expect(await screen.findByRole("heading", { name: /your escrow is live/i })).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: /view public tournament/i })).toHaveAttribute(
-    "href",
-    `/tournaments/${tournamentId}`,
-  );
+  const heading = await screen.findByRole("heading", { name: /your escrow is live/i });
+  expect(heading.closest("section")).toHaveClass("rounded-xl");
+  const publicLink = screen.getByRole("link", { name: /view public tournament/i });
+  expect(publicLink).toHaveAttribute("href", `/tournaments/${tournamentId}`);
+  expect(publicLink).toHaveClass("bg-primary", "text-on-primary");
   expect(screen.getByText(/confirm the referee has the correct wallet/i)).toBeInTheDocument();
   expect(screen.getByText(/monitor confirmed entrants/i)).toBeInTheDocument();
   expect(screen.getByText(/ask the referee to settle/i)).toBeInTheDocument();
@@ -70,7 +70,7 @@ describe("CreateTournamentForm", () => {
     push.mockReset();
   });
 
-  it("restores a saved draft after reload without persisting the organizer wallet", async () => {
+  it("restores public draft fields without persisting organizer or referee wallets", async () => {
     localStorage.setItem(
       "ggg:tournament-create-draft",
       JSON.stringify({
@@ -90,12 +90,20 @@ describe("CreateTournamentForm", () => {
     expect(screen.getByDisplayValue("SF6")).toBeInTheDocument();
     expect(screen.getByDisplayValue("1.5")).toBeInTheDocument();
     expect(screen.getByDisplayValue("USDC")).toBeInTheDocument();
-    expect(screen.getByDisplayValue(REF)).toBeInTheDocument();
+    expect(screen.getByLabelText(/referee/i)).toHaveValue("");
     expect(screen.getByDisplayValue("50")).toBeInTheDocument();
     expect(screen.getByText(/5000 \/ 3000 \/ 2000 bps/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/payout calculation/i)).toHaveValue("custom");
-    expect(localStorage.getItem("ggg:tournament-create-draft")).not.toContain(MOCK_ORGANIZER);
-    expect(screen.getByRole("status")).toHaveTextContent(/wallet addresses.*never stored/i);
+    await waitFor(() => {
+      const stored = localStorage.getItem("ggg:tournament-create-draft");
+      expect(stored).not.toContain(MOCK_ORGANIZER);
+      expect(stored).not.toContain(REF);
+    });
+    const privacyNotice = screen.getByRole("status");
+    expect(privacyNotice).toHaveTextContent(/organizer wallet, referee wallet.*never.*stored/i);
+    expect(
+      within(privacyNotice).getByText(/only non-wallet public tournament fields/i),
+    ).toHaveClass("text-on-surface");
   });
 
   it("restores a descending mode draft without recalculating it", async () => {
@@ -333,12 +341,28 @@ describe("CreateTournamentForm", () => {
     expect(screen.getByText(/6000 \/ 2000 \/ 2000 bps/i)).toBeInTheDocument();
   });
 
-  it("applies reusable payout presets through the existing calculation model", () => {
+  it("applies every payout preset without changing other submitted fields", async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          data: { tournamentId: "t_preset", unsignedXdr: "XDR", network: "testnet" },
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", mockFetch);
     render(<CreateTournamentForm expectedPassphrase="P" />);
 
     fireEvent.click(screen.getByRole("button", { name: "Winner takes all" }));
     expect(screen.getByText("10000 bps")).toBeInTheDocument();
     expect(screen.queryByLabelText(/2nd %/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Top 3" }));
+    expect(screen.getByText("6000 / 2000 / 2000 bps")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Top 4" }));
+    expect(screen.getByText("5000 / 1667 / 1667 / 1666 bps")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Top 8" }));
     expect(
@@ -347,6 +371,25 @@ describe("CreateTournamentForm", () => {
     expect(screen.getByLabelText("Rank 8 %")).toHaveValue(10);
     expect(screen.getByText(/local time; stored on-chain as UTC/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /deploy soroban contract/i })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Top 4" }));
+    await fillValidTournament();
+    fireEvent.click(screen.getByRole("button", { name: /deploy soroban contract/i }));
+
+    await waitFor(() => expect(signAndSubmit).toHaveBeenCalled());
+    const tournamentCall = mockFetch.mock.calls.find(([url]) => url === "/api/tournaments");
+    const body = JSON.parse((tournamentCall![1] as RequestInit).body as string);
+    expect(body).toMatchObject({
+      name: "Cup",
+      gameTitle: "SF6",
+      entryFee: "10000000",
+      asset: "XLM",
+      refereeAddress: REF,
+      organizerAddress: MOCK_ORGANIZER,
+      distributionBps: [5000, 1667, 1667, 1666],
+    });
+    expect(body.settlementDeadline).toBeGreaterThan(Math.floor(Date.now() / 1000));
+    vi.unstubAllGlobals();
   });
 
   it("renders accessible payout-rank buttons and enforces the 1–10 rank limits", () => {
