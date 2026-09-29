@@ -68,6 +68,23 @@ describe("JoinCard", () => {
     expect(screen.getByRole("button", { name: /join tournament/i })).toBeDisabled();
   });
 
+  it("offers public player guidance before wallet authorization or an app login", () => {
+    render(<JoinCard {...baseProps} />);
+
+    expect(screen.getByRole("button", { name: "Open player guidelines" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /connect wallet/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /sign in|log in/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open player guidelines" }));
+    expect(screen.getByRole("dialog", { name: "Join a tournament" })).toBeInTheDocument();
+    expect(screen.getByText(/public tournament page/i)).toBeInTheDocument();
+    expect(screen.getByText(/approve the join transaction/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /read the full guide/i })).toHaveAttribute(
+      "href",
+      "https://goodgameguild.gitbook.io/ggg/role-guides/player-guide",
+    );
+  });
+
   it("shows truncated address chip after wallet connected", async () => {
     render(<JoinCard {...baseProps} />);
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));

@@ -2,6 +2,13 @@
 
 Running log of shipped features (append one entry per change), per the auto-dev workflow.
 
+## Issue #350 - Role-journey smoke coverage
+
+Focused local smoke tests now protect the public SDK CTA and organizer, player,
+referee, refund, and keyboard guidance paths. A companion verification record
+defines a repeatable desktop/mobile manual QA matrix without sending a wallet
+transaction, changing an authentication boundary, or repeating Testnet evidence.
+
 ## Issue #349 - Role-based operating guides
 
 GitBook now has separate Testnet-only organizer, player, and referee guides, with prerequisites, numbered steps, expected results, wallet/login boundaries, and troubleshooting for pending transactions, wrong wallets, deadlines, and delayed status updates. The future concise in-app Guidelines modal in #348 can link to these canonical manuals rather than repeat them.
