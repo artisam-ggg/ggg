@@ -259,6 +259,25 @@ describe("CreateTournamentForm", () => {
     expect(screen.getByLabelText(/settlement deadline/i)).toBeInTheDocument();
   });
 
+  it("keeps organizer safety guidance, validation, wallet access, and the role guide discoverable", () => {
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+
+    expect(screen.getByLabelText(/settlement deadline \(your local time\)/i)).toHaveAttribute(
+      "aria-describedby",
+      "settlement-deadline-help",
+    );
+    expect(screen.getByText(/local time; stored on-chain as UTC/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /connect wallet/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /deploy soroban contract/i })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open organizer guidelines" }));
+    expect(screen.getByRole("dialog", { name: "Create a tournament" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /read the full guide/i })).toHaveAttribute(
+      "href",
+      "https://goodgameguild.gitbook.io/ggg/role-guides/organizer-guide",
+    );
+  });
+
   it("shows the equal-remainder mode and split by default", () => {
     render(<CreateTournamentForm expectedPassphrase="P" />);
     const calculation = screen.getByLabelText(/payout calculation/i);

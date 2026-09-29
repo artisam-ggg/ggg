@@ -43,6 +43,24 @@ describe("RefereePanel", () => {
     expect(screen.queryByRole("link", { name: /settlement console/i })).toBeNull();
   });
 
+  it("offers public referee guidance while preserving the configured-wallet settlement boundary", async () => {
+    render(<RefereePanel tournamentId="t_1" refereeAddr={REF} passphrase="P" />);
+
+    expect(screen.getByRole("button", { name: "Open referee guidelines" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /sign in|log in/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open referee guidelines" }));
+    expect(screen.getByRole("dialog", { name: "Finalize payouts" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /read the full guide/i })).toHaveAttribute(
+      "href",
+      "https://goodgameguild.gitbook.io/ggg/role-guides/referee-guide",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /verify referee/i }));
+    await screen.findByRole("link", { name: /settlement console/i });
+    expect(ensureWallet).toHaveBeenCalledWith("P");
+  });
+
   it("reveals the settle link only when connected wallet matches refereeAddr", async () => {
     render(<RefereePanel tournamentId="t_1" refereeAddr={REF} passphrase="P" />);
     expect(screen.queryByRole("link", { name: /settlement console/i })).toBeNull();

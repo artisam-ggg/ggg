@@ -3,16 +3,41 @@ import { describe, expect, it } from "vitest";
 import { Guidelines } from "./Guidelines";
 
 describe("Guidelines", () => {
-  it("opens contextual guidance and links to the full guide", () => {
-    render(<Guidelines journey="organizer" />);
+  it.each([
+    [
+      "organizer",
+      "Create a tournament",
+      /set the entry fee/i,
+      "https://goodgameguild.gitbook.io/ggg/role-guides/organizer-guide",
+    ],
+    [
+      "player",
+      "Join a tournament",
+      /public tournament page/i,
+      "https://goodgameguild.gitbook.io/ggg/role-guides/player-guide",
+    ],
+    [
+      "referee",
+      "Finalize payouts",
+      /exact referee wallet/i,
+      "https://goodgameguild.gitbook.io/ggg/role-guides/referee-guide",
+    ],
+    [
+      "refund",
+      "Claim a refund",
+      /wallet that joined/i,
+      "https://goodgameguild.gitbook.io/ggg/role-guides/player-guide",
+    ],
+  ] as const)("opens %s guidance and links to its full guide", (journey, title, step, href) => {
+    render(<Guidelines journey={journey} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Open organizer guidelines" }));
+    fireEvent.click(screen.getByRole("button", { name: `Open ${journey} guidelines` }));
 
-    expect(screen.getByRole("dialog", { name: "Create a tournament" })).toBeInTheDocument();
-    expect(screen.getByText(/set the entry fee/i)).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: title })).toBeInTheDocument();
+    expect(screen.getByText(step)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /read the full guide/i })).toHaveAttribute(
       "href",
-      "https://goodgameguild.gitbook.io/ggg/role-guides/organizer-guide",
+      href,
     );
   });
 
@@ -33,6 +58,19 @@ describe("Guidelines", () => {
     expect(closeButton).toHaveFocus();
 
     fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("closes with the visible close control and restores focus", () => {
+    render(<Guidelines journey="referee" />);
+
+    const trigger = screen.getByRole("button", {
+      name: "Open referee guidelines",
+    });
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
   });
