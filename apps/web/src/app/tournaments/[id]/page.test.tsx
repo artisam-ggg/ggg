@@ -289,6 +289,15 @@ describe("/tournaments/[id] — public detail page", () => {
       render(await Page({ params: Promise.resolve({ id: "t_2" }) }));
 
       expect(screen.getByText(/settlement complete/i)).toBeInTheDocument();
+      expect(screen.getByTestId("tournament-bento-grid")).toHaveClass("lg:grid-cols-12");
+      expect(screen.getByText(/settlement complete/i).parentElement).toHaveClass(
+        "high-contrast-card",
+        "acid-glow",
+        "rounded-2xl",
+      );
+      expect(screen.getByText(/settlement complete/i).parentElement?.parentElement).toHaveClass(
+        "lg:col-span-12",
+      );
     });
 
     it("renders a retryable processing state when FINISHED payouts have not synced", async () => {
@@ -354,6 +363,12 @@ describe("/tournaments/[id] — public detail page", () => {
       render(await Page({ params: Promise.resolve({ id: "t_1" }) }));
 
       expect(screen.getByRole("button", { name: /cancel/i })).toBeInTheDocument();
+      expect(screen.getByTestId("tournament-operations-grid")).toHaveClass("lg:grid-cols-12");
+      const organiserActions = screen.getByRole("region", { name: "Organiser actions" });
+      expect(screen.getByTestId("tournament-tools-rail")).toHaveClass("self-start", "gap-4");
+      expect(screen.getByTestId("tournament-tools-rail")).toContainElement(organiserActions);
+      expect(organiserActions).not.toHaveClass("mt-auto");
+      expect(screen.getByText(/make player refunds available/i)).toBeInTheDocument();
     });
 
     it("does NOT render CancelButton for a non-organiser viewing an ACTIVE tournament", async () => {

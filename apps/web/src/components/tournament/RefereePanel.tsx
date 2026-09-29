@@ -18,8 +18,8 @@ export function RefereePanel({
   const [state, setState] = useState<State>("idle");
 
   return (
-    <div className="violet-accent rounded-xl bg-surface-container p-6">
-      <p className="label-caps text-electric-violet">Referee</p>
+    <div className="kinetic-glass rounded-2xl p-6">
+      <h2 className="text-lg font-semibold text-on-surface">Referee</h2>
       <div className="mt-3">
         <Guidelines journey="referee" />
       </div>

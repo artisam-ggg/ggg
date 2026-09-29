@@ -66,13 +66,13 @@ export function TournamentLifecycle(props: TournamentLifecycleProps) {
   return (
     <section
       aria-labelledby="tournament-lifecycle-heading"
-      className="mt-6 rounded-xl border border-outline-variant bg-surface-container-low p-4"
+      className="kinetic-glass h-full rounded-2xl p-6"
     >
       <p className="label-caps text-on-surface-variant">Tournament status</p>
       <h2 id="tournament-lifecycle-heading" className="mt-1 text-xl font-bold text-on-surface">
         {title}
       </h2>
-      <p className="mt-2 text-sm text-on-surface-variant">{detail}</p>
+      <p className="mt-2 text-xs leading-relaxed text-on-surface-variant">{detail}</p>
     </section>
   );
 }

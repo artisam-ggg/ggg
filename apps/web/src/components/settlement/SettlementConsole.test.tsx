@@ -69,6 +69,10 @@ describe("SettlementConsole", () => {
     );
 
     expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute("href", "/tournaments/t_1");
+    expect(screen.getByRole("heading", { level: 2, name: "Candidates" })).toHaveClass(
+      "text-lg",
+      "font-semibold",
+    );
     expect(screen.getByText(/finalizing distributes the escrow pool/i)).toHaveTextContent(
       /cannot access your private key or sign for you/i,
     );

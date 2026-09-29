@@ -98,19 +98,25 @@ export default async function TournamentDetailPage({
 
       {t.coverImageUrl && <TournamentCover src={t.coverImageUrl} name={t.name} />}
 
-      <TournamentLifecycle {...lifecycleProps} />
-
-      <p className="data-mono mt-3 text-sm text-on-surface-variant">
-        {t.settlementDeadline ? (
-          <SettlementDeadline seconds={t.settlementDeadline} />
-        ) : t.contractVersion === "UNSUPPORTED" ? (
-          "Legacy escrow ABI: on-chain deadline unavailable here. This tournament is read-only."
-        ) : t.contractVersion === "UNAVAILABLE" ? (
-          "Escrow state is temporarily unavailable. Wallet actions are paused."
-        ) : (
-          "Settlement deadline pending contract deployment."
-        )}
-      </p>
+      <div className="mt-4 grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <TournamentLifecycle {...lifecycleProps} />
+        </div>
+        <section aria-label="Settlement timing" className="kinetic-glass h-full rounded-2xl p-6">
+          <p className="label-caps text-on-surface-variant">Settlement deadline</p>
+          <div className="data-mono mt-4 text-sm text-on-surface">
+            {t.settlementDeadline ? (
+              <SettlementDeadline seconds={t.settlementDeadline} stacked />
+            ) : t.contractVersion === "UNSUPPORTED" ? (
+              "Legacy escrow ABI: on-chain deadline unavailable here. This tournament is read-only."
+            ) : t.contractVersion === "UNAVAILABLE" ? (
+              "Escrow state is temporarily unavailable. Wallet actions are paused."
+            ) : (
+              "Pending contract deployment."
+            )}
+          </div>
+        </section>
+      </div>
 
       {t.refundsClaimable && (
         <section
@@ -146,8 +152,11 @@ export default async function TournamentDetailPage({
       )}
 
       <TournamentEventsProvider tournamentId={t.id}>
-        <div className="mt-10 grid gap-8 lg:grid-cols-12">
-          <div className="flex flex-col gap-8 lg:col-span-8">
+        <div
+          data-testid="tournament-bento-grid"
+          className="mt-4 grid grid-flow-row-dense gap-4 lg:grid-cols-12 [&>*]:min-w-0"
+        >
+          <div className="lg:col-span-8">
             <PrizePoolCounter
               initialPool={t.pool}
               asset={t.asset}
@@ -158,59 +167,78 @@ export default async function TournamentDetailPage({
               {...(!t.refundsClaimable ? { distributionBps: t.distributionBps } : {})}
               {...(t.status === "FINISHED" ? { confirmedPayouts: t.winners } : {})}
             />
+          </div>
 
-            {t.status === "ACTIVE" &&
-              !t.refundsClaimable &&
-              t.contractId &&
-              t.settlementDeadline != null &&
-              t.contractVersion === "CURRENT" && (
-                <JoinCard
-                  tournamentId={t.id}
-                  contractId={t.contractId}
-                  entryFee={t.entryFee}
-                  asset={t.asset}
-                  joinUrl={joinUrl}
-                  passphrase={passphrase}
-                  network={env.STELLAR_NETWORK}
-                  confirmedParticipants={t.participants.map((participant) => ({
-                    playerAddress: participant.playerAddr,
-                    txHash: participant.joinTxHash,
-                  }))}
-                  settlementDeadline={t.settlementDeadline}
-                />
+          <div className="lg:col-span-4">
+            <LiveFeed />
+          </div>
+
+          {t.status === "ACTIVE" && !t.refundsClaimable && t.contractVersion === "CURRENT" && (
+            <div
+              data-testid="tournament-operations-grid"
+              className="grid gap-4 lg:col-span-12 lg:grid-cols-12"
+            >
+              {t.contractId && t.settlementDeadline != null && (
+                <div className="lg:col-span-8">
+                  <JoinCard
+                    tournamentId={t.id}
+                    contractId={t.contractId}
+                    entryFee={t.entryFee}
+                    asset={t.asset}
+                    joinUrl={joinUrl}
+                    passphrase={passphrase}
+                    network={env.STELLAR_NETWORK}
+                    confirmedParticipants={t.participants.map((participant) => ({
+                      playerAddress: participant.playerAddr,
+                      txHash: participant.joinTxHash,
+                    }))}
+                    settlementDeadline={t.settlementDeadline}
+                  />
+                </div>
               )}
 
-            {t.status === "FINISHED" && t.winners.length > 0 && (
-              <WinnersPanel winners={t.winners} asset={t.asset} />
-            )}
-            {t.status === "FINISHED" && t.winners.length === 0 && (
-              <SettlementSyncStatus contractUrl={t.contractUrl} />
-            )}
+              <aside
+                aria-label="Tournament tools"
+                data-testid="tournament-tools-rail"
+                className="flex self-start flex-col gap-4 lg:col-span-4"
+              >
+                <RefereePanel
+                  tournamentId={t.id}
+                  refereeAddr={t.refereeAddr}
+                  passphrase={passphrase}
+                />
 
-            <section aria-label="Participants" className="kinetic-glass rounded-2xl p-6">
+                {canCancel && (
+                  <section aria-label="Organiser actions" className="kinetic-glass rounded-2xl p-6">
+                    <p className="label-caps text-error">Danger zone</p>
+                    <p className="mt-2 text-xs leading-relaxed text-on-surface-variant">
+                      Cancel this tournament and make player refunds available.
+                    </p>
+                    <div className="mt-4">
+                      <CancelButton tournamentId={t.id} passphrase={passphrase} />
+                    </div>
+                  </section>
+                )}
+              </aside>
+            </div>
+          )}
+
+          {t.status === "FINISHED" && t.winners.length > 0 && (
+            <div className="lg:col-span-12">
+              <WinnersPanel winners={t.winners} asset={t.asset} />
+            </div>
+          )}
+          {t.status === "FINISHED" && t.winners.length === 0 && (
+            <div className="lg:col-span-8">
+              <SettlementSyncStatus contractUrl={t.contractUrl} />
+            </div>
+          )}
+
+          <div className="lg:col-span-12">
+            <section aria-label="Participants" className="kinetic-glass h-full rounded-2xl p-6">
               <LiveParticipantList participants={t.participants} />
             </section>
           </div>
-
-          <aside aria-label="Tournament tools" className="flex flex-col gap-8 lg:col-span-4">
-            <LiveFeed />
-            {t.status === "ACTIVE" && !t.refundsClaimable && t.contractVersion === "CURRENT" && (
-              <RefereePanel
-                tournamentId={t.id}
-                refereeAddr={t.refereeAddr}
-                passphrase={passphrase}
-              />
-            )}
-            {canCancel && t.contractVersion === "CURRENT" && (
-              <section
-                aria-label="Organiser actions"
-                className="rounded-xl bg-surface-container p-4"
-              >
-                <p className="label-caps mb-3 text-error">Danger zone</p>
-                <CancelButton tournamentId={t.id} passphrase={passphrase} />
-              </section>
-            )}
-          </aside>
         </div>
       </TournamentEventsProvider>
     </main>

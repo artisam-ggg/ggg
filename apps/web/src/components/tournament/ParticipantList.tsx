@@ -21,8 +21,8 @@ export function ParticipantList({ participants }: { participants: Participant[] 
 
   return (
     <section>
-      <h2 className="label-caps text-on-surface-variant">Participants</h2>
-      <p className="mt-1 text-sm text-on-surface-variant">
+      <h2 className="text-lg font-semibold text-on-surface">Participants</h2>
+      <p className="mt-1 text-xs text-on-surface-variant">
         {isBrowser
           ? "App join times shown in your local timezone."
           : "App join times shown in UTC until your local timezone loads."}

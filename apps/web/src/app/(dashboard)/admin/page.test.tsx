@@ -54,6 +54,10 @@ describe("/admin page", () => {
     render(await AdminPage());
 
     expect(screen.getByRole("heading", { level: 1, name: "Admin" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Recent users" })).toHaveClass(
+      "text-lg",
+      "font-semibold",
+    );
   });
 
   it("renders userCount stat", async () => {

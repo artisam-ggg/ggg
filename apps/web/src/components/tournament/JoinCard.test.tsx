@@ -78,6 +78,10 @@ describe("JoinCard", () => {
 
   it("encodes the tournament join URL instead of a direct payment URI", () => {
     render(<JoinCard {...baseProps} />);
+    expect(screen.getByRole("heading", { level: 2, name: "Scan to join" })).toHaveClass(
+      "text-lg",
+      "font-semibold",
+    );
     expect(screen.getByTestId("qr")).toHaveAttribute("data-value", baseProps.joinUrl);
     expect(screen.getByRole("link", { name: /open tournament join page/i })).toHaveAttribute(
       "href",
@@ -102,8 +106,9 @@ describe("JoinCard", () => {
     render(<JoinCard {...baseProps} />);
     expect(screen.getByRole("button", { name: /connect wallet/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /join tournament/i })).toBeDisabled();
+    expect(screen.getByTestId("join-actions")).toHaveClass("flex-col", "items-start");
     expect(screen.getByText(/connect freighter to enable/i)).toHaveAttribute("aria-live", "polite");
-    expect(screen.getByText(/joining transfers the displayed entry fee/i)).toHaveTextContent(
+    expect(screen.getByText(/freighter transfers the displayed entry fee/i)).toHaveTextContent(
       /cannot access your private key or sign for you/i,
     );
   });
@@ -132,7 +137,7 @@ describe("JoinCard", () => {
     await waitFor(() => expect(screen.getByText(/GPLAYE…AYERP/)).toBeInTheDocument());
   });
 
-  it("disables Join when the connected wallet already joined", async () => {
+  it("replaces the join action with a compact confirmation when the wallet already joined", async () => {
     render(
       <JoinCard
         {...baseProps}
@@ -141,8 +146,13 @@ describe("JoinCard", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
 
-    expect(await screen.findByText(/this wallet has already joined/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /join tournament/i })).toBeDisabled();
+    expect(
+      await screen.findByRole("heading", { name: /registration confirmed/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /join tournament/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/freighter transfers the displayed entry fee/i),
+    ).not.toBeInTheDocument();
   });
 
   it("builds + signs + submits join, then refreshes on success", async () => {
@@ -165,13 +175,8 @@ describe("JoinCard", () => {
 
     await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
     expect(screen.getByRole("heading", { name: /registration confirmed/i })).toBeInTheDocument();
-    expect(
-      screen.getByText(/held by this tournament's soroban escrow, not by ggg/i),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /view public tournament/i })).toHaveAttribute(
-      "href",
-      baseProps.joinUrl,
-    );
+    expect(screen.getByText(/1\.0000000 XLM secured in tournament escrow/i)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /view public tournament/i })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /view transaction receipt/i })).toHaveAttribute(
       "href",
       "https://stellar.expert/explorer/testnet/tx/TX",

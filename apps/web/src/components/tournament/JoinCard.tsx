@@ -235,8 +235,8 @@ export function JoinCard(props: JoinCardProps) {
     : null;
 
   return (
-    <div className="kinetic-glass rounded-2xl p-6">
-      <p className="label-caps text-on-surface-variant">Scan to join</p>
+    <div className="kinetic-glass h-full rounded-2xl p-6">
+      <h2 className="text-lg font-semibold text-on-surface">Scan to join</h2>
       <div className="mt-3">
         <Guidelines journey="player" />
       </div>
@@ -252,30 +252,30 @@ export function JoinCard(props: JoinCardProps) {
           </span>
         </div>
 
-        <WalletActionNotice expectedPassphrase={props.passphrase}>
-          Joining transfers the displayed entry fee from your wallet into this tournament&apos;s
-          escrow.
-        </WalletActionNotice>
+        {!registered && (
+          <WalletActionNotice expectedPassphrase={props.passphrase}>
+            Freighter transfers the displayed entry fee to this tournament&apos;s escrow.
+          </WalletActionNotice>
+        )}
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div data-testid="join-actions" className="flex flex-col items-start gap-3">
           <WalletButton expectedPassphrase={props.passphrase} onConnected={handleConnected} />
 
-          <button
-            type="button"
-            onClick={onJoin}
-            disabled={
-              !player || joinStatus !== "ready" || submitting || awaitingConfirmation || registered
-            }
-            className="brutalist-border label-caps bg-electric-violet-strong px-6 py-3 italic text-background transition-transform hover:-translate-y-0.5 active:translate-y-0.5 disabled:opacity-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-acid-yellow"
-          >
-            Join Tournament
-          </button>
+          {!registered && (
+            <button
+              type="button"
+              onClick={onJoin}
+              disabled={!player || joinStatus !== "ready" || submitting || awaitingConfirmation}
+              className="brutalist-border label-caps bg-electric-violet-strong px-6 py-3 italic text-background transition-transform hover:-translate-y-0.5 active:translate-y-0.5 disabled:opacity-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-acid-yellow"
+            >
+              Join Tournament
+            </button>
+          )}
         </div>
-        <p aria-live="polite" className="text-sm text-on-surface-variant">
-          {!player
-            ? "Connect Freighter to enable Join Tournament."
-            : alreadyJoined
-              ? "This wallet has already joined this tournament."
+        {!registered && (
+          <p aria-live="polite" className="text-sm text-on-surface-variant">
+            {!player
+              ? "Connect Freighter to enable Join Tournament."
               : joinStatus === "loading"
                 ? "Checking this wallet for an earlier join submission."
                 : joinStatus === "error"
@@ -287,7 +287,8 @@ export function JoinCard(props: JoinCardProps) {
                     : submitting
                       ? "Join transaction is waiting for wallet or network confirmation."
                       : "Wallet connected. Join Tournament will request the entry-fee transaction."}
-        </p>
+          </p>
+        )}
         {awaitingConfirmation && refreshExhausted && (
           <button
             type="button"
@@ -301,29 +302,19 @@ export function JoinCard(props: JoinCardProps) {
 
       {registered && (
         <section
-          className="mt-6 rounded-xl border border-primary p-5"
+          className="mt-4 rounded-xl border border-primary p-4"
           aria-labelledby="join-confirmation-heading"
         >
-          <p className="label-caps text-primary" role="status">
-            Registered
-          </p>
-          <h2 id="join-confirmation-heading" className="mt-1 text-xl font-semibold text-on-surface">
+          <h2 id="join-confirmation-heading" className="text-lg font-semibold text-on-surface">
             Registration confirmed
           </h2>
-          <p className="mt-3 text-on-surface">
-            Your {formatStroops(props.entryFee)} {props.asset} entry fee is held by this
-            tournament&apos;s Soroban escrow, not by GGG.
+          <p className="data-mono mt-2 text-sm text-on-surface" role="status">
+            {formatStroops(props.entryFee)} {props.asset} secured in tournament escrow.
           </p>
-          <p className="mt-2 text-sm text-on-surface-variant">
+          <p className="mt-2 text-xs text-on-surface-variant">
             Next expected deadline: <SettlementDeadline seconds={props.settlementDeadline} />
           </p>
-          <div className="mt-4 flex flex-wrap gap-4">
-            <Link
-              href={props.joinUrl}
-              className="label-caps text-primary underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-            >
-              View public tournament
-            </Link>
+          <div className="mt-3 flex flex-wrap gap-3">
             {transactionUrl && (
               <a
                 href={transactionUrl}

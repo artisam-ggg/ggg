@@ -32,7 +32,9 @@ describe("StatusChip", () => {
 
   it("renders the refunds-open label with spaces", () => {
     render(<StatusChip status="REFUNDS_OPEN" />);
-    expect(screen.getByText("REFUNDS AVAILABLE")).toHaveAttribute("data-status", "REFUNDS_OPEN");
+    const chip = screen.getByText("REFUNDS AVAILABLE");
+    expect(chip).toHaveAttribute("data-status", "REFUNDS_OPEN");
+    expect(chip).toHaveClass("whitespace-nowrap");
   });
 
   it("renders REFUNDED with muted styling", () => {

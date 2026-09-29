@@ -40,26 +40,28 @@ export function WinnersPanel({ winners, asset }: { winners: Winner[]; asset: "XL
   };
 
   return (
-    <div className="brutalist-border brutalist-border-active rounded-none p-6">
+    <div className="high-contrast-card acid-glow h-full rounded-2xl p-6">
       <p className="label-caps italic text-acid-yellow">Settlement Complete</p>
-      <ul className="mt-4 flex flex-col gap-3" aria-label="Tournament winners">
+      <ul className="mt-4 divide-y divide-outline-variant" aria-label="Tournament winners">
         {winners.map((w) => (
           <li
             key={w.rank}
             data-testid="payout-row"
-            className="flex items-center justify-between gap-4"
+            className="flex flex-col items-start gap-3 py-3 sm:flex-row sm:items-center sm:justify-between"
           >
             <span className="flex items-center gap-3">
               {/* Renders clean, standalone inline SVG directly without custom stylesheets */}
               {renderRankIcon(w.rank)}
-              <span className="label-caps text-on-surface-variant">Rank {w.rank}</span>
+              <span className="label-caps whitespace-nowrap text-on-surface-variant">
+                Rank {w.rank}
+              </span>
 
-              <span className="data-mono text-on-surface">
+              <span className="data-mono whitespace-nowrap text-on-surface">
                 {w.playerAddr.slice(0, 6)}…{w.playerAddr.slice(-6)}
               </span>
             </span>
-            <span className="flex items-center gap-4">
-              <span className="data-mono text-acid-yellow">
+            <span className="flex w-full items-center justify-between gap-4 sm:w-auto sm:justify-start">
+              <span className="data-mono whitespace-nowrap text-acid-yellow">
                 {fmt(w.amount)} {asset}
               </span>
               {w.explorerUrl && (

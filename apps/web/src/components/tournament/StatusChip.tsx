@@ -14,7 +14,7 @@ const styles: Record<TournamentDisplayStatus, string> = {
 export function StatusChip({ status, label }: { status: TournamentDisplayStatus; label?: string }) {
   return (
     <span
-      className={`label-caps inline-flex items-center rounded-full border-2 px-3 py-1 ${styles[status]}`}
+      className={`label-caps inline-flex items-center whitespace-nowrap rounded-full border-2 px-3 py-1 ${styles[status]}`}
       data-testid="status-chip"
       data-status={status}
     >
