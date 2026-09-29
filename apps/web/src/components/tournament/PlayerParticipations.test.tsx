@@ -21,6 +21,7 @@ const registered = {
   entryFee: "10000000",
   displayStatus: "ACTIVE",
   state: "REGISTERED",
+  refundReason: null,
   joinedAt: "2026-09-29T00:00:00.000Z",
   settlementDeadline: "2026-10-10T12:00:00.000Z",
   joinExplorerUrl: "https://stellar.expert/explorer/testnet/tx/JOIN_TX",
@@ -99,7 +100,7 @@ describe("PlayerParticipations", () => {
       screen.getByText(/held by the tournament's soroban escrow, not by ggg/i),
     ).toBeInTheDocument();
     expect(screen.getByText(/next expected deadline/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /view transaction receipt/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /view join receipt/i })).toHaveAttribute(
       "href",
       registered.joinExplorerUrl,
     );
@@ -130,6 +131,32 @@ describe("PlayerParticipations", () => {
 
     expect(await screen.findByText("Payout confirmed")).toBeInTheDocument();
     expect(screen.getByText(/rank 1 received 2\.5000000 xlm/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /view payout receipt/i })).toHaveAttribute(
+      "href",
+      "https://stellar.expert/explorer/testnet/tx/PAYOUT_TX",
+    );
+  });
+
+  it("shows payout-ready guidance while confirmed payouts are still syncing", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        response([
+          {
+            ...registered,
+            tournamentId: "t_payout_ready",
+            displayStatus: "FINISHED",
+            state: "PAYOUT_READY",
+          },
+        ]),
+      ),
+    );
+    render(<PlayerParticipations expectedPassphrase="P" />);
+
+    await connect();
+
+    expect(await screen.findByText("Payout confirmation pending")).toBeInTheDocument();
+    expect(screen.getByText(/results are final.*still syncing/i)).toBeInTheDocument();
   });
 
   it("shows when the connected wallet has a confirmed refund available", async () => {
@@ -142,6 +169,7 @@ describe("PlayerParticipations", () => {
             tournamentId: "t_refund",
             displayStatus: "REFUNDS_OPEN",
             state: "REFUND_AVAILABLE",
+            refundReason: "CANCELLED",
           },
         ]),
       ),
@@ -151,9 +179,30 @@ describe("PlayerParticipations", () => {
     await connect();
 
     expect(await screen.findByText("Refund available")).toBeInTheDocument();
-    expect(
-      screen.getByText(/allows this wallet to claim its entry fee from the escrow/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/tournament was cancelled.*may now claim/i)).toBeInTheDocument();
+  });
+
+  it("does not substitute a join receipt when a payout receipt is unavailable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        response([
+          {
+            ...registered,
+            tournamentId: "t_payout_without_receipt",
+            displayStatus: "FINISHED",
+            state: "PAYOUT_CONFIRMED",
+            payout: { rank: 2, amount: "10000000", explorerUrl: null },
+          },
+        ]),
+      ),
+    );
+    render(<PlayerParticipations expectedPassphrase="P" />);
+
+    await connect();
+
+    expect(await screen.findByText("Payout confirmed")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /receipt/i })).not.toBeInTheDocument();
   });
 
   it("shows an explicit no-participation state for the connected wallet", async () => {

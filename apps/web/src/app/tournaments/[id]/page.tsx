@@ -171,7 +171,12 @@ export default async function TournamentDetailPage({
                   asset={t.asset}
                   joinUrl={joinUrl}
                   passphrase={passphrase}
-                  confirmedParticipantAddresses={participantAddresses}
+                  network={env.STELLAR_NETWORK}
+                  confirmedParticipants={t.participants.map((participant) => ({
+                    playerAddress: participant.playerAddr,
+                    txHash: participant.joinTxHash,
+                  }))}
+                  pendingJoinSubmissions={t.pendingJoinSubmissions}
                   settlementDeadline={t.settlementDeadline}
                 />
               )}

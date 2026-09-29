@@ -57,6 +57,7 @@ vi.mock("@/lib/db", () => ({
               joinedAt: new Date("2026-09-22T00:00:00Z"),
               joinTxHash: null,
             })),
+            joinSubmissions: [],
           },
       ),
       update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {

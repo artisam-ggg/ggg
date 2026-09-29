@@ -23,8 +23,11 @@ interface JoinCardProps {
   joinUrl: string;
   /** Network passphrase — passed from the server shell, not imported here. */
   passphrase: string;
-  /** Confirmed participant wallets from server/subscriber state. */
-  confirmedParticipantAddresses: string[];
+  network: "testnet" | "public";
+  /** Confirmed participant wallets and receipts from server/subscriber state. */
+  confirmedParticipants: { playerAddress: string; txHash: string | null }[];
+  /** Submitted joins that are still awaiting confirmed participant state. */
+  pendingJoinSubmissions: { playerAddress: string; txHash: string }[];
   settlementDeadline: number;
 }
 
@@ -39,6 +42,7 @@ const joinResponseSchema = z.object({
 });
 
 type JoinTransaction = {
+  playerAddress: string;
   txHash: string;
   network: "testnet" | "public";
   status: "pending" | "confirmed" | "failed";
@@ -65,9 +69,20 @@ export function JoinCard(props: JoinCardProps) {
   const [transaction, setTransaction] = useState<JoinTransaction | null>(null);
 
   const submitting = phase === "signing" || phase === "submitting";
-  const awaitingConfirmation = phase === "awaitingConfirmation";
-  const alreadyJoined = player != null && props.confirmedParticipantAddresses.includes(player);
-  const registered = alreadyJoined || transaction?.status === "confirmed";
+  const confirmedParticipant = player
+    ? props.confirmedParticipants.find((participant) => participant.playerAddress === player)
+    : undefined;
+  const pendingSubmission = player
+    ? props.pendingJoinSubmissions.find((submission) => submission.playerAddress === player)
+    : undefined;
+  const activeTransaction = transaction?.playerAddress === player ? transaction : null;
+  const alreadyJoined = confirmedParticipant !== undefined;
+  const awaitingConfirmation =
+    !alreadyJoined &&
+    (phase === "awaitingConfirmation" ||
+      activeTransaction?.status === "pending" ||
+      pendingSubmission !== undefined);
+  const registered = alreadyJoined || activeTransaction?.status === "confirmed";
   const refreshExhausted = refreshAttempts >= REFRESH_DELAYS_MS.length;
   const tournamentIdentifier =
     props.tournamentId.length > 14
@@ -83,8 +98,18 @@ export function JoinCard(props: JoinCardProps) {
     return () => clearTimeout(timeout);
   }, [alreadyJoined, awaitingConfirmation, refreshAttempts, refreshExhausted, router]);
 
+  function handleConnected(nextPlayer: string | null) {
+    if (nextPlayer !== player) {
+      setPhase("idle");
+      setErrorMsg(null);
+      setRefreshAttempts(0);
+      setTransaction(null);
+    }
+    setPlayer(nextPlayer);
+  }
+
   async function onJoin() {
-    if (!player || submitting || awaitingConfirmation || alreadyJoined) return;
+    if (!player || submitting || awaitingConfirmation || registered) return;
     setErrorMsg(null);
     setRefreshAttempts(0);
     setTransaction(null);
@@ -120,7 +145,12 @@ export function JoinCard(props: JoinCardProps) {
       );
 
       // 3. Success — refresh so the participant list / pool updates.
-      setTransaction({ txHash: result.txHash, network, status: "confirmed" });
+      setTransaction({
+        playerAddress: player,
+        txHash: result.txHash,
+        network,
+        status: "confirmed",
+      });
       setPhase("success");
       router.refresh();
     } catch (e: unknown) {
@@ -130,13 +160,23 @@ export function JoinCard(props: JoinCardProps) {
         e.details.txHash !== undefined
       ) {
         if (network) {
-          setTransaction({ txHash: e.details.txHash, network, status: "pending" });
+          setTransaction({
+            playerAddress: player,
+            txHash: e.details.txHash,
+            network,
+            status: "pending",
+          });
         }
         setPhase("awaitingConfirmation");
         return;
       }
       if (e instanceof SubmissionError && e.details.txHash !== undefined && network) {
-        setTransaction({ txHash: e.details.txHash, network, status: "failed" });
+        setTransaction({
+          playerAddress: player,
+          txHash: e.details.txHash,
+          network,
+          status: "failed",
+        });
       }
       setPhase("error");
       setErrorMsg(e instanceof Error ? e.message : "Join failed");
@@ -148,8 +188,11 @@ export function JoinCard(props: JoinCardProps) {
     setErrorMsg(null);
   }
 
-  const transactionUrl = transaction
-    ? `https://stellar.expert/explorer/${transaction.network}/tx/${encodeURIComponent(transaction.txHash)}`
+  const receiptHash =
+    confirmedParticipant?.txHash ?? activeTransaction?.txHash ?? pendingSubmission?.txHash;
+  const receiptNetwork = activeTransaction?.network ?? props.network;
+  const transactionUrl = receiptHash
+    ? `https://stellar.expert/explorer/${receiptNetwork}/tx/${encodeURIComponent(receiptHash)}`
     : null;
 
   return (
@@ -176,7 +219,7 @@ export function JoinCard(props: JoinCardProps) {
         </WalletActionNotice>
 
         <div className="flex flex-wrap items-center gap-3">
-          <WalletButton expectedPassphrase={props.passphrase} onConnected={setPlayer} />
+          <WalletButton expectedPassphrase={props.passphrase} onConnected={handleConnected} />
 
           <button
             type="button"
@@ -211,7 +254,7 @@ export function JoinCard(props: JoinCardProps) {
         )}
       </div>
 
-      {transaction?.status === "confirmed" && transactionUrl && (
+      {registered && (
         <section
           className="mt-6 rounded-xl border border-primary p-5"
           aria-labelledby="join-confirmation-heading"
@@ -236,14 +279,16 @@ export function JoinCard(props: JoinCardProps) {
             >
               View public tournament
             </Link>
-            <a
-              href={transactionUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="label-caps text-on-surface underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-            >
-              View transaction receipt
-            </a>
+            {transactionUrl && (
+              <a
+                href={transactionUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="label-caps text-on-surface underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+              >
+                View transaction receipt
+              </a>
+            )}
             <Link
               href="/participations"
               className="label-caps text-on-surface underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
@@ -258,7 +303,7 @@ export function JoinCard(props: JoinCardProps) {
       {errorMsg && phase === "error" && (
         <div role="alert" className="mt-3 text-sm text-error">
           <p>{errorMsg}</p>
-          {transaction?.status === "failed" && transactionUrl && (
+          {activeTransaction?.status === "failed" && transactionUrl && (
             <a
               href={transactionUrl}
               target="_blank"
@@ -271,7 +316,7 @@ export function JoinCard(props: JoinCardProps) {
         </div>
       )}
 
-      {transaction?.status === "pending" && transactionUrl && (
+      {awaitingConfirmation && transactionUrl && (
         <a
           href={transactionUrl}
           target="_blank"

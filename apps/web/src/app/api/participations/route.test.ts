@@ -38,7 +38,7 @@ describe("/api/participations", () => {
     expect(listPlayerParticipations).not.toHaveBeenCalled();
   });
 
-  it("rate-limits repeated public lookups", async () => {
+  it("rate-limits repeated lookups by client IP", async () => {
     rateLimit.mockResolvedValueOnce({ ok: false, remaining: 0 });
 
     const response = await GET(
@@ -46,6 +46,29 @@ describe("/api/participations", () => {
     );
 
     expect(response.status).toBe(429);
+    expect(rateLimit).toHaveBeenNthCalledWith(1, "participations:ip:unknown", {
+      limit: 30,
+      windowSec: 60,
+    });
+    expect(listPlayerParticipations).not.toHaveBeenCalled();
+  });
+
+  it("rate-limits repeated lookups by wallet independently of client IP", async () => {
+    rateLimit
+      .mockResolvedValueOnce({ ok: true, remaining: 29 })
+      .mockResolvedValueOnce({ ok: false, remaining: 0 });
+
+    const response = await GET(
+      new NextRequest(`http://localhost/api/participations?playerAddress=${PLAYER}`, {
+        headers: { "x-real-ip": "203.0.113.4" },
+      }),
+    );
+
+    expect(response.status).toBe(429);
+    expect(rateLimit).toHaveBeenNthCalledWith(2, `participations:wallet:${PLAYER}`, {
+      limit: 30,
+      windowSec: 60,
+    });
     expect(listPlayerParticipations).not.toHaveBeenCalled();
   });
 

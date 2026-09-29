@@ -64,6 +64,7 @@ const ACTIVE_TOURNAMENT = {
   refundsClaimable: false,
   pool: "30000000",
   refundClaimedPlayers: [],
+  pendingJoinSubmissions: [],
   participants: [
     {
       playerAddr: "GP1AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",

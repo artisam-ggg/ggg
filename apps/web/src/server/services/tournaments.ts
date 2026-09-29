@@ -438,10 +438,7 @@ export async function listPlayerParticipations(playerAddress: string) {
       tournament: {
         include: {
           participants: { select: { playerAddr: true } },
-          payouts: {
-            where: { playerAddr: playerAddress },
-            orderBy: { rank: "asc" },
-          },
+          payouts: { orderBy: { rank: "asc" } },
           events: {
             where: { type: "REFUND_CLAIMED" },
             select: { payload: true, txHash: true },
@@ -458,7 +455,8 @@ export async function listPlayerParticipations(playerAddress: string) {
       parseRefundClaims([event]).map((claim) => ({ ...claim, txHash: event.txHash })),
     );
     const refund = refundClaims.find((claim) => claim.player === playerAddress);
-    const payout = tournament.payouts[0] ?? null;
+    const payout =
+      tournament.payouts.find((candidate) => candidate.playerAddr === playerAddress) ?? null;
     const displayStatus = getTournamentDisplayStatus({
       status: tournament.status,
       settlementDeadline: tournament.settlementDeadline,
@@ -474,7 +472,9 @@ export async function listPlayerParticipations(playerAddress: string) {
         : refundAvailable
           ? "REFUND_AVAILABLE"
           : tournament.status === "FINISHED"
-            ? "SETTLED"
+            ? tournament.payouts.length === 0
+              ? "PAYOUT_READY"
+              : "SETTLED"
             : "REGISTERED";
 
     return {
@@ -485,6 +485,11 @@ export async function listPlayerParticipations(playerAddress: string) {
       entryFee: tournament.entryFee.toString(),
       displayStatus,
       state,
+      refundReason: refundAvailable
+        ? tournament.status === "CANCELLED"
+          ? "CANCELLED"
+          : "DEADLINE"
+        : null,
       joinedAt: participation.joinedAt.toISOString(),
       settlementDeadline: tournament.settlementDeadline?.toISOString() ?? null,
       joinExplorerUrl: participation.joinTxHash ? explorerTxUrl(participation.joinTxHash) : null,
@@ -610,6 +615,7 @@ export async function getTournamentDetail(id: string) {
     where: { id },
     include: {
       participants: { orderBy: { joinedAt: "asc" } },
+      joinSubmissions: { orderBy: { submittedAt: "asc" } },
       payouts: { orderBy: { rank: "asc" } },
       events: {
         where: { type: "REFUND_CLAIMED" },
@@ -679,6 +685,10 @@ export async function getTournamentDetail(id: string) {
       playerAddr: p.playerAddr,
       joinedAt: p.joinedAt.toISOString(),
       joinTxHash: p.joinTxHash,
+    })),
+    pendingJoinSubmissions: t.joinSubmissions.map((submission) => ({
+      playerAddress: submission.playerAddr,
+      txHash: submission.txHash,
     })),
     winners: t.payouts.map((p) => ({
       rank: p.rank,

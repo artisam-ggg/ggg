@@ -16,7 +16,15 @@ const participationSchema = z.object({
   asset: z.enum(["XLM", "USDC"]),
   entryFee: z.string(),
   displayStatus: z.enum(["DRAFT", "ACTIVE", "REFUNDS_OPEN", "REFUNDED", "CANCELLED", "FINISHED"]),
-  state: z.enum(["REGISTERED", "PAYOUT_CONFIRMED", "REFUND_AVAILABLE", "REFUNDED", "SETTLED"]),
+  state: z.enum([
+    "REGISTERED",
+    "PAYOUT_READY",
+    "PAYOUT_CONFIRMED",
+    "REFUND_AVAILABLE",
+    "REFUNDED",
+    "SETTLED",
+  ]),
+  refundReason: z.enum(["CANCELLED", "DEADLINE"]).nullable(),
   joinedAt: z.string().datetime(),
   settlementDeadline: z.string().datetime().nullable(),
   joinExplorerUrl: z.string().url().nullable(),
@@ -36,6 +44,7 @@ type LoadState = "idle" | "loading" | "ready" | "error";
 
 const stateTitle: Record<Participation["state"], string> = {
   REGISTERED: "Registration confirmed",
+  PAYOUT_READY: "Payout confirmation pending",
   PAYOUT_CONFIRMED: "Payout confirmed",
   REFUND_AVAILABLE: "Refund available",
   REFUNDED: "Refund confirmed",
@@ -43,11 +52,16 @@ const stateTitle: Record<Participation["state"], string> = {
 };
 
 function participationCopy(item: Participation) {
+  if (item.state === "PAYOUT_READY") {
+    return "Results are final. Payout confirmation is still syncing; do not submit another transaction.";
+  }
   if (item.state === "PAYOUT_CONFIRMED" && item.payout) {
     return `Rank ${item.payout.rank} received ${formatStroops(item.payout.amount)} ${item.asset} from the tournament escrow.`;
   }
   if (item.state === "REFUND_AVAILABLE") {
-    return "The confirmed tournament state allows this wallet to claim its entry fee from the escrow.";
+    return item.refundReason === "CANCELLED"
+      ? "This tournament was cancelled. This wallet may now claim its entry fee from the escrow."
+      : "The settlement deadline passed without finalization. This wallet may now claim its entry fee from the escrow.";
   }
   if (item.state === "REFUNDED" && item.refund) {
     return `${formatStroops(item.refund.amount)} ${item.asset} was returned from the tournament escrow to this wallet.`;
@@ -56,6 +70,19 @@ function participationCopy(item: Participation) {
     return "The tournament settled with no confirmed payout recorded for this wallet.";
   }
   return `${formatStroops(item.entryFee)} ${item.asset} is held by the tournament's Soroban escrow, not by GGG.`;
+}
+
+function receiptFor(item: Participation): { label: string; url: string } | null {
+  if (item.state === "REGISTERED" && item.joinExplorerUrl) {
+    return { label: "View join receipt", url: item.joinExplorerUrl };
+  }
+  if (item.state === "PAYOUT_CONFIRMED" && item.payout?.explorerUrl) {
+    return { label: "View payout receipt", url: item.payout.explorerUrl };
+  }
+  if (item.state === "REFUNDED" && item.refund?.explorerUrl) {
+    return { label: "View refund receipt", url: item.refund.explorerUrl };
+  }
+  return null;
 }
 
 export function PlayerParticipations({ expectedPassphrase }: { expectedPassphrase: string }) {
@@ -137,8 +164,7 @@ export function PlayerParticipations({ expectedPassphrase }: { expectedPassphras
       {state === "ready" && items.length > 0 && (
         <ul className="mt-6 grid gap-4">
           {items.map((item) => {
-            const receipt =
-              item.payout?.explorerUrl ?? item.refund?.explorerUrl ?? item.joinExplorerUrl;
+            const receipt = receiptFor(item);
             return (
               <li key={item.tournamentId} className="rounded-xl border border-outline-variant p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -165,12 +191,12 @@ export function PlayerParticipations({ expectedPassphrase }: { expectedPassphras
                   </Link>
                   {receipt && (
                     <a
-                      href={receipt}
+                      href={receipt.url}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="label-caps text-on-surface underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                     >
-                      View transaction receipt
+                      {receipt.label}
                     </a>
                   )}
                 </div>

@@ -30,14 +30,19 @@ export async function GET(req: NextRequest): Promise<Response> {
   }
 
   try {
-    const limited = await rateLimit(
-      `participations:${clientIp(req)}:${parsed.data.playerAddress}`,
-      {
+    const [ipLimit, walletLimit] = await Promise.all([
+      rateLimit(`participations:ip:${clientIp(req)}`, {
         limit: 30,
         windowSec: 60,
-      },
-    );
-    if (!limited.ok) return err("TOO_MANY_REQUESTS", "Too many requests. Try again later.", 429);
+      }),
+      rateLimit(`participations:wallet:${parsed.data.playerAddress}`, {
+        limit: 30,
+        windowSec: 60,
+      }),
+    ]);
+    if (!ipLimit.ok || !walletLimit.ok) {
+      return err("TOO_MANY_REQUESTS", "Too many requests. Try again later.", 429);
+    }
 
     return ok({ items: await listPlayerParticipations(parsed.data.playerAddress) });
   } catch {
