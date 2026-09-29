@@ -82,6 +82,9 @@ describe("JoinCard", () => {
       "text-lg",
       "font-semibold",
     );
+    expect(screen.getByRole("heading", { name: "Scan to join" }).parentElement).toHaveClass(
+      "justify-between",
+    );
     expect(screen.getByTestId("qr")).toHaveAttribute("data-value", baseProps.joinUrl);
     expect(screen.getByRole("link", { name: /open tournament join page/i })).toHaveAttribute(
       "href",

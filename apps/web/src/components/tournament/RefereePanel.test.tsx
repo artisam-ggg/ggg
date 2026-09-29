@@ -50,6 +50,9 @@ describe("RefereePanel", () => {
   it("offers public referee guidance while preserving the configured-wallet settlement boundary", async () => {
     render(<RefereePanel tournamentId="t_1" refereeAddr={REF} passphrase="P" />);
 
+    expect(screen.getByRole("heading", { name: "Referee" }).parentElement).toHaveClass(
+      "justify-between",
+    );
     expect(screen.getByRole("button", { name: "Open referee guidelines" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /sign in|log in/i })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Open referee guidelines" }));

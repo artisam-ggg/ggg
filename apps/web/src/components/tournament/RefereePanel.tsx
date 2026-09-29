@@ -19,8 +19,8 @@ export function RefereePanel({
 
   return (
     <div className="kinetic-glass rounded-2xl p-6">
-      <h2 className="text-lg font-semibold text-on-surface">Referee</h2>
-      <div className="mt-3">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold text-on-surface">Referee</h2>
         <Guidelines journey="referee" />
       </div>
 
