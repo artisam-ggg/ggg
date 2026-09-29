@@ -8,6 +8,7 @@ import { PrizeBreakdown } from "./PrizeBreakdown";
 import { Button } from "@/components/ui/button";
 import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
 import { Guidelines } from "@/components/ui/Guidelines";
+import { fetchTournamentStatus } from "@/lib/tournament-status";
 import { signAndSubmit, SubmissionError } from "@/lib/wallet";
 import { createTournamentSchema } from "@/lib/validation/tournament";
 import { apiResponseSchema } from "@/lib/api";
@@ -137,9 +138,15 @@ function transactionExplorerUrl(txHash: string, passphrase: string) {
   return `https://stellar.expert/explorer/${network}/tx/${encodeURIComponent(txHash)}`;
 }
 
-type Phase = "idle" | "signing" | "submitting" | "success" | "error";
+type Phase = "idle" | "signing" | "submitting" | "awaitingConfirmation" | "success" | "error";
 type CoverUploadStatus = "idle" | "uploading" | "failed" | "complete";
-type PendingDeployment = { tournamentId: string; unsignedXdr: string };
+type PendingDeployment = {
+  tournamentId: string;
+  unsignedXdr: string;
+  organizerAddress: string;
+};
+
+const REFRESH_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000];
 
 interface CreateTournamentFormProps {
   expectedPassphrase: string;
@@ -169,6 +176,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   const [error, setError] = useState<string | null>(null);
   const [errorTxHash, setErrorTxHash] = useState<string | null>(null);
   const [pendingDeployment, setPendingDeployment] = useState<PendingDeployment | null>(null);
+  const [confirmationAttempts, setConfirmationAttempts] = useState(0);
   const [entryFeeError, setEntryFeeError] = useState<string | null>(null);
   const [refereeError, setRefereeError] = useState<string | null>(null);
   const hasDraft =
@@ -230,6 +238,40 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     settlementDeadline,
     splits,
   ]);
+
+  const awaitingConfirmation = phase === "awaitingConfirmation";
+  const preparedOrganizerMismatch =
+    pendingDeployment !== null && pendingDeployment.organizerAddress !== organizerAddress;
+
+  useEffect(() => {
+    if (
+      !awaitingConfirmation ||
+      !pendingDeployment ||
+      confirmationAttempts >= REFRESH_DELAYS_MS.length
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    const timeout = window.setTimeout(() => {
+      void fetchTournamentStatus(pendingDeployment.tournamentId).then((status) => {
+        if (cancelled) return;
+        if (status === "ACTIVE") {
+          removeStoredDraft();
+          setPendingDeployment(null);
+          setPhase("success");
+          router.push(`/tournaments/${pendingDeployment.tournamentId}`);
+          return;
+        }
+        setConfirmationAttempts((attempts) => attempts + 1);
+      });
+    }, REFRESH_DELAYS_MS[confirmationAttempts]);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [awaitingConfirmation, confirmationAttempts, pendingDeployment, router]);
 
   function clearDraft() {
     removeStoredDraft();
@@ -363,6 +405,11 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   }
 
   async function submitDeployment(pending: PendingDeployment) {
+    if (pending.organizerAddress !== organizerAddress) {
+      throw new Error(
+        "Connect the organizer wallet that prepared this deployment before retrying.",
+      );
+    }
     setPhase("signing");
     const submitUrl = `/api/tournaments/${pending.tournamentId}/submit`;
     await signAndSubmit(pending.unsignedXdr, "deploy", submitUrl, expectedPassphrase);
@@ -374,13 +421,20 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
   }
 
   function handleDeploymentError(e: unknown) {
+    if (e instanceof SubmissionError && e.details.retryable && e.details.txHash) {
+      setPhase("awaitingConfirmation");
+      setError(null);
+      setErrorTxHash(e.details.txHash);
+      setConfirmationAttempts(0);
+      return;
+    }
     setPhase("error");
     setError(e instanceof Error ? e.message : "An unexpected error occurred");
     setErrorTxHash(e instanceof SubmissionError ? (e.details.txHash ?? null) : null);
   }
 
   async function retryDeployment() {
-    if (!pendingDeployment) return;
+    if (!pendingDeployment || preparedOrganizerMismatch || awaitingConfirmation) return;
     setError(null);
     setErrorTxHash(null);
     try {
@@ -388,6 +442,19 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
     } catch (e: unknown) {
       handleDeploymentError(e);
     }
+  }
+
+  async function refreshDeploymentStatus() {
+    if (!pendingDeployment) return;
+    if ((await fetchTournamentStatus(pendingDeployment.tournamentId)) === "ACTIVE") {
+      removeStoredDraft();
+      const tournamentId = pendingDeployment.tournamentId;
+      setPendingDeployment(null);
+      setPhase("success");
+      router.push(`/tournaments/${tournamentId}`);
+      return;
+    }
+    setConfirmationAttempts((attempts) => Math.min(attempts + 1, REFRESH_DELAYS_MS.length));
   }
 
   async function handleDeploy() {
@@ -478,6 +545,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       const pending = {
         tournamentId: created.tournamentId,
         unsignedXdr: created.unsignedXdr,
+        organizerAddress,
       };
       setPendingDeployment(pending);
       await submitDeployment(pending);
@@ -820,10 +888,11 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
               View transaction
             </a>
           )}
-          {pendingDeployment && (
+          {pendingDeployment && !awaitingConfirmation && (
             <button
               type="button"
               onClick={() => void retryDeployment()}
+              disabled={preparedOrganizerMismatch}
               className="label-caps mt-2 block text-sm underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
             >
               Retry deployment
@@ -832,10 +901,43 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         </div>
       )}
 
+      {preparedOrganizerMismatch && !awaitingConfirmation && (
+        <p className="mt-4 text-sm text-error" role="alert">
+          This deployment was prepared for a different organizer. Connect the original organizer
+          wallet before retrying.
+        </p>
+      )}
+
+      {awaitingConfirmation && pendingDeployment && (
+        <div className="mt-4 text-sm text-on-surface-variant" role="status">
+          <p>
+            Deployment was submitted and may still confirm. Do not resubmit while its status is
+            being checked.
+          </p>
+          {errorTxHash && (
+            <a
+              href={transactionExplorerUrl(errorTxHash, expectedPassphrase)}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 inline-block underline"
+            >
+              View transaction
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={() => void refreshDeploymentStatus()}
+            className="label-caps mt-2 block text-sm underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+          >
+            Check deployment status
+          </button>
+        </div>
+      )}
+
       {/* Progress modal */}
       <SubmitStateModal
         open={phase === "signing" || phase === "submitting" || phase === "error"}
-        phase={phase}
+        phase={phase === "awaitingConfirmation" ? "idle" : phase}
         {...(phase === "error" && error != null ? { message: error } : {})}
         {...(phase === "error"
           ? {

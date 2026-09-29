@@ -96,12 +96,8 @@ export function WalletButton({ expectedPassphrase, onConnected }: WalletButtonPr
       }
     } catch (e: unknown) {
       if (currentAttempt !== attemptId.current) return;
-      if (
-        e instanceof Error &&
-        "details" in e &&
-        (e as Error & { details?: { code?: string } }).details?.code === "NETWORK_MISMATCH"
-      ) {
-        setNeedsRecheck(address !== null);
+      if (address !== null) {
+        setNeedsRecheck(true);
         onConnected(null);
       }
       setError(e instanceof Error ? e.message : "Failed to connect wallet");

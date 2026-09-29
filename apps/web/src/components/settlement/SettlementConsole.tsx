@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { CandidateCard } from "./CandidateCard";
@@ -9,10 +9,13 @@ import { SettlementModal } from "./SettlementModal";
 import { WalletButton } from "@/components/tournament/WalletButton";
 import { WalletActionNotice } from "@/components/tournament/WalletActionNotice";
 import { PrizeBreakdown } from "@/components/tournament/PrizeBreakdown";
-import { signAndSubmit } from "@/lib/wallet";
+import { fetchTournamentStatus } from "@/lib/tournament-status";
+import { signAndSubmit, SubmissionError } from "@/lib/wallet";
 import { BackButton } from "@/components/ui/BackButton";
 
-type Phase = "idle" | "submitting" | "signing" | "error";
+type Phase = "idle" | "submitting" | "signing" | "awaitingConfirmation" | "error";
+
+const REFRESH_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000];
 
 type Participant = { playerAddr: string; joinedAt: string };
 
@@ -40,6 +43,7 @@ export function SettlementConsole({
   const [slots, setSlots] = useState<(string | null)[]>(() => distributionBps.map(() => null));
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [confirmationAttempts, setConfirmationAttempts] = useState(0);
 
   const assignedSet = new Set(slots.filter((s): s is string => s !== null));
 
@@ -62,10 +66,34 @@ export function SettlementConsole({
   const isReferee = wallet !== null && wallet === refereeAddr;
   const allFilled = slots.every((s) => s !== null);
   const allDistinct = new Set(slots).size === slots.length;
-  const ready = isReferee && allFilled && allDistinct;
+  const awaitingConfirmation = phase === "awaitingConfirmation";
+  const ready = isReferee && allFilled && allDistinct && !awaitingConfirmation;
+
+  useEffect(() => {
+    if (!awaitingConfirmation || confirmationAttempts >= REFRESH_DELAYS_MS.length) return;
+
+    let cancelled = false;
+    const timeout = window.setTimeout(() => {
+      void fetchTournamentStatus(tournamentId).then((status) => {
+        if (cancelled) return;
+        if (status === "FINISHED") {
+          router.push(`/tournaments/${tournamentId}`);
+          return;
+        }
+        setConfirmationAttempts((attempts) => attempts + 1);
+      });
+    }, REFRESH_DELAYS_MS[confirmationAttempts]);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [awaitingConfirmation, confirmationAttempts, router, tournamentId]);
 
   async function finalize() {
+    if (!ready) return;
     setError(null);
+    setConfirmationAttempts(0);
     try {
       setPhase("submitting");
       const res = await fetch(`/api/tournaments/${tournamentId}/finalize`, {
@@ -95,9 +123,21 @@ export function SettlementConsole({
 
       router.push(`/tournaments/${tournamentId}`);
     } catch (e: unknown) {
+      if (e instanceof SubmissionError && e.details.retryable && e.details.txHash) {
+        setPhase("awaitingConfirmation");
+        return;
+      }
       setPhase("error");
       setError(e instanceof Error ? e.message : "Finalization failed");
     }
+  }
+
+  async function refreshSettlementStatus() {
+    if ((await fetchTournamentStatus(tournamentId)) === "FINISHED") {
+      router.push(`/tournaments/${tournamentId}`);
+      return;
+    }
+    setConfirmationAttempts((attempts) => Math.min(attempts + 1, REFRESH_DELAYS_MS.length));
   }
 
   const modalOpen = phase === "submitting" || phase === "signing";
@@ -197,6 +237,22 @@ export function SettlementConsole({
             <p className="mt-3 text-error" role="alert">
               {error}
             </p>
+          )}
+
+          {awaitingConfirmation && (
+            <div className="mt-3 text-sm text-on-surface-variant" role="status">
+              <p>
+                Finalization was submitted and may still confirm. Do not resubmit while its status
+                is being checked.
+              </p>
+              <button
+                type="button"
+                onClick={() => void refreshSettlementStatus()}
+                className="label-caps mt-2 underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+              >
+                Check settlement status
+              </button>
+            </div>
           )}
         </section>
 

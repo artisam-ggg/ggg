@@ -87,7 +87,7 @@ describe("WalletButton", () => {
     expect(screen.getByLabelText("Wallet GNEWADDRESSNEWADDRESS")).toBeInTheDocument();
   });
 
-  it("keeps the current wallet and shows an error when re-checking fails", async () => {
+  it("keeps the address for display but revokes authorization when re-checking fails", async () => {
     const onConnected = vi.fn();
     mockedEnsureWallet
       .mockResolvedValueOnce("GABCDEFGHIJABCDEFGHIJ")
@@ -100,6 +100,8 @@ describe("WalletButton", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Freighter access denied");
     expect(screen.getByLabelText("Wallet GABCDEFGHIJABCDEFGHIJ")).toBeInTheDocument();
+    expect(screen.getByText(/wallet is not verified/i)).toBeInTheDocument();
+    expect(onConnected).toHaveBeenLastCalledWith(null);
   });
 
   it("disables a stale wallet until a wrong-network re-check succeeds", async () => {
