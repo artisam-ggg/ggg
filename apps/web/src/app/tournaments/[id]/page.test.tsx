@@ -60,6 +60,8 @@ const ACTIVE_TOURNAMENT = {
   organizerAddr: "GORG",
   organizerId: "user_org_1",
   refereeAddr: "GREF",
+  settlementDeadline: 1_800_000_000,
+  refundsClaimable: false,
   pool: "30000000",
   refundClaimedPlayers: [],
   participants: [

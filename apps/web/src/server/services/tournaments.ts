@@ -431,6 +431,80 @@ export async function listTournaments(userId: string, q: ListQueryInput) {
   return { items, nextCursor };
 }
 
+export async function listPlayerParticipations(playerAddress: string) {
+  const rows = await prisma.participant.findMany({
+    where: { playerAddr: playerAddress },
+    include: {
+      tournament: {
+        include: {
+          participants: { select: { playerAddr: true } },
+          payouts: {
+            where: { playerAddr: playerAddress },
+            orderBy: { rank: "asc" },
+          },
+          events: {
+            where: { type: "REFUND_CLAIMED" },
+            select: { payload: true, txHash: true },
+          },
+        },
+      },
+    },
+    orderBy: { joinedAt: "desc" },
+  });
+
+  return rows.map((participation) => {
+    const tournament = participation.tournament;
+    const refundClaims = tournament.events.flatMap((event) =>
+      parseRefundClaims([event]).map((claim) => ({ ...claim, txHash: event.txHash })),
+    );
+    const refund = refundClaims.find((claim) => claim.player === playerAddress);
+    const payout = tournament.payouts[0] ?? null;
+    const displayStatus = getTournamentDisplayStatus({
+      status: tournament.status,
+      settlementDeadline: tournament.settlementDeadline,
+      deadlineConfirmedAt: tournament.deadlineConfirmedAt,
+      participantAddresses: tournament.participants.map((participant) => participant.playerAddr),
+      refundClaimedPlayers: [...new Set(refundClaims.map((claim) => claim.player))],
+    });
+    const refundAvailable = displayStatus === "REFUNDS_OPEN" && !refund;
+    const state = refund
+      ? "REFUNDED"
+      : payout
+        ? "PAYOUT_CONFIRMED"
+        : refundAvailable
+          ? "REFUND_AVAILABLE"
+          : tournament.status === "FINISHED"
+            ? "SETTLED"
+            : "REGISTERED";
+
+    return {
+      tournamentId: tournament.id,
+      name: tournament.name,
+      gameTitle: tournament.gameTitle,
+      asset: tournament.asset,
+      entryFee: tournament.entryFee.toString(),
+      displayStatus,
+      state,
+      joinedAt: participation.joinedAt.toISOString(),
+      settlementDeadline: tournament.settlementDeadline?.toISOString() ?? null,
+      joinExplorerUrl: participation.joinTxHash ? explorerTxUrl(participation.joinTxHash) : null,
+      payout: payout
+        ? {
+            rank: payout.rank,
+            amount: payout.amount.toString(),
+            explorerUrl: payout.txHash ? explorerTxUrl(payout.txHash) : null,
+          }
+        : null,
+      refund: refund
+        ? {
+            amount: refund.amount,
+            explorerUrl: refund.txHash ? explorerTxUrl(refund.txHash) : null,
+          }
+        : null,
+    };
+  });
+}
+
 export async function buildJoin(
   id: string,
   playerAddress: string,

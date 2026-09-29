@@ -35,9 +35,11 @@ const baseProps = {
   tournamentId: "t_1",
   contractId: "CONTRACTCONTRACTCONTRACTCONTRACTCONTRACTCONTRACTCONTRACTAB",
   entryFee: "10000000",
+  asset: "XLM" as const,
   joinUrl: "https://ggg.quest/tournaments/t_1",
   passphrase: "P",
   confirmedParticipantAddresses: [] as string[],
+  settlementDeadline: 1_800_000_000,
 };
 
 describe("JoinCard", () => {
@@ -149,6 +151,22 @@ describe("JoinCard", () => {
     );
 
     await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
+    expect(screen.getByRole("heading", { name: /registration confirmed/i })).toBeInTheDocument();
+    expect(
+      screen.getByText(/held by this tournament's soroban escrow, not by ggg/i),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /view public tournament/i })).toHaveAttribute(
+      "href",
+      baseProps.joinUrl,
+    );
+    expect(screen.getByRole("link", { name: /view transaction receipt/i })).toHaveAttribute(
+      "href",
+      "https://stellar.expert/explorer/testnet/tx/TX",
+    );
+    expect(screen.getByRole("link", { name: /view my tournaments/i })).toHaveAttribute(
+      "href",
+      "/participations",
+    );
   });
 
   it("POST /join sends { playerAddress } in the body", async () => {
@@ -286,8 +304,42 @@ describe("JoinCard", () => {
     fireEvent.click(screen.getByRole("button", { name: /join tournament/i }));
 
     expect(await screen.findByText(/submitted and awaiting confirmation/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /view submitted transaction/i })).toHaveAttribute(
+      "href",
+      "https://stellar.expert/explorer/testnet/tx/TX_PENDING",
+    );
     expect(screen.getByRole("button", { name: /join tournament/i })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: /join tournament/i }));
     expect(mockedSignAndSubmit).toHaveBeenCalledOnce();
+  });
+
+  it("shows a failed transaction receipt without marking registration confirmed", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({ ok: true, data: { unsignedXdr: "JU", network: "testnet" } }),
+      ),
+    );
+    mockedSignAndSubmit.mockRejectedValueOnce(
+      new SubmissionError("Transaction failed on-chain", {
+        code: "TX_FAILED",
+        txHash: "TX_FAILED",
+        retryable: false,
+      }),
+    );
+
+    render(<JoinCard {...baseProps} />);
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await screen.findByText(/GPLAYE…AYERP/);
+    fireEvent.click(screen.getByRole("button", { name: /join tournament/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/transaction failed on-chain/i);
+    expect(screen.getByRole("link", { name: /view failed transaction/i })).toHaveAttribute(
+      "href",
+      "https://stellar.expert/explorer/testnet/tx/TX_FAILED",
+    );
+    expect(
+      screen.queryByRole("heading", { name: /registration confirmed/i }),
+    ).not.toBeInTheDocument();
   });
 });

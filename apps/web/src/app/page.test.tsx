@@ -9,5 +9,9 @@ describe("/ landing", () => {
     const cta = screen.getByRole("link", { name: /create tournament/i });
     expect(cta).toHaveAttribute("href", "/tournaments/new");
     expect(cta.className).toMatch(/electric-violet/);
+    expect(screen.getByRole("link", { name: /my tournaments/i })).toHaveAttribute(
+      "href",
+      "/participations",
+    );
   });
 });

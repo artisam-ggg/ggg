@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { z } from "zod";
 import { QrTile } from "./QrTile";
 import { WalletButton } from "./WalletButton";
@@ -8,19 +9,23 @@ import { ContractAddress } from "./ContractAddress";
 import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
 import { Guidelines } from "@/components/ui/Guidelines";
 import { WalletActionNotice } from "./WalletActionNotice";
+import { SettlementDeadline } from "./SettlementDeadline";
 import { signAndSubmit, SubmissionError } from "@/lib/wallet";
+import { formatStroops } from "@/lib/format-stroops";
 
 interface JoinCardProps {
   tournamentId: string;
   contractId: string;
   /** Entry fee in stroops (smallest unit) as a string, e.g. "10000000" = 1 XLM. */
   entryFee: string;
+  asset: "XLM" | "USDC";
   /** Public tournament URL encoded in the join QR. */
   joinUrl: string;
   /** Network passphrase — passed from the server shell, not imported here. */
   passphrase: string;
   /** Confirmed participant wallets from server/subscriber state. */
   confirmedParticipantAddresses: string[];
+  settlementDeadline: number;
 }
 
 type Phase = "idle" | "signing" | "submitting" | "awaitingConfirmation" | "success" | "error";
@@ -29,9 +34,15 @@ const REFRESH_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000, 30_000, 3
 
 const joinResponseSchema = z.object({
   ok: z.boolean(),
-  data: z.object({ unsignedXdr: z.string(), network: z.string() }).optional(),
+  data: z.object({ unsignedXdr: z.string(), network: z.enum(["testnet", "public"]) }).optional(),
   error: z.union([z.string(), z.object({ message: z.string().optional() })]).optional(),
 });
+
+type JoinTransaction = {
+  txHash: string;
+  network: "testnet" | "public";
+  status: "pending" | "confirmed" | "failed";
+};
 
 /**
  * JoinCard — contract-backed QR join flow (FLOW 02).
@@ -51,10 +62,12 @@ export function JoinCard(props: JoinCardProps) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [refreshAttempts, setRefreshAttempts] = useState(0);
+  const [transaction, setTransaction] = useState<JoinTransaction | null>(null);
 
   const submitting = phase === "signing" || phase === "submitting";
   const awaitingConfirmation = phase === "awaitingConfirmation";
   const alreadyJoined = player != null && props.confirmedParticipantAddresses.includes(player);
+  const registered = alreadyJoined || transaction?.status === "confirmed";
   const refreshExhausted = refreshAttempts >= REFRESH_DELAYS_MS.length;
   const tournamentIdentifier =
     props.tournamentId.length > 14
@@ -74,7 +87,9 @@ export function JoinCard(props: JoinCardProps) {
     if (!player || submitting || awaitingConfirmation || alreadyJoined) return;
     setErrorMsg(null);
     setRefreshAttempts(0);
+    setTransaction(null);
     setPhase("submitting");
+    let network: "testnet" | "public" | null = null;
 
     try {
       // 1. Build unsigned XDR from the server.
@@ -93,10 +108,11 @@ export function JoinCard(props: JoinCardProps) {
         );
       }
       if (!built.data.data) throw new Error("Failed to build join transaction");
+      network = built.data.data.network;
 
       // 2. Sign (Freighter) + submit.
       setPhase("signing");
-      await signAndSubmit(
+      const result = await signAndSubmit(
         built.data.data.unsignedXdr,
         "join",
         `/api/tournaments/${props.tournamentId}/submit`,
@@ -104,6 +120,7 @@ export function JoinCard(props: JoinCardProps) {
       );
 
       // 3. Success — refresh so the participant list / pool updates.
+      setTransaction({ txHash: result.txHash, network, status: "confirmed" });
       setPhase("success");
       router.refresh();
     } catch (e: unknown) {
@@ -112,8 +129,14 @@ export function JoinCard(props: JoinCardProps) {
         e.details.retryable === true &&
         e.details.txHash !== undefined
       ) {
+        if (network) {
+          setTransaction({ txHash: e.details.txHash, network, status: "pending" });
+        }
         setPhase("awaitingConfirmation");
         return;
+      }
+      if (e instanceof SubmissionError && e.details.txHash !== undefined && network) {
+        setTransaction({ txHash: e.details.txHash, network, status: "failed" });
       }
       setPhase("error");
       setErrorMsg(e instanceof Error ? e.message : "Join failed");
@@ -124,6 +147,10 @@ export function JoinCard(props: JoinCardProps) {
     setPhase("idle");
     setErrorMsg(null);
   }
+
+  const transactionUrl = transaction
+    ? `https://stellar.expert/explorer/${transaction.network}/tx/${encodeURIComponent(transaction.txHash)}`
+    : null;
 
   return (
     <div className="kinetic-glass rounded-2xl p-6">
@@ -154,7 +181,7 @@ export function JoinCard(props: JoinCardProps) {
           <button
             type="button"
             onClick={onJoin}
-            disabled={!player || submitting || awaitingConfirmation || alreadyJoined}
+            disabled={!player || submitting || awaitingConfirmation || registered}
             className="brutalist-border label-caps bg-electric-violet-strong px-6 py-3 italic text-background transition-transform hover:-translate-y-0.5 active:translate-y-0.5 disabled:opacity-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-acid-yellow"
           >
             Join Tournament
@@ -184,17 +211,81 @@ export function JoinCard(props: JoinCardProps) {
         )}
       </div>
 
+      {transaction?.status === "confirmed" && transactionUrl && (
+        <section
+          className="mt-6 rounded-xl border border-primary p-5"
+          aria-labelledby="join-confirmation-heading"
+        >
+          <p className="label-caps text-primary" role="status">
+            Registered
+          </p>
+          <h2 id="join-confirmation-heading" className="mt-1 text-xl font-semibold text-on-surface">
+            Registration confirmed
+          </h2>
+          <p className="mt-3 text-on-surface">
+            Your {formatStroops(props.entryFee)} {props.asset} entry fee is held by this
+            tournament&apos;s Soroban escrow, not by GGG.
+          </p>
+          <p className="mt-2 text-sm text-on-surface-variant">
+            Next expected deadline: <SettlementDeadline seconds={props.settlementDeadline} />
+          </p>
+          <div className="mt-4 flex flex-wrap gap-4">
+            <Link
+              href={props.joinUrl}
+              className="label-caps text-primary underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              View public tournament
+            </Link>
+            <a
+              href={transactionUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="label-caps text-on-surface underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              View transaction receipt
+            </a>
+            <Link
+              href="/participations"
+              className="label-caps text-on-surface underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              View my tournaments
+            </Link>
+          </div>
+        </section>
+      )}
+
       {/* Error display — role="alert" for screen readers */}
       {errorMsg && phase === "error" && (
-        <p role="alert" className="mt-3 text-sm text-error">
-          {errorMsg}
-        </p>
+        <div role="alert" className="mt-3 text-sm text-error">
+          <p>{errorMsg}</p>
+          {transaction?.status === "failed" && transactionUrl && (
+            <a
+              href={transactionUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 inline-block underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              View failed transaction
+            </a>
+          )}
+        </div>
+      )}
+
+      {transaction?.status === "pending" && transactionUrl && (
+        <a
+          href={transactionUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 inline-block text-sm text-on-surface underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+        >
+          View submitted transaction
+        </a>
       )}
 
       <SubmitStateModal
         open={submitting || phase === "success"}
         phase={phase === "awaitingConfirmation" ? "idle" : phase}
-        {...(errorMsg !== null ? { message: errorMsg } : {})}
+        {...(phase === "success" ? { message: "Registration confirmed" } : {})}
         onClose={onModalClose}
       />
     </div>
