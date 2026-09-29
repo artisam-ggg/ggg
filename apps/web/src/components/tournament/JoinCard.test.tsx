@@ -66,6 +66,7 @@ describe("JoinCard", () => {
     render(<JoinCard {...baseProps} />);
     expect(screen.getByRole("button", { name: /connect wallet/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /join tournament/i })).toBeDisabled();
+    expect(screen.getByText(/connect freighter to enable/i)).toHaveAttribute("aria-live", "polite");
   });
 
   it("offers public player guidance before wallet authorization or an app login", () => {

@@ -5,7 +5,7 @@ import { StatusChip } from "./StatusChip";
 describe("StatusChip", () => {
   it("renders ACTIVE with acid-yellow styling and label-caps", () => {
     render(<StatusChip status="ACTIVE" />);
-    const chip = screen.getByText("ACTIVE");
+    const chip = screen.getByText("OPEN FOR JOINING");
     expect(chip).toHaveClass("label-caps");
     expect(chip.className).toMatch(/acid-yellow/);
   });
@@ -18,37 +18,37 @@ describe("StatusChip", () => {
 
   it("renders DRAFT with muted styling", () => {
     render(<StatusChip status="DRAFT" />);
-    const chip = screen.getByText("DRAFT");
+    const chip = screen.getByText("PREPARING");
     expect(chip).toHaveClass("label-caps");
     expect(chip.className).toMatch(/outline-variant/);
   });
 
   it("renders FINISHED with muted styling", () => {
     render(<StatusChip status="FINISHED" />);
-    const chip = screen.getByText("FINISHED");
+    const chip = screen.getByText("COMPLETED");
     expect(chip).toHaveClass("label-caps");
     expect(chip.className).toMatch(/outline-variant/);
   });
 
   it("renders the refunds-open label with spaces", () => {
     render(<StatusChip status="REFUNDS_OPEN" />);
-    expect(screen.getByText("REFUNDS OPEN")).toHaveAttribute("data-status", "REFUNDS_OPEN");
+    expect(screen.getByText("REFUNDS AVAILABLE")).toHaveAttribute("data-status", "REFUNDS_OPEN");
   });
 
   it("renders REFUNDED with muted styling", () => {
     render(<StatusChip status="REFUNDED" />);
-    expect(screen.getByText("REFUNDED").className).toMatch(/outline-variant/);
+    expect(screen.getByText("REFUNDS COMPLETE").className).toMatch(/outline-variant/);
   });
 
   it("sets data-status attribute to the status value", () => {
     render(<StatusChip status="ACTIVE" />);
-    const chip = screen.getByText("ACTIVE");
+    const chip = screen.getByText("OPEN FOR JOINING");
     expect(chip).toHaveAttribute("data-status", "ACTIVE");
   });
 
   it("renders as a span element", () => {
     render(<StatusChip status="ACTIVE" />);
-    const chip = screen.getByText("ACTIVE");
+    const chip = screen.getByText("OPEN FOR JOINING");
     expect(chip.tagName.toLowerCase()).toBe("span");
   });
 });

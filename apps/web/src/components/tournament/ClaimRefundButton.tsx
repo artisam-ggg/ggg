@@ -128,6 +128,15 @@ export function ClaimRefundButton({
           {displayNotice}
         </p>
       )}
+      {!displayNotice && !error && (
+        <p aria-live="polite" className="text-sm text-on-surface-variant">
+          {!player
+            ? "Connect the wallet that joined this tournament to check and claim its refund."
+            : alreadyClaimed
+              ? "This wallet has a confirmed refund. No further claim is available."
+              : "Wallet connected. Claim Refund will request one refund transaction."}
+        </p>
+      )}
       {awaitingConfirmation && refreshExhausted && (
         <button
           type="button"

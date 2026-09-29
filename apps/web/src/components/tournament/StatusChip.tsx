@@ -1,5 +1,6 @@
 // Server Component — no "use client"
 import type { TournamentDisplayStatus } from "@/server/services/tournaments";
+import { lifecycleLabels } from "./TournamentLifecycle";
 
 const styles: Record<TournamentDisplayStatus, string> = {
   DRAFT: "border-outline-variant text-on-surface-variant",
@@ -10,15 +11,6 @@ const styles: Record<TournamentDisplayStatus, string> = {
   CANCELLED: "border-error text-error",
 };
 
-const labels: Record<TournamentDisplayStatus, string> = {
-  DRAFT: "DRAFT",
-  ACTIVE: "ACTIVE",
-  REFUNDS_OPEN: "REFUNDS OPEN",
-  REFUNDED: "REFUNDED",
-  FINISHED: "FINISHED",
-  CANCELLED: "CANCELLED",
-};
-
 export function StatusChip({ status }: { status: TournamentDisplayStatus }) {
   return (
     <span
@@ -26,7 +18,7 @@ export function StatusChip({ status }: { status: TournamentDisplayStatus }) {
       data-testid="status-chip"
       data-status={status}
     >
-      {labels[status]}
+      {lifecycleLabels[status]}
     </span>
   );
 }

@@ -28,6 +28,17 @@ vi.mock("./WalletButton", () => ({
 import { ClaimRefundButton } from "./ClaimRefundButton";
 
 describe("ClaimRefundButton", () => {
+  it("explains why the claim action starts disabled", () => {
+    render(
+      <ClaimRefundButton tournamentId="t1" passphrase="Testnet" entryFee="10000000" asset="XLM" />,
+    );
+
+    expect(screen.getByRole("button", { name: /claim refund/i })).toBeDisabled();
+    expect(screen.getByText(/connect the wallet that joined/i)).toHaveAttribute(
+      "aria-live",
+      "polite",
+    );
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     signAndSubmit.mockResolvedValue({ txHash: "TX" });

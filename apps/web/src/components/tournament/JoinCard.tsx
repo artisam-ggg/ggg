@@ -128,6 +128,13 @@ export function JoinCard(props: JoinCardProps) {
             Join Tournament
           </button>
         </div>
+        <p aria-live="polite" className="text-sm text-on-surface-variant">
+          {!player
+            ? "Connect Freighter to enable Join Tournament."
+            : isPending
+              ? "Join transaction is waiting for wallet or network confirmation."
+              : "Wallet connected. Join Tournament will request the entry-fee transaction."}
+        </p>
       </div>
 
       {/* Error display — role="alert" for screen readers */}

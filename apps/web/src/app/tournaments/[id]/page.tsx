@@ -18,6 +18,7 @@ import { SettlementSyncStatus } from "@/components/tournament/SettlementSyncStat
 import { RefundList } from "@/components/tournament/RefundList";
 import { CancelButton } from "@/components/tournament/CancelButton";
 import { ClaimRefundButton } from "@/components/tournament/ClaimRefundButton";
+import { TournamentLifecycle } from "@/components/tournament/TournamentLifecycle";
 import { BackButton } from "@/components/ui/BackButton";
 
 export const revalidate = 0;
@@ -86,6 +87,13 @@ export default async function TournamentDetailPage({
       </header>
 
       {t.coverImageUrl && <TournamentCover src={t.coverImageUrl} name={t.name} />}
+
+      <TournamentLifecycle
+        status={t.status}
+        displayStatus={t.displayStatus}
+        contractVersion={t.contractVersion}
+        hasConfirmedPayouts={t.winners.length > 0}
+      />
 
       <p className="data-mono mt-3 text-sm text-on-surface-variant">
         {t.settlementDeadline ? (

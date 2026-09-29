@@ -199,7 +199,7 @@ describe("/tournaments/[id] — public detail page", () => {
       mockGetTournamentDetail.mockResolvedValue(ACTIVE_TOURNAMENT);
       render(await Page({ params: Promise.resolve({ id: "t_1" }) }));
 
-      expect(screen.getByText("ACTIVE")).toBeInTheDocument();
+      expect(screen.getAllByText("OPEN FOR JOINING")).toHaveLength(2);
     });
 
     it("renders the PrizePoolCounter with formatted pool amount", async () => {
@@ -241,7 +241,7 @@ describe("/tournaments/[id] — public detail page", () => {
       });
       render(await Page({ params: Promise.resolve({ id: "t_1" }) }));
 
-      expect(screen.getByText("REFUNDED")).toBeInTheDocument();
+      expect(screen.getAllByText("REFUNDS COMPLETE")).toHaveLength(2);
       expect(screen.getByRole("alert")).toHaveTextContent(
         "All registered players have claimed their refunds.",
       );
@@ -321,7 +321,7 @@ describe("/tournaments/[id] — public detail page", () => {
       mockGetTournamentDetail.mockResolvedValue(FINISHED_TOURNAMENT);
       render(await Page({ params: Promise.resolve({ id: "t_2" }) }));
 
-      expect(screen.getByText("FINISHED")).toBeInTheDocument();
+      expect(screen.getAllByText("COMPLETED")).toHaveLength(2);
     });
   });
 
@@ -389,7 +389,7 @@ describe("/tournaments/[id] — public detail page", () => {
       mockGetTournamentDetail.mockResolvedValue(CANCELLED_TOURNAMENT);
       render(await Page({ params: Promise.resolve({ id: "t_3" }) }));
 
-      expect(screen.getByText("CANCELLED")).toBeInTheDocument();
+      expect(screen.getAllByText("CANCELLED")).toHaveLength(2);
     });
 
     it("does NOT render JoinCard when CANCELLED", async () => {
