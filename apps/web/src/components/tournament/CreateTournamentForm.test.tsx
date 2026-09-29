@@ -36,6 +36,16 @@ function fillSettlementDeadline() {
   });
 }
 
+async function fillValidTournament() {
+  fireEvent.change(screen.getByLabelText(/tournament name/i), { target: { value: "Cup" } });
+  fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
+  fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "1" } });
+  fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+  fillSettlementDeadline();
+  fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+  await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
+}
+
 describe("CreateTournamentForm", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -546,6 +556,9 @@ describe("CreateTournamentForm", () => {
     render(<CreateTournamentForm expectedPassphrase="P" />);
     const btn = screen.getByRole("button", { name: /deploy soroban contract/i });
     expect(btn).toBeDisabled();
+    expect(screen.getByText(/deploying creates the tournament escrow/i)).toHaveTextContent(
+      /cannot access your private key or sign for you/i,
+    );
   });
 
   it("shows truncated wallet address chip after connecting", async () => {
@@ -794,6 +807,109 @@ describe("CreateTournamentForm", () => {
       "/api/tournaments/t_recover/submit",
       "P",
     );
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps deployment pending and prevents a duplicate submission", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            data: { tournamentId: "t_pending", unsignedXdr: "DEPLOY_XDR", network: "testnet" },
+          }),
+          { status: 201, headers: { "content-type": "application/json" } },
+        ),
+      ),
+    );
+    (signAndSubmit as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new SubmissionError("Confirmation delayed", {
+        code: "SUBMIT_UNKNOWN",
+        txHash: "TX_PENDING",
+        retryable: true,
+      }),
+    );
+
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    await fillValidTournament();
+    const deploy = screen.getByRole("button", { name: /deploy soroban contract/i });
+    fireEvent.click(deploy);
+
+    expect(await screen.findByText(/do not resubmit/i)).toBeInTheDocument();
+    expect(deploy).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /retry deployment/i })).not.toBeInTheDocument();
+    fireEvent.click(deploy);
+    expect(signAndSubmit).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  it("redirects after a pending deployment is confirmed", async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            data: { tournamentId: "t_pending", unsignedXdr: "DEPLOY_XDR", network: "testnet" },
+          }),
+          { status: 201, headers: { "content-type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ok: true, data: { status: "ACTIVE" } }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    vi.stubGlobal("fetch", mockFetch);
+    (signAndSubmit as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new SubmissionError("Confirmation delayed", {
+        code: "SUBMIT_UNKNOWN",
+        txHash: "TX_PENDING",
+        retryable: true,
+      }),
+    );
+
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    await fillValidTournament();
+    fireEvent.click(screen.getByRole("button", { name: /deploy soroban contract/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /check deployment status/i }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/tournaments/t_pending"));
+    vi.unstubAllGlobals();
+  });
+
+  it("disables retry when a different organizer wallet is connected", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            data: { tournamentId: "t_retry", unsignedXdr: "DEPLOY_XDR", network: "testnet" },
+          }),
+          { status: 201, headers: { "content-type": "application/json" } },
+        ),
+      ),
+    );
+    (ensureWallet as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(MOCK_ORGANIZER)
+      .mockResolvedValueOnce(REF);
+    (signAndSubmit as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("Submission unavailable"),
+    );
+
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    await fillValidTournament();
+    fireEvent.click(screen.getByRole("button", { name: /deploy soroban contract/i }));
+    await screen.findByRole("dialog", { name: /transaction failed/i });
+    fireEvent.click(screen.getByRole("button", { name: /close/i }));
+    fireEvent.click(screen.getByRole("button", { name: /re-check wallet/i }));
+
+    expect(await screen.findByText(/prepared for a different organizer/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /retry deployment/i })).toBeDisabled();
+    expect(signAndSubmit).toHaveBeenCalledTimes(1);
     vi.unstubAllGlobals();
   });
 

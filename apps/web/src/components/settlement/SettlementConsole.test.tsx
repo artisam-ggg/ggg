@@ -4,13 +4,22 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/lib/wallet", () => ({
   ensureWallet: vi.fn(async () => "GREFREFREFREFREFREFREFREFREFREFREFREFREFREFREFREFREFREFRE"),
   signAndSubmit: vi.fn(async () => ({ txHash: "FTX", status: "FINISHED" })),
+  SubmissionError: class SubmissionError extends Error {
+    details: { txHash?: string; retryable?: boolean };
+
+    constructor(message: string, details: { txHash?: string; retryable?: boolean }) {
+      super(message);
+      this.name = "SubmissionError";
+      this.details = details;
+    }
+  },
 }));
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 
 import { SettlementConsole } from "./SettlementConsole";
-import { signAndSubmit } from "@/lib/wallet";
+import { signAndSubmit, SubmissionError } from "@/lib/wallet";
 
 const REF = "GREFREFREFREFREFREFREFREFREFREFREFREFREFREFREFREFREFREFRE";
 
@@ -35,6 +44,14 @@ function dropOnto(slotTestId: string, addr: string) {
   fireEvent.drop(slot, { dataTransfer: dt });
 }
 
+async function prepareFinalization() {
+  fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+  await screen.findByText(/GREFRE…REFRE/i);
+  dropOnto("slot-1", ADDR_A);
+  dropOnto("slot-2", ADDR_B);
+  dropOnto("slot-3", ADDR_C);
+}
+
 describe("SettlementConsole", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -52,6 +69,9 @@ describe("SettlementConsole", () => {
     );
 
     expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute("href", "/tournaments/t_1");
+    expect(screen.getByText(/finalizing distributes the escrow pool/i)).toHaveTextContent(
+      /cannot access your private key or sign for you/i,
+    );
   });
 
   it("assigns three distinct winners then finalizes", async () => {
@@ -280,5 +300,82 @@ describe("SettlementConsole", () => {
         headers: { "content-type": "application/json" },
       }),
     );
+  });
+
+  it("keeps finalization pending and prevents a duplicate submission", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({ ok: true, data: { unsignedXdr: "FU", network: "testnet" } }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+        ),
+      ),
+    );
+    (signAndSubmit as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new SubmissionError("Confirmation delayed", {
+        code: "SUBMIT_UNKNOWN",
+        txHash: "FTX_PENDING",
+        retryable: true,
+      }),
+    );
+
+    render(
+      <SettlementConsole
+        tournamentId="t_1"
+        refereeAddr={REF}
+        participants={players}
+        passphrase="P"
+      />,
+    );
+    await prepareFinalization();
+    const finalize = screen.getByRole("button", { name: /finalize payouts/i });
+    fireEvent.click(finalize);
+
+    expect(await screen.findByText(/do not resubmit/i)).toBeInTheDocument();
+    expect(finalize).toBeDisabled();
+    fireEvent.click(finalize);
+    expect(signAndSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it("redirects after a pending finalization is confirmed", async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ ok: true, data: { unsignedXdr: "FU", network: "testnet" } }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ok: true, data: { status: "FINISHED" } }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    vi.stubGlobal("fetch", mockFetch);
+    (signAndSubmit as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new SubmissionError("Confirmation delayed", {
+        code: "SUBMIT_UNKNOWN",
+        txHash: "FTX_PENDING",
+        retryable: true,
+      }),
+    );
+
+    render(
+      <SettlementConsole
+        tournamentId="t_1"
+        refereeAddr={REF}
+        participants={players}
+        passphrase="P"
+      />,
+    );
+    await prepareFinalization();
+    fireEvent.click(screen.getByRole("button", { name: /finalize payouts/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /check settlement status/i }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/tournaments/t_1"));
   });
 });

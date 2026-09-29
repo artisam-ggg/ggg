@@ -77,6 +77,9 @@ describe("JoinCard", () => {
     expect(screen.getByRole("button", { name: /connect wallet/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /join tournament/i })).toBeDisabled();
     expect(screen.getByText(/connect freighter to enable/i)).toHaveAttribute("aria-live", "polite");
+    expect(screen.getByText(/joining transfers the displayed entry fee/i)).toHaveTextContent(
+      /cannot access your private key or sign for you/i,
+    );
   });
 
   it("offers public player guidance before wallet authorization or an app login", () => {

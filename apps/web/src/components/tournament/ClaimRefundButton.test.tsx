@@ -44,6 +44,9 @@ describe("ClaimRefundButton", () => {
       "aria-live",
       "polite",
     );
+    expect(screen.getByText(/claim refund requests one transaction/i)).toHaveTextContent(
+      /cannot access your private key or sign for you/i,
+    );
   });
 
   it("keeps Claim Refund disabled for a wallet without confirmed entitlement", () => {

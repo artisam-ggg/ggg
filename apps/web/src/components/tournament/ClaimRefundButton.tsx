@@ -7,6 +7,7 @@ import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
 import { signAndSubmit, SubmissionError } from "@/lib/wallet";
 import { formatStroops } from "@/lib/format-stroops";
 import { Guidelines } from "@/components/ui/Guidelines";
+import { WalletActionNotice } from "./WalletActionNotice";
 
 type Phase = "idle" | "signing" | "submitting" | "awaitingConfirmation" | "error";
 const REFRESH_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000, 30_000, 30_000] as const;
@@ -108,10 +109,14 @@ export function ClaimRefundButton({
   return (
     <div className="mt-4 flex flex-wrap items-center gap-3">
       <Guidelines journey="refund" />
+      <WalletActionNotice expectedPassphrase={passphrase}>
+        Claim Refund requests one transaction that returns the escrowed entry fee to the joined
+        wallet.
+      </WalletActionNotice>
       <WalletButton expectedPassphrase={passphrase} onConnected={setPlayer} />
       {hasRefundEntitlement && (
         <p className="text-sm text-on-surface-variant">
-          You will sign a {formatStroops(entryFee)} {asset} refund to {player} on {passphrase}.
+          Confirmed refund: {formatStroops(entryFee)} {asset} to {player}.
         </p>
       )}
       <button
