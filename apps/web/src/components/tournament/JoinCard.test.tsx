@@ -33,6 +33,28 @@ const mockedUseRouter = useRouter as ReturnType<typeof vi.fn>;
 const PLAYER = "GPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERPLAYERP";
 const OTHER_PLAYER = "GOTHEROTHEROTHEROTHEROTHEROTHEROTHEROTHEROTHEROTHEROT";
 
+function joinBuildResponse() {
+  return Response.json({ ok: true, data: { unsignedXdr: "JU", network: "testnet" } });
+}
+
+function mockJoinFetch(
+  joinHandler: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> = async () =>
+    joinBuildResponse(),
+  pendingJoinSubmissions: { tournamentId: string; txHash: string }[] = [],
+) {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).startsWith("/api/participations?")) {
+      return Response.json({
+        ok: true,
+        data: { items: [], pendingJoinSubmissions },
+      });
+    }
+    return joinHandler(input, init);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
 const baseProps = {
   tournamentId: "t_1",
   contractId: "CONTRACTCONTRACTCONTRACTCONTRACTCONTRACTCONTRACTCONTRACTAB",
@@ -42,7 +64,6 @@ const baseProps = {
   passphrase: "P",
   network: "testnet" as const,
   confirmedParticipants: [] as { playerAddress: string; txHash: string | null }[],
-  pendingJoinSubmissions: [] as { playerAddress: string; txHash: string }[],
   settlementDeadline: 1_800_000_000,
 };
 
@@ -52,6 +73,7 @@ describe("JoinCard", () => {
     mockedEnsureWallet.mockResolvedValue(PLAYER);
     mockedSignAndSubmit.mockResolvedValue({ txHash: "TX" });
     mockedUseRouter.mockReturnValue({ refresh: vi.fn() });
+    mockJoinFetch();
   });
 
   it("encodes the tournament join URL instead of a direct payment URI", () => {
@@ -127,17 +149,6 @@ describe("JoinCard", () => {
     const mockRefresh = vi.fn();
     mockedUseRouter.mockReturnValue({ refresh: mockRefresh });
 
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({ ok: true, data: { unsignedXdr: "JU", network: "testnet" } }),
-            { status: 200, headers: { "content-type": "application/json" } },
-          ),
-      ),
-    );
-
     render(<JoinCard {...baseProps} />);
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     await screen.findByText(/GPLAYE…AYERP/);
@@ -172,22 +183,23 @@ describe("JoinCard", () => {
   });
 
   it("POST /join sends { playerAddress } in the body", async () => {
-    const mockFetch = vi.fn(
+    const mockFetch = mockJoinFetch(
       async () =>
         new Response(
           JSON.stringify({ ok: true, data: { unsignedXdr: "JU", network: "testnet" } }),
           { status: 200, headers: { "content-type": "application/json" } },
         ),
     );
-    vi.stubGlobal("fetch", mockFetch);
-
     render(<JoinCard {...baseProps} />);
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     await screen.findByText(/GPLAYE…AYERP/);
     fireEvent.click(screen.getByRole("button", { name: /join tournament/i }));
 
     await waitFor(() => expect(mockFetch).toHaveBeenCalled());
-    const [url, init] = mockFetch.mock.calls[0] as unknown as [string, RequestInit];
+    const [url, init] = mockFetch.mock.calls.find(
+      ([request, requestInit]) =>
+        request === "/api/tournaments/t_1/join" && requestInit?.method === "POST",
+    ) as unknown as [string, RequestInit];
     expect(url).toBe("/api/tournaments/t_1/join");
     expect(JSON.parse(init.body as string)).toEqual({
       playerAddress: PLAYER,
@@ -198,15 +210,8 @@ describe("JoinCard", () => {
     const mockRefresh = vi.fn();
     mockedUseRouter.mockReturnValue({ refresh: mockRefresh });
 
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ ok: false, error: "Tournament is full" }), {
-            status: 409,
-            headers: { "content-type": "application/json" },
-          }),
-      ),
+    mockJoinFetch(async () =>
+      Response.json({ ok: false, error: "Tournament is full" }, { status: 409 }),
     );
 
     render(<JoinCard {...baseProps} />);
@@ -220,20 +225,16 @@ describe("JoinCard", () => {
   });
 
   it("renders the duplicate-participant message from the API error envelope", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({
-              ok: false,
-              error: {
-                code: "CONFLICT",
-                message: "You are already a participant in this tournament.",
-              },
-            }),
-            { status: 409, headers: { "content-type": "application/json" } },
-          ),
+    mockJoinFetch(async () =>
+      Response.json(
+        {
+          ok: false,
+          error: {
+            code: "CONFLICT",
+            message: "You are already a participant in this tournament.",
+          },
+        },
+        { status: 409 },
       ),
     );
 
@@ -251,15 +252,12 @@ describe("JoinCard", () => {
   });
 
   it("Join button is disabled while pending (no double-click)", async () => {
-    let resolveFetch!: (v: unknown) => void;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        () =>
-          new Promise((resolve) => {
-            resolveFetch = resolve;
-          }),
-      ),
+    let resolveFetch!: (value: Response | PromiseLike<Response>) => void;
+    mockJoinFetch(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }),
     );
 
     render(<JoinCard {...baseProps} />);
@@ -282,16 +280,6 @@ describe("JoinCard", () => {
   });
 
   it("keeps a retryable submitted join disabled while confirmation is uncertain", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({ ok: true, data: { unsignedXdr: "JU", network: "testnet" } }),
-            { status: 200, headers: { "content-type": "application/json" } },
-          ),
-      ),
-    );
     mockedSignAndSubmit.mockRejectedValueOnce(
       new SubmissionError("Confirmation timed out", {
         code: "TX_TIMEOUT",
@@ -316,12 +304,6 @@ describe("JoinCard", () => {
   });
 
   it("reconciles a delayed submitted join into the confirmed summary", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
-        Response.json({ ok: true, data: { unsignedXdr: "JU", network: "testnet" } }),
-      ),
-    );
     mockedSignAndSubmit.mockRejectedValueOnce(
       new SubmissionError("Confirmation timed out", {
         code: "TX_TIMEOUT",
@@ -350,12 +332,8 @@ describe("JoinCard", () => {
   });
 
   it("restores a persisted pending guard after reload", async () => {
-    render(
-      <JoinCard
-        {...baseProps}
-        pendingJoinSubmissions={[{ playerAddress: PLAYER, txHash: "TX_PENDING" }]}
-      />,
-    );
+    mockJoinFetch(undefined, [{ tournamentId: "t_1", txHash: "TX_PENDING" }]);
+    render(<JoinCard {...baseProps} />);
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
 
     expect(await screen.findByText(/submitted and awaiting confirmation/i)).toBeInTheDocument();
@@ -368,12 +346,6 @@ describe("JoinCard", () => {
   });
 
   it("does not leak a confirmed transaction across wallet changes", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
-        Response.json({ ok: true, data: { unsignedXdr: "JU", network: "testnet" } }),
-      ),
-    );
     render(<JoinCard {...baseProps} />);
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     await screen.findByText(/GPLAYE…AYERP/);
@@ -393,12 +365,6 @@ describe("JoinCard", () => {
   });
 
   it("shows a failed transaction receipt without marking registration confirmed", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
-        Response.json({ ok: true, data: { unsignedXdr: "JU", network: "testnet" } }),
-      ),
-    );
     mockedSignAndSubmit.mockRejectedValueOnce(
       new SubmissionError("Transaction failed on-chain", {
         code: "TX_FAILED",

@@ -2,7 +2,10 @@ import { type NextRequest } from "next/server";
 import { err, ok } from "@/lib/api";
 import { rateLimit } from "@/lib/rate-limit";
 import { participationQuerySchema } from "@/lib/validation/tournament";
-import { listPlayerParticipations } from "@/server/services/tournaments";
+import {
+  listPendingJoinSubmissions,
+  listPlayerParticipations,
+} from "@/server/services/tournaments";
 
 function methodNotAllowed(): Response {
   return err("METHOD_NOT_ALLOWED", "Method not allowed", 405);
@@ -44,7 +47,11 @@ export async function GET(req: NextRequest): Promise<Response> {
       return err("TOO_MANY_REQUESTS", "Too many requests. Try again later.", 429);
     }
 
-    return ok({ items: await listPlayerParticipations(parsed.data.playerAddress) });
+    const [items, pendingJoinSubmissions] = await Promise.all([
+      listPlayerParticipations(parsed.data.playerAddress),
+      listPendingJoinSubmissions(parsed.data.playerAddress),
+    ]);
+    return ok({ items, pendingJoinSubmissions });
   } catch {
     return err("INTERNAL_ERROR", "Participation status is temporarily unavailable", 503);
   }

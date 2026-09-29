@@ -2,12 +2,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 const PLAYER = "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI";
-const { listPlayerParticipations, rateLimit } = vi.hoisted(() => ({
+const { listPlayerParticipations, listPendingJoinSubmissions, rateLimit } = vi.hoisted(() => ({
   listPlayerParticipations: vi.fn(),
+  listPendingJoinSubmissions: vi.fn(),
   rateLimit: vi.fn(),
 }));
 
-vi.mock("@/server/services/tournaments", () => ({ listPlayerParticipations }));
+vi.mock("@/server/services/tournaments", () => ({
+  listPlayerParticipations,
+  listPendingJoinSubmissions,
+}));
 vi.mock("@/lib/rate-limit", () => ({ rateLimit }));
 
 import { GET, POST } from "./route";
@@ -17,6 +21,7 @@ describe("/api/participations", () => {
     vi.clearAllMocks();
     rateLimit.mockResolvedValue({ ok: true, remaining: 29 });
     listPlayerParticipations.mockResolvedValue([{ tournamentId: "t_1" }]);
+    listPendingJoinSubmissions.mockResolvedValue([{ tournamentId: "t_2", txHash: "PENDING" }]);
   });
 
   it("returns confirmed participations for the validated public wallet", async () => {
@@ -25,8 +30,15 @@ describe("/api/participations", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ ok: true, data: { items: [{ tournamentId: "t_1" }] } });
+    expect(await response.json()).toEqual({
+      ok: true,
+      data: {
+        items: [{ tournamentId: "t_1" }],
+        pendingJoinSubmissions: [{ tournamentId: "t_2", txHash: "PENDING" }],
+      },
+    });
     expect(listPlayerParticipations).toHaveBeenCalledWith(PLAYER);
+    expect(listPendingJoinSubmissions).toHaveBeenCalledWith(PLAYER);
   });
 
   it("rejects an invalid wallet before querying confirmed state", async () => {

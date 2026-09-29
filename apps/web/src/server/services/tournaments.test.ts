@@ -6,6 +6,7 @@ const OTHER_PLAYER = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
 vi.mock("@/lib/db", () => ({
   prisma: {
     participant: { findMany: vi.fn() },
+    joinSubmission: { findMany: vi.fn() },
   },
 }));
 vi.mock("@/lib/env", () => ({
@@ -13,9 +14,10 @@ vi.mock("@/lib/env", () => ({
 }));
 
 import { prisma } from "@/lib/db";
-import { listPlayerParticipations } from "./tournaments";
+import { listPendingJoinSubmissions, listPlayerParticipations } from "./tournaments";
 
 const findMany = prisma.participant.findMany as unknown as ReturnType<typeof vi.fn>;
+const findPending = prisma.joinSubmission.findMany as unknown as ReturnType<typeof vi.fn>;
 
 function tournament(overrides: Partial<Record<string, unknown>> = {}) {
   return {
@@ -83,5 +85,22 @@ describe("listPlayerParticipations", () => {
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { playerAddr: PLAYER } }),
     );
+  });
+});
+
+describe("listPendingJoinSubmissions", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("queries and returns pending metadata for only the requested wallet", async () => {
+    findPending.mockResolvedValue([{ tournamentId: "t_pending", txHash: "PENDING_TX" }]);
+
+    await expect(listPendingJoinSubmissions(PLAYER)).resolves.toEqual([
+      { tournamentId: "t_pending", txHash: "PENDING_TX" },
+    ]);
+    expect(findPending).toHaveBeenCalledWith({
+      where: { playerAddr: PLAYER },
+      select: { tournamentId: true, txHash: true },
+      orderBy: { submittedAt: "desc" },
+    });
   });
 });

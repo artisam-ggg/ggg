@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { z } from "zod";
@@ -12,6 +12,7 @@ import { WalletActionNotice } from "./WalletActionNotice";
 import { SettlementDeadline } from "./SettlementDeadline";
 import { signAndSubmit, SubmissionError } from "@/lib/wallet";
 import { formatStroops } from "@/lib/format-stroops";
+import { apiResponseSchema } from "@/lib/api";
 
 interface JoinCardProps {
   tournamentId: string;
@@ -26,8 +27,6 @@ interface JoinCardProps {
   network: "testnet" | "public";
   /** Confirmed participant wallets and receipts from server/subscriber state. */
   confirmedParticipants: { playerAddress: string; txHash: string | null }[];
-  /** Submitted joins that are still awaiting confirmed participant state. */
-  pendingJoinSubmissions: { playerAddress: string; txHash: string }[];
   settlementDeadline: number;
 }
 
@@ -40,6 +39,14 @@ const joinResponseSchema = z.object({
   data: z.object({ unsignedXdr: z.string(), network: z.enum(["testnet", "public"]) }).optional(),
   error: z.union([z.string(), z.object({ message: z.string().optional() })]).optional(),
 });
+
+const joinStatusResponseSchema = apiResponseSchema(
+  z.object({
+    pendingJoinSubmissions: z.array(
+      z.object({ tournamentId: z.string(), txHash: z.string().min(1) }),
+    ),
+  }),
+);
 
 type JoinTransaction = {
   playerAddress: string;
@@ -67,13 +74,13 @@ export function JoinCard(props: JoinCardProps) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [refreshAttempts, setRefreshAttempts] = useState(0);
   const [transaction, setTransaction] = useState<JoinTransaction | null>(null);
+  const [joinStatus, setJoinStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [pendingSubmission, setPendingSubmission] = useState<{ txHash: string } | null>(null);
+  const statusRequest = useRef<AbortController | null>(null);
 
   const submitting = phase === "signing" || phase === "submitting";
   const confirmedParticipant = player
     ? props.confirmedParticipants.find((participant) => participant.playerAddress === player)
-    : undefined;
-  const pendingSubmission = player
-    ? props.pendingJoinSubmissions.find((submission) => submission.playerAddress === player)
     : undefined;
   const activeTransaction = transaction?.playerAddress === player ? transaction : null;
   const alreadyJoined = confirmedParticipant !== undefined;
@@ -81,7 +88,7 @@ export function JoinCard(props: JoinCardProps) {
     !alreadyJoined &&
     (phase === "awaitingConfirmation" ||
       activeTransaction?.status === "pending" ||
-      pendingSubmission !== undefined);
+      pendingSubmission !== null);
   const registered = alreadyJoined || activeTransaction?.status === "confirmed";
   const refreshExhausted = refreshAttempts >= REFRESH_DELAYS_MS.length;
   const tournamentIdentifier =
@@ -98,18 +105,50 @@ export function JoinCard(props: JoinCardProps) {
     return () => clearTimeout(timeout);
   }, [alreadyJoined, awaitingConfirmation, refreshAttempts, refreshExhausted, router]);
 
+  useEffect(() => () => statusRequest.current?.abort(), []);
+
   function handleConnected(nextPlayer: string | null) {
+    statusRequest.current?.abort();
     if (nextPlayer !== player) {
       setPhase("idle");
       setErrorMsg(null);
       setRefreshAttempts(0);
       setTransaction(null);
+      setPendingSubmission(null);
     }
     setPlayer(nextPlayer);
+    if (!nextPlayer) {
+      setJoinStatus("idle");
+      return;
+    }
+
+    const controller = new AbortController();
+    statusRequest.current = controller;
+    setJoinStatus("loading");
+    void fetch(`/api/participations?playerAddress=${encodeURIComponent(nextPlayer)}`, {
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const parsed = joinStatusResponseSchema.safeParse(await response.json());
+        if (!response.ok || !parsed.success || !parsed.data.ok) {
+          throw new Error("Could not verify prior join submissions");
+        }
+        const pending = parsed.data.data.pendingJoinSubmissions.find(
+          (submission) => submission.tournamentId === props.tournamentId,
+        );
+        setPendingSubmission(pending ? { txHash: pending.txHash } : null);
+        setJoinStatus("ready");
+      })
+      .catch((reason: unknown) => {
+        if (reason instanceof DOMException && reason.name === "AbortError") return;
+        setPendingSubmission(null);
+        setJoinStatus("error");
+      });
   }
 
   async function onJoin() {
-    if (!player || submitting || awaitingConfirmation || registered) return;
+    if (!player || joinStatus !== "ready" || submitting || awaitingConfirmation || registered)
+      return;
     setErrorMsg(null);
     setRefreshAttempts(0);
     setTransaction(null);
@@ -224,7 +263,9 @@ export function JoinCard(props: JoinCardProps) {
           <button
             type="button"
             onClick={onJoin}
-            disabled={!player || submitting || awaitingConfirmation || registered}
+            disabled={
+              !player || joinStatus !== "ready" || submitting || awaitingConfirmation || registered
+            }
             className="brutalist-border label-caps bg-electric-violet-strong px-6 py-3 italic text-background transition-transform hover:-translate-y-0.5 active:translate-y-0.5 disabled:opacity-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-acid-yellow"
           >
             Join Tournament
@@ -235,13 +276,17 @@ export function JoinCard(props: JoinCardProps) {
             ? "Connect Freighter to enable Join Tournament."
             : alreadyJoined
               ? "This wallet has already joined this tournament."
-              : awaitingConfirmation
-                ? refreshExhausted
-                  ? "Join submitted and still processing. Refresh the status; do not submit another transaction."
-                  : "Join submitted and awaiting confirmation. Do not submit another transaction."
-                : submitting
-                  ? "Join transaction is waiting for wallet or network confirmation."
-                  : "Wallet connected. Join Tournament will request the entry-fee transaction."}
+              : joinStatus === "loading"
+                ? "Checking this wallet for an earlier join submission."
+                : joinStatus === "error"
+                  ? "Prior join status could not be verified. Re-check the wallet before joining."
+                  : awaitingConfirmation
+                    ? refreshExhausted
+                      ? "Join submitted and still processing. Refresh the status; do not submit another transaction."
+                      : "Join submitted and awaiting confirmation. Do not submit another transaction."
+                    : submitting
+                      ? "Join transaction is waiting for wallet or network confirmation."
+                      : "Wallet connected. Join Tournament will request the entry-fee transaction."}
         </p>
         {awaitingConfirmation && refreshExhausted && (
           <button

@@ -248,6 +248,14 @@ export async function submitTournamentTx(
       recoveredDeployment ?? (await sdk.submit(input.signedXdr, built, env.NETWORK_PASSPHRASE));
   } catch (error) {
     if (
+      input.intent === "join" &&
+      joinTxHash &&
+      error instanceof EscrowSdkError &&
+      error.code === "SUBMIT_REJECTED"
+    ) {
+      await prisma.joinSubmission.deleteMany({ where: { txHash: joinTxHash } });
+    }
+    if (
       input.intent === "deploy" &&
       error instanceof EscrowSdkError &&
       error.code === "SUBMIT_REJECTED"
@@ -510,6 +518,14 @@ export async function listPlayerParticipations(playerAddress: string) {
   });
 }
 
+export async function listPendingJoinSubmissions(playerAddress: string) {
+  return prisma.joinSubmission.findMany({
+    where: { playerAddr: playerAddress },
+    select: { tournamentId: true, txHash: true },
+    orderBy: { submittedAt: "desc" },
+  });
+}
+
 export async function buildJoin(
   id: string,
   playerAddress: string,
@@ -615,7 +631,6 @@ export async function getTournamentDetail(id: string) {
     where: { id },
     include: {
       participants: { orderBy: { joinedAt: "asc" } },
-      joinSubmissions: { orderBy: { submittedAt: "asc" } },
       payouts: { orderBy: { rank: "asc" } },
       events: {
         where: { type: "REFUND_CLAIMED" },
@@ -685,10 +700,6 @@ export async function getTournamentDetail(id: string) {
       playerAddr: p.playerAddr,
       joinedAt: p.joinedAt.toISOString(),
       joinTxHash: p.joinTxHash,
-    })),
-    pendingJoinSubmissions: t.joinSubmissions.map((submission) => ({
-      playerAddress: submission.playerAddr,
-      txHash: submission.txHash,
     })),
     winners: t.payouts.map((p) => ({
       rank: p.rank,

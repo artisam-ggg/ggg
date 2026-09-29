@@ -27,7 +27,6 @@ vi.mock("@/lib/db", () => ({
         participants: [
           { playerAddr: "G_P1", joinedAt: new Date("2025-01-01T00:00:00Z"), joinTxHash: "JT1" },
         ],
-        joinSubmissions: [],
         payouts: [{ rank: 1, playerAddr: "G_P1", amount: 6000000n, txHash: "PT1" }],
         events: [],
       })),
@@ -80,6 +79,7 @@ describe("GET /api/tournaments/[id]", () => {
 
     expect(json.ok).toBe(true);
     expect(json.data).not.toHaveProperty("organizerId");
+    expect(json.data).not.toHaveProperty("pendingJoinSubmissions");
     // Other expected public fields are still present
     expect(json.data).toHaveProperty("id");
     expect(json.data).toHaveProperty("name");
@@ -118,7 +118,6 @@ describe("GET /api/tournaments/[id]", () => {
         { playerAddr: "G_P1", joinedAt: new Date("2025-01-01T00:00:00Z"), joinTxHash: "JT1" },
         { playerAddr: "G_P2", joinedAt: new Date("2025-01-02T00:00:00Z"), joinTxHash: "JT2" },
       ],
-      joinSubmissions: [],
       payouts: [],
       events: [],
     });

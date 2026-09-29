@@ -176,7 +176,6 @@ export default async function TournamentDetailPage({
                     playerAddress: participant.playerAddr,
                     txHash: participant.joinTxHash,
                   }))}
-                  pendingJoinSubmissions={t.pendingJoinSubmissions}
                   settlementDeadline={t.settlementDeadline}
                 />
               )}
