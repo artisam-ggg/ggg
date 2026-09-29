@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { act } from "react";
 import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
@@ -46,6 +46,17 @@ async function fillValidTournament() {
   await waitFor(() => expect(ensureWallet).toHaveBeenCalled());
 }
 
+async function expectCreationSuccess(tournamentId: string) {
+  expect(await screen.findByRole("heading", { name: /your escrow is live/i })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /view public tournament/i })).toHaveAttribute(
+    "href",
+    `/tournaments/${tournamentId}`,
+  );
+  expect(screen.getByText(/confirm the referee has the correct wallet/i)).toBeInTheDocument();
+  expect(screen.getByText(/monitor confirmed entrants/i)).toBeInTheDocument();
+  expect(screen.getByText(/ask the referee to settle/i)).toBeInTheDocument();
+}
+
 describe("CreateTournamentForm", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -84,6 +95,7 @@ describe("CreateTournamentForm", () => {
     expect(screen.getByText(/5000 \/ 3000 \/ 2000 bps/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/payout calculation/i)).toHaveValue("custom");
     expect(localStorage.getItem("ggg:tournament-create-draft")).not.toContain(MOCK_ORGANIZER);
+    expect(screen.getByRole("status")).toHaveTextContent(/wallet addresses.*never stored/i);
   });
 
   it("restores a descending mode draft without recalculating it", async () => {
@@ -269,6 +281,28 @@ describe("CreateTournamentForm", () => {
     expect(screen.getByLabelText(/settlement deadline/i)).toBeInTheDocument();
   });
 
+  it("previews the public tournament details before deployment", () => {
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+    fireEvent.change(screen.getByLabelText(/tournament name/i), {
+      target: { value: "Preview Cup" },
+    });
+    fireEvent.change(screen.getByLabelText(/game title/i), { target: { value: "SF6" } });
+    fireEvent.change(screen.getByLabelText(/entry fee/i), { target: { value: "2.5" } });
+    fireEvent.change(screen.getByLabelText(/referee/i), { target: { value: REF } });
+    fireEvent.change(screen.getByLabelText(/settlement deadline/i), {
+      target: { value: "2026-10-01T12:00" },
+    });
+
+    const preview = screen.getByRole("region", { name: /public tournament preview/i });
+    expect(within(preview).getByText("Preview Cup")).toBeInTheDocument();
+    expect(within(preview).getByText("SF6")).toBeInTheDocument();
+    expect(within(preview).getByText("2.5 XLM")).toBeInTheDocument();
+    expect(within(preview).getByText("2026-10-01 12:00 local time")).toBeInTheDocument();
+    expect(within(preview).getByText(REF)).toBeInTheDocument();
+    expect(within(preview).getByText("#1 60% · #2 20% · #3 20%")).toBeInTheDocument();
+    expect(within(preview).getByText(/default tournament cover/i)).toBeInTheDocument();
+  });
+
   it("keeps organizer safety guidance, validation, wallet access, and the role guide discoverable", () => {
     render(<CreateTournamentForm expectedPassphrase="P" />);
 
@@ -297,6 +331,22 @@ describe("CreateTournamentForm", () => {
       screen.getByText(/equal and descending update lower ranks; edit one to use custom/i),
     ).toBeInTheDocument();
     expect(screen.getByText(/6000 \/ 2000 \/ 2000 bps/i)).toBeInTheDocument();
+  });
+
+  it("applies reusable payout presets through the existing calculation model", () => {
+    render(<CreateTournamentForm expectedPassphrase="P" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Winner takes all" }));
+    expect(screen.getByText("10000 bps")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/2nd %/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Top 8" }));
+    expect(
+      screen.getByText("3000 / 1000 / 1000 / 1000 / 1000 / 1000 / 1000 / 1000 bps"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Rank 8 %")).toHaveValue(10);
+    expect(screen.getByText(/local time; stored on-chain as UTC/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /deploy soroban contract/i })).toBeDisabled();
   });
 
   it("renders accessible payout-rank buttons and enforces the 1–10 rank limits", () => {
@@ -649,8 +699,7 @@ describe("CreateTournamentForm", () => {
       ),
     );
 
-    // Redirect on success
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/tournaments/t_1"));
+    await expectCreationSuccess("t_1");
     expect(localStorage.getItem("ggg:tournament-create-draft")).toBeNull();
 
     vi.unstubAllGlobals();
@@ -798,7 +847,7 @@ describe("CreateTournamentForm", () => {
     fireEvent.click(screen.getByRole("button", { name: /close/i }));
     fireEvent.click(screen.getByRole("button", { name: /retry deployment/i }));
 
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/tournaments/t_recover"));
+    await expectCreationSuccess("t_recover");
     expect(signAndSubmit).toHaveBeenCalledTimes(2);
     expect(signAndSubmit).toHaveBeenNthCalledWith(
       2,
@@ -844,7 +893,7 @@ describe("CreateTournamentForm", () => {
     vi.unstubAllGlobals();
   });
 
-  it("redirects after a pending deployment is confirmed", async () => {
+  it("shows follow-up guidance after a pending deployment is confirmed", async () => {
     const mockFetch = vi
       .fn()
       .mockResolvedValueOnce(
@@ -876,7 +925,7 @@ describe("CreateTournamentForm", () => {
     fireEvent.click(screen.getByRole("button", { name: /deploy soroban contract/i }));
     fireEvent.click(await screen.findByRole("button", { name: /check deployment status/i }));
 
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/tournaments/t_pending"));
+    await expectCreationSuccess("t_pending");
     vi.unstubAllGlobals();
   });
 
@@ -956,6 +1005,7 @@ describe("CreateTournamentForm", () => {
         expect.objectContaining({ method: "POST" }),
       );
     });
+    expect(await screen.findByAltText(/tournament cover preview/i)).toBeInTheDocument();
 
     // Connect wallet and submit
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
@@ -972,7 +1022,6 @@ describe("CreateTournamentForm", () => {
       const body = JSON.parse((tournamentCall![1] as RequestInit).body as string);
       expect(body.coverImageKey).toBe("covers/123e4567-e89b-12d3-a456-426614174000.png");
     });
-
     vi.unstubAllGlobals();
   });
 
@@ -1011,7 +1060,7 @@ describe("CreateTournamentForm", () => {
 
     // Resolve signing to unblock
     resolveSign!({ txHash: "TX", contractId: "C1", status: "ACTIVE" });
-    await waitFor(() => expect(push).toHaveBeenCalled());
+    await expectCreationSuccess("t_modal");
 
     vi.unstubAllGlobals();
   });

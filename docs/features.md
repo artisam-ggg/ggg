@@ -320,3 +320,7 @@ The organizer, player, referee, and refund interfaces now include a shared
 keyboard-accessible Guidelines modal. Each entry point offers concise,
 role-specific steps, a link to the relevant full GitBook guide, Escape-to-close,
 and focus management that returns people to the control that opened the modal.
+
+## Issue #362 - Organizer preparation, preview, and post-create guidance
+
+Tournament creation now includes payout-rank presets backed by the existing distribution calculations and a pre-deployment review of the public title, game, entry fee, deadline, referee, payout ranks, and cover status. Browser draft guidance makes clear that only public form fields are restored; the connected wallet, uploaded cover, and secret data are not persisted. After deployment confirmation, organizers receive a concise checklist and safe links to the public tournament and organizer dashboard instead of being redirected before they can review the next steps.
