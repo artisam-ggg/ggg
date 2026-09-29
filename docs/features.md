@@ -2,6 +2,15 @@
 
 Running log of shipped features (append one entry per change), per the auto-dev workflow.
 
+## Issue #360 - Wallet status, network recovery, and transaction guidance
+
+Create, join, referee, settlement, and refund journeys now share a compact wallet status that
+identifies the required Stellar network and supports re-checking after an account or network
+change. Each signing boundary explains what the transaction does and confirms that GGG cannot
+access private keys or sign for users. Wrong-network, rejected connection, rejected signature,
+wrong-wallet, pending, and confirmed states retain the existing server and contract authorization
+boundaries while offering clearer recovery guidance.
+
 ## Issue #357 - Public tournament lifecycle clarity
 
 Public tournament pages now summarize confirmed lifecycle state in plain language and explain

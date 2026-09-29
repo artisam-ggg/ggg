@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Minus, Plus } from "lucide-react";
 import { WalletButton } from "./WalletButton";
+import { WalletActionNotice } from "./WalletActionNotice";
 import { PrizeBreakdown } from "./PrizeBreakdown";
 import { Button } from "@/components/ui/button";
 import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
@@ -777,6 +778,11 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       </div>
 
       {/* Wallet + Deploy */}
+      <div className="mt-8">
+        <WalletActionNotice expectedPassphrase={expectedPassphrase}>
+          Deploying creates the tournament escrow from the reviewed settings above.
+        </WalletActionNotice>
+      </div>
       <div className="mt-8 flex flex-wrap items-center gap-4">
         <WalletButton
           expectedPassphrase={expectedPassphrase}

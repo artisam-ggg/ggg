@@ -3,6 +3,7 @@ import freighter from "@stellar/freighter-api";
 import { apiResponseSchema } from "@/lib/api";
 import { captureWalletTransactionSucceeded, type WalletTransactionType } from "@/lib/analytics";
 import { stellarPublicKey } from "@/lib/validation/tournament";
+import { stellarNetworkLabel } from "@/lib/stellar-network";
 import { z } from "zod";
 
 export type SubmitResult = {
@@ -44,21 +45,33 @@ export async function ensureWallet(expectedPassphrase: string): Promise<string> 
     );
 
   const access = await freighter.requestAccess();
-  if (access.error) throw new Error(`Freighter access denied: ${access.error.message}`);
+  if (access.error)
+    throw new Error(
+      "Wallet connection was not approved. Approve the Freighter request, then try again.",
+    );
 
   const { address, error: addrError } = await freighter.getAddress();
-  if (addrError) throw new Error(`Freighter could not get address: ${addrError.message}`);
+  if (addrError)
+    throw new Error(
+      "Freighter could not read the active account. Unlock Freighter, then try again.",
+    );
   const parsedAddress = stellarPublicKey.safeParse(address);
   if (!parsedAddress.success) throw new Error("Freighter returned an invalid Stellar address.");
 
   const { networkPassphrase, error: netError } = await freighter.getNetwork();
-  if (netError) throw new Error(`Freighter could not get network: ${netError.message}`);
+  if (netError)
+    throw new Error(
+      "Freighter could not read the active network. Unlock Freighter, then try again.",
+    );
 
   if (networkPassphrase !== expectedPassphrase)
-    throw new SubmissionError("Wrong network — switch Freighter to the tournament's network.", {
-      code: "NETWORK_MISMATCH",
-      retryable: false,
-    });
+    throw new SubmissionError(
+      `Wrong network. Switch Freighter to ${stellarNetworkLabel(expectedPassphrase)}, then try again.`,
+      {
+        code: "NETWORK_MISMATCH",
+        retryable: false,
+      },
+    );
 
   return parsedAddress.data;
 }
@@ -75,7 +88,10 @@ export async function signAndSubmit(
     networkPassphrase: expectedPassphrase,
     address,
   });
-  if (signError) throw new Error(`Freighter signing failed: ${signError.message}`);
+  if (signError)
+    throw new Error(
+      "Transaction signature was not approved. Review the request in Freighter, then try again. Nothing was submitted.",
+    );
 
   const res = await fetch(submitUrl, {
     method: "POST",
@@ -106,7 +122,13 @@ export async function signAndSubmit(
     return result;
   }
   const { code, message, txHash, retryable } = json.data.error;
-  throw new SubmissionError(message, {
+  const recoveryMessage =
+    code === "TX_BAD_AUTH" || code === "TX_MALFORMED"
+      ? "The signed transaction is no longer valid. Re-check your wallet, then build and sign a fresh transaction."
+      : code === "SUBMIT_REJECTED"
+        ? "Stellar rejected the transaction. Re-check your wallet, then build and sign a fresh transaction."
+        : message;
+  throw new SubmissionError(recoveryMessage, {
     code,
     ...(txHash ? { txHash } : {}),
     ...(retryable === undefined ? {} : { retryable }),

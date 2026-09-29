@@ -37,11 +37,11 @@ describe("RefereePanel", () => {
     (ensureWallet as ReturnType<typeof vi.fn>).mockResolvedValue(REF);
   });
 
-  it("shows verify button and no settle link initially", () => {
+  it("shows wallet connection and no settle link initially", () => {
     render(<RefereePanel tournamentId="t_1" refereeAddr={REF} passphrase="P" />);
-    expect(screen.getByRole("button", { name: /verify referee/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /connect wallet/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /settlement console/i })).toBeNull();
-    expect(screen.getByText(/verify the configured referee wallet/i)).toHaveAttribute(
+    expect(screen.getByText(/connect the configured referee wallet/i)).toHaveAttribute(
       "aria-live",
       "polite",
     );
@@ -60,7 +60,7 @@ describe("RefereePanel", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
-    fireEvent.click(screen.getByRole("button", { name: /verify referee/i }));
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     await screen.findByRole("link", { name: /settlement console/i });
     expect(ensureWallet).toHaveBeenCalledWith("P");
   });
@@ -68,7 +68,7 @@ describe("RefereePanel", () => {
   it("reveals the settle link only when connected wallet matches refereeAddr", async () => {
     render(<RefereePanel tournamentId="t_1" refereeAddr={REF} passphrase="P" />);
     expect(screen.queryByRole("link", { name: /settlement console/i })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /verify referee/i }));
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     await waitFor(() =>
       expect(screen.getByRole("link", { name: /settlement console/i })).toHaveAttribute(
         "href",
@@ -87,7 +87,7 @@ describe("RefereePanel", () => {
       "GOTHEROTHEROTHEROTHEROTHEROTHEROTHEROTHEROTHEROTHEROTHER",
     );
     render(<RefereePanel tournamentId="t_1" refereeAddr={REF} passphrase="P" />);
-    fireEvent.click(screen.getByRole("button", { name: /verify referee/i }));
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     await waitFor(() => expect(screen.getByText(/not the referee/i)).toBeInTheDocument());
     expect(screen.queryByRole("link", { name: /settlement console/i })).toBeNull();
     expect(captureWalletConnected).toHaveBeenCalledOnce();
@@ -96,7 +96,7 @@ describe("RefereePanel", () => {
   it("mismatch message has role=alert for screen readers", async () => {
     (ensureWallet as ReturnType<typeof vi.fn>).mockResolvedValueOnce("GWRONG");
     render(<RefereePanel tournamentId="t_1" refereeAddr={REF} passphrase="P" />);
-    fireEvent.click(screen.getByRole("button", { name: /verify referee/i }));
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
   });
 
@@ -105,9 +105,9 @@ describe("RefereePanel", () => {
       new Error("Freighter not installed"),
     );
     render(<RefereePanel tournamentId="t_1" refereeAddr={REF} passphrase="P" />);
-    fireEvent.click(screen.getByRole("button", { name: /verify referee/i }));
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     await waitFor(() =>
-      expect(screen.getByRole("alert")).toHaveTextContent(/failed to connect wallet/i),
+      expect(screen.getByRole("alert")).toHaveTextContent(/freighter not installed/i),
     );
     expect(captureWalletConnected).not.toHaveBeenCalled();
   });
@@ -115,11 +115,9 @@ describe("RefereePanel", () => {
   it("does not capture the same wallet again when verification is repeated", async () => {
     (ensureWallet as ReturnType<typeof vi.fn>).mockResolvedValue("GWRONG");
     render(<RefereePanel tournamentId="t_1" refereeAddr={REF} passphrase="P" />);
-    const button = screen.getByRole("button", { name: /verify referee/i });
-
-    fireEvent.click(button);
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     await screen.findByRole("alert");
-    fireEvent.click(button);
+    fireEvent.click(screen.getByRole("button", { name: /re-check wallet/i }));
 
     await waitFor(() => expect(ensureWallet).toHaveBeenCalledTimes(2));
     expect(captureWalletConnected).toHaveBeenCalledTimes(1);
@@ -129,7 +127,7 @@ describe("RefereePanel", () => {
     // Lower-case version — Stellar addresses are always uppercase, but test the exact-match rule
     (ensureWallet as ReturnType<typeof vi.fn>).mockResolvedValueOnce(REF.toLowerCase());
     render(<RefereePanel tournamentId="t_1" refereeAddr={REF} passphrase="P" />);
-    fireEvent.click(screen.getByRole("button", { name: /verify referee/i }));
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     await waitFor(() => expect(screen.getByText(/not the referee/i)).toBeInTheDocument());
   });
 });

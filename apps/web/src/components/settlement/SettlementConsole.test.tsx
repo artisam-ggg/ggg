@@ -52,6 +52,9 @@ describe("SettlementConsole", () => {
     );
 
     expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute("href", "/tournaments/t_1");
+    expect(screen.getByText(/finalizing distributes the escrow pool/i)).toHaveTextContent(
+      /cannot access your private key or sign for you/i,
+    );
   });
 
   it("assigns three distinct winners then finalizes", async () => {

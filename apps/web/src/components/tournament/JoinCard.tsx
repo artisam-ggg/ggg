@@ -7,6 +7,7 @@ import { WalletButton } from "./WalletButton";
 import { ContractAddress } from "./ContractAddress";
 import { SubmitStateModal } from "@/components/ui/SubmitStateModal";
 import { Guidelines } from "@/components/ui/Guidelines";
+import { WalletActionNotice } from "./WalletActionNotice";
 import { signAndSubmit, SubmissionError } from "@/lib/wallet";
 
 interface JoinCardProps {
@@ -141,6 +142,11 @@ export function JoinCard(props: JoinCardProps) {
             Tournament: {tournamentIdentifier}
           </span>
         </div>
+
+        <WalletActionNotice expectedPassphrase={props.passphrase}>
+          Joining transfers the displayed entry fee from your wallet into this tournament&apos;s
+          escrow.
+        </WalletActionNotice>
 
         <div className="flex flex-wrap items-center gap-3">
           <WalletButton expectedPassphrase={props.passphrase} onConnected={setPlayer} />

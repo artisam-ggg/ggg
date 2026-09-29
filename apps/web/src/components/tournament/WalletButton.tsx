@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { Wallet } from "lucide-react";
 import { ensureWallet } from "@/lib/wallet";
 import { captureWalletConnected } from "@/lib/analytics";
+import { stellarNetworkLabel } from "@/lib/stellar-network";
 
 interface WalletButtonProps {
   expectedPassphrase: string;
@@ -15,40 +16,50 @@ export function WalletButton({ expectedPassphrase, onConnected }: WalletButtonPr
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
+  const [needsRecheck, setNeedsRecheck] = useState(false);
   const attemptId = useRef(0);
+  const networkLabel = stellarNetworkLabel(expectedPassphrase);
 
   if (address) {
     return (
-      <div className="flex items-center gap-2">
-        <span
-          className="data-mono inline-flex items-center gap-2 rounded-full border-2 border-acid-yellow px-3 py-1 text-acid-yellow"
-          aria-label={`Wallet ${address}`}
-        >
-          <Wallet className="h-4 w-4 shrink-0 text-acid-yellow" aria-hidden="true" />
-          {address.slice(0, 6)}…{address.slice(-5)}
-        </span>
-        <button
-          type="button"
-          disabled={connecting}
-          onClick={handleConnect}
-          className="label-caps text-sm text-acid-yellow focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong disabled:opacity-50"
-        >
-          {connecting ? "Re-checking…" : "Re-check Wallet"}
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            attemptId.current += 1;
-            setConnecting(false);
-            setAddress(null);
-            setError(null);
-            setNotice(null);
-            onConnected(null);
-          }}
-          className="label-caps text-sm text-on-surface-variant focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
-        >
-          Disconnect Wallet
-        </button>
+      <div className="flex max-w-full flex-col items-start gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className="data-mono inline-flex items-center gap-2 rounded-full border-2 border-acid-yellow px-3 py-1 text-acid-yellow"
+            aria-label={`Wallet ${address}`}
+          >
+            <Wallet className="h-4 w-4 shrink-0 text-acid-yellow" aria-hidden="true" />
+            {address.slice(0, 6)}…{address.slice(-5)}
+          </span>
+          <button
+            type="button"
+            disabled={connecting}
+            onClick={handleConnect}
+            className="label-caps text-sm text-acid-yellow focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong disabled:opacity-50"
+          >
+            {connecting ? "Re-checking…" : "Re-check Wallet"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              attemptId.current += 1;
+              setConnecting(false);
+              setAddress(null);
+              setNeedsRecheck(false);
+              setError(null);
+              setNotice(null);
+              onConnected(null);
+            }}
+            className="label-caps text-sm text-on-surface-variant focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+          >
+            Disconnect Wallet
+          </button>
+        </div>
+        <p className="text-sm text-on-surface-variant">
+          {needsRecheck
+            ? `Wallet is not verified for ${networkLabel}. Switch networks, then choose Re-check Wallet.`
+            : `Connected for ${networkLabel}. Re-check after changing account or network in Freighter.`}
+        </p>
         {error && (
           <p role="alert" className="text-sm text-error">
             {error}
@@ -73,13 +84,26 @@ export function WalletButton({ expectedPassphrase, onConnected }: WalletButtonPr
       if (currentAttempt !== attemptId.current) return;
       if (a === address) {
         setNotice("Wallet re-checked");
+        if (needsRecheck) {
+          setNeedsRecheck(false);
+          onConnected(a);
+        }
       } else {
         setAddress(a);
+        setNeedsRecheck(false);
         captureWalletConnected(a);
         onConnected(a);
       }
     } catch (e: unknown) {
       if (currentAttempt !== attemptId.current) return;
+      if (
+        e instanceof Error &&
+        "details" in e &&
+        (e as Error & { details?: { code?: string } }).details?.code === "NETWORK_MISMATCH"
+      ) {
+        setNeedsRecheck(address !== null);
+        onConnected(null);
+      }
       setError(e instanceof Error ? e.message : "Failed to connect wallet");
     } finally {
       if (currentAttempt === attemptId.current) setConnecting(false);
@@ -107,6 +131,10 @@ export function WalletButton({ expectedPassphrase, onConnected }: WalletButtonPr
           "Connect Wallet"
         )}
       </button>
+      <p className="mt-2 text-sm text-on-surface-variant">
+        Disconnected. Required network: {networkLabel}. Connecting shares your public address only;
+        it does not approve a transaction.
+      </p>
       {error && (
         <p role="alert" className="mt-2 text-sm text-error">
           {error}

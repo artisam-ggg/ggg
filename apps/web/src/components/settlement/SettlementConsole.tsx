@@ -7,6 +7,7 @@ import { CandidateCard } from "./CandidateCard";
 import { PodiumSlot } from "./PodiumSlot";
 import { SettlementModal } from "./SettlementModal";
 import { WalletButton } from "@/components/tournament/WalletButton";
+import { WalletActionNotice } from "@/components/tournament/WalletActionNotice";
 import { PrizeBreakdown } from "@/components/tournament/PrizeBreakdown";
 import { signAndSubmit } from "@/lib/wallet";
 import { BackButton } from "@/components/ui/BackButton";
@@ -155,6 +156,12 @@ export function SettlementConsole({
           </div>
 
           {/* Wallet connect + finalize */}
+          <div className="mt-8">
+            <WalletActionNotice expectedPassphrase={passphrase}>
+              Finalizing distributes the escrow pool to the ranked wallets above and cannot be
+              undone.
+            </WalletActionNotice>
+          </div>
           <div className="mt-8 flex flex-wrap items-center gap-4">
             <WalletButton expectedPassphrase={passphrase} onConnected={setWallet} />
             <button

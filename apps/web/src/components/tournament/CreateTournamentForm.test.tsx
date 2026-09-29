@@ -546,6 +546,9 @@ describe("CreateTournamentForm", () => {
     render(<CreateTournamentForm expectedPassphrase="P" />);
     const btn = screen.getByRole("button", { name: /deploy soroban contract/i });
     expect(btn).toBeDisabled();
+    expect(screen.getByText(/deploying creates the tournament escrow/i)).toHaveTextContent(
+      /cannot access your private key or sign for you/i,
+    );
   });
 
   it("shows truncated wallet address chip after connecting", async () => {
