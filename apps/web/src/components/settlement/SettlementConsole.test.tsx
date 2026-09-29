@@ -315,7 +315,11 @@ describe("SettlementConsole", () => {
       ),
     );
     (signAndSubmit as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new SubmissionError("Confirmation delayed", { txHash: "FTX_PENDING", retryable: true }),
+      new SubmissionError("Confirmation delayed", {
+        code: "SUBMIT_UNKNOWN",
+        txHash: "FTX_PENDING",
+        retryable: true,
+      }),
     );
 
     render(
@@ -353,7 +357,11 @@ describe("SettlementConsole", () => {
       );
     vi.stubGlobal("fetch", mockFetch);
     (signAndSubmit as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new SubmissionError("Confirmation delayed", { txHash: "FTX_PENDING", retryable: true }),
+      new SubmissionError("Confirmation delayed", {
+        code: "SUBMIT_UNKNOWN",
+        txHash: "FTX_PENDING",
+        retryable: true,
+      }),
     );
 
     render(
