@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 
 type Journey = "organizer" | "player" | "referee" | "refund";
 
@@ -117,50 +118,55 @@ export function Guidelines({ journey }: { journey: Journey }) {
         Guidelines
       </button>
 
-      {isOpen && (
-        <div
-          ref={dialogRef}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={titleId}
-          onKeyDown={trapFocus}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 p-4 backdrop-blur-md"
-        >
-          <section className="w-full max-w-lg rounded-2xl bg-surface-container p-6 shadow-xl">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="label-caps text-electric-violet">Guidelines</p>
-                <h2 id={titleId} className="mt-2 text-2xl font-bold text-on-surface">
-                  {guide.title}
-                </h2>
-              </div>
-              <button
-                ref={closeButtonRef}
-                type="button"
-                onClick={close}
-                className="label-caps rounded-lg border-2 border-outline px-3 py-2 text-on-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
-              >
-                Close
-              </button>
-            </div>
-
-            <ol className="mt-5 list-decimal space-y-3 pl-5 text-on-surface-variant">
-              {guide.steps.map((step) => (
-                <li key={step}>{step}</li>
-              ))}
-            </ol>
-
-            <a
-              href={guide.guideUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="label-caps mt-6 inline-block text-acid-yellow underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+      {isOpen &&
+        createPortal(
+          <div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={titleId}
+            onKeyDown={trapFocus}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 p-4 backdrop-blur-md"
+          >
+            <section
+              data-testid="guidelines-panel"
+              className="w-full max-w-[32rem] rounded-2xl bg-surface-container p-6 shadow-xl"
             >
-              Read the full guide
-            </a>
-          </section>
-        </div>
-      )}
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="label-caps text-electric-violet">Guidelines</p>
+                  <h2 id={titleId} className="mt-2 text-2xl font-bold text-on-surface">
+                    {guide.title}
+                  </h2>
+                </div>
+                <button
+                  ref={closeButtonRef}
+                  type="button"
+                  onClick={close}
+                  className="label-caps rounded-lg border-2 border-outline px-3 py-2 text-on-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+                >
+                  Close
+                </button>
+              </div>
+
+              <ol className="mt-5 list-decimal space-y-3 pl-5 text-on-surface-variant">
+                {guide.steps.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
+              </ol>
+
+              <a
+                href={guide.guideUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="label-caps mt-6 inline-block text-acid-yellow underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+              >
+                Read the full guide
+              </a>
+            </section>
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

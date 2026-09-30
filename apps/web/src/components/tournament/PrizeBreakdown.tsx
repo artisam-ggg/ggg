@@ -50,7 +50,7 @@ export function PrizeBreakdown({
       className="rounded-xl bg-surface-container p-5"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="prize-breakdown-heading" className="label-caps text-on-surface">
+        <h2 id="prize-breakdown-heading" className="text-base font-semibold text-on-surface">
           {heading}
         </h2>
         <p className="data-mono text-xs text-on-surface-variant">
@@ -58,7 +58,7 @@ export function PrizeBreakdown({
         </p>
       </div>
 
-      <p className="mt-2 text-sm text-on-surface-variant">
+      <p className="mt-2 text-xs text-on-surface-variant">
         {hasConfirmedPayouts
           ? "Confirmed on-chain payouts"
           : isSettled

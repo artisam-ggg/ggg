@@ -9,9 +9,9 @@ export function WalletActionNotice({
   children: ReactNode;
 }) {
   return (
-    <p className="w-full text-sm text-on-surface-variant">
-      {children} Approve this transaction in Freighter on {stellarNetworkLabel(expectedPassphrase)}.
-      GGG cannot access your private key or sign for you.
+    <p className="w-full text-xs leading-relaxed text-on-surface-variant">
+      {children} Approve in Freighter on {stellarNetworkLabel(expectedPassphrase)}. GGG cannot
+      access your private key or sign for you.
     </p>
   );
 }

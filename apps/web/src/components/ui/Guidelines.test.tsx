@@ -77,4 +77,17 @@ describe("Guidelines", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
   });
+
+  it("portals the modal outside filtered card ancestors without shrinking its panel", () => {
+    render(
+      <div className="kinetic-glass w-48">
+        <Guidelines journey="refund" />
+      </div>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open refund guidelines" }));
+
+    expect(screen.getByRole("dialog").parentElement).toBe(document.body);
+    expect(screen.getByTestId("guidelines-panel")).toHaveClass("w-full", "max-w-[32rem]");
+  });
 });

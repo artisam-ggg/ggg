@@ -55,11 +55,11 @@ export function WalletButton({ expectedPassphrase, onConnected }: WalletButtonPr
             Disconnect Wallet
           </button>
         </div>
-        <p className="text-sm text-on-surface-variant">
-          {needsRecheck
-            ? `Wallet is not verified for ${networkLabel}. Switch networks, then choose Re-check Wallet.`
-            : `Connected for ${networkLabel}. Re-check after changing account or network in Freighter.`}
-        </p>
+        {needsRecheck && (
+          <p className="text-sm text-on-surface-variant">
+            Wallet is not verified for {networkLabel}. Switch networks, then choose Re-check Wallet.
+          </p>
+        )}
         {error && (
           <p role="alert" className="text-sm text-error">
             {error}
@@ -127,9 +127,9 @@ export function WalletButton({ expectedPassphrase, onConnected }: WalletButtonPr
           "Connect Wallet"
         )}
       </button>
-      <p className="mt-2 text-sm text-on-surface-variant">
-        Disconnected. Required network: {networkLabel}. Connecting shares your public address only;
-        it does not approve a transaction.
+      <p className="mt-2 text-xs leading-relaxed text-on-surface-variant">
+        Connect on {networkLabel}. This shares your public address; it does not approve a
+        transaction.
       </p>
       {error && (
         <p role="alert" className="mt-2 text-sm text-error">

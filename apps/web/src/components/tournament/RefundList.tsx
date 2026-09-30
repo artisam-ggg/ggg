@@ -33,11 +33,13 @@ export function RefundList({
 
   return (
     <div className="mt-4">
-      <p className="label-caps text-error">Registered players ({participants.length})</p>
+      <h2 className="text-base font-semibold text-on-surface">
+        Registered players ({participants.length})
+      </h2>
       <p className="data-mono mt-2 text-sm text-on-surface-variant">
         Refund progress: {claimedPlayers.length} of {participants.length} claimed
       </p>
-      <p className="mt-2 text-sm text-on-surface-variant">
+      <p className="mt-2 text-xs leading-relaxed text-on-surface-variant">
         Each registered player may claim {formatStroops(entryFee)} {asset} to their registered
         wallet.
       </p>

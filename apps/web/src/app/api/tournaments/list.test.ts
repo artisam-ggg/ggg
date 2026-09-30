@@ -55,6 +55,7 @@ describe("GET /api/tournaments", () => {
         status: "ACTIVE",
         entryFee: 10n,
         asset: "XLM",
+        coverImageKey: "tournaments/t_1/cover.webp",
         _count: { participants: 3 },
       },
     ]);
@@ -67,6 +68,7 @@ describe("GET /api/tournaments", () => {
     });
     expect(json.data.items[0].entryFee).toBe("10"); // BigInt serialized to string
     expect(json.data.items[0].participantCount).toBe(3);
+    expect(json.data.items[0].coverImageUrl).toBe("/api/tournaments/t_1/cover");
   });
 
   it("excludes another owner's tournaments (IDOR check)", async () => {

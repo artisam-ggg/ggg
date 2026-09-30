@@ -61,7 +61,7 @@ describe("TournamentLifecycle", () => {
       );
 
       expect(screen.getByRole("heading", { name: title })).toBeInTheDocument();
-      expect(screen.getByText(detail)).toBeInTheDocument();
+      expect(screen.getByText(detail)).toHaveClass("text-xs", "text-on-surface-variant");
     },
   );
 });

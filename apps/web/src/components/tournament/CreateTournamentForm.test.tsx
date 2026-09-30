@@ -99,14 +99,13 @@ describe("CreateTournamentForm", () => {
       expect(stored).not.toContain(MOCK_ORGANIZER);
       expect(stored).not.toContain(REF);
     });
-    const privacyNotice = screen
-      .getByText(/only non-wallet public tournament fields/i)
-      .closest("div");
+    const privacyNotice = screen.getByText(/draft restored/i).closest("div");
     expect(privacyNotice).not.toHaveAttribute("role", "status");
-    expect(privacyNotice).toHaveTextContent(/organizer wallet, referee wallet.*never.*stored/i);
-    expect(
-      within(privacyNotice!).getByText(/only non-wallet public tournament fields/i),
-    ).toHaveClass("text-on-surface");
+    expect(privacyNotice).toHaveTextContent(/wallets, cover images, and secrets are never stored/i);
+    expect(within(privacyNotice!).getByText(/draft restored/i)).toHaveClass(
+      "text-xs",
+      "text-on-surface-variant",
+    );
   });
 
   it("does not create a recoverable draft for a referee wallet alone", async () => {
@@ -295,9 +294,17 @@ describe("CreateTournamentForm", () => {
   it("renders all required fields", () => {
     render(<CreateTournamentForm expectedPassphrase="P" />);
     expect(screen.getByLabelText(/tournament name/i)).toBeInTheDocument();
+    expect(screen.getByText("Tournament Name", { selector: "label" })).toHaveClass(
+      "text-sm",
+      "font-medium",
+    );
+    expect(screen.getByText("Tournament Name", { selector: "label" })).not.toHaveClass(
+      "label-caps",
+    );
     expect(screen.getByLabelText(/game title/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/entry fee/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/referee/i)).toBeInTheDocument();
+    expect(screen.getByText(/stored on-chain as utc/i)).toHaveClass("text-xs");
     expect(screen.getByLabelText(/settlement deadline/i)).toBeInTheDocument();
   });
 
@@ -330,7 +337,7 @@ describe("CreateTournamentForm", () => {
       "aria-describedby",
       "settlement-deadline-help",
     );
-    expect(screen.getByText(/local time; stored on-chain as UTC/i)).toBeInTheDocument();
+    expect(screen.getByText(/stored on-chain as UTC/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /connect wallet/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /deploy soroban contract/i })).toBeDisabled();
 
@@ -348,7 +355,7 @@ describe("CreateTournamentForm", () => {
     expect(calculation).toHaveValue("equal");
     expect(calculation.parentElement).toHaveClass("w-full", "max-w-[24rem]");
     expect(
-      screen.getByText(/equal and descending update lower ranks; edit one to use custom/i),
+      screen.getByText(/editing a calculated rank switches the payout to custom/i),
     ).toBeInTheDocument();
     expect(screen.getByText(/6000 \/ 2000 \/ 2000 bps/i)).toBeInTheDocument();
   });
@@ -381,7 +388,7 @@ describe("CreateTournamentForm", () => {
       screen.getByText("3000 / 1000 / 1000 / 1000 / 1000 / 1000 / 1000 / 1000 bps"),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Rank 8 %")).toHaveValue(10);
-    expect(screen.getByText(/local time; stored on-chain as UTC/i)).toBeInTheDocument();
+    expect(screen.getByText(/stored on-chain as UTC/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /deploy soroban contract/i })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Top 4" }));
@@ -545,7 +552,7 @@ describe("CreateTournamentForm", () => {
       "type",
       "datetime-local",
     );
-    expect(screen.getByText(/local time; stored on-chain as UTC/i)).toBeInTheDocument();
+    expect(screen.getByText(/stored on-chain as UTC/i)).toBeInTheDocument();
     expect(screen.getByText(/choose 1 hour to 90 days ahead/i)).toBeInTheDocument();
   });
 

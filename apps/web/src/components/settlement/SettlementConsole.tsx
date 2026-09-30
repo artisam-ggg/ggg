@@ -163,8 +163,8 @@ export function SettlementConsole({
           <h1 className="text-[32px] font-bold italic -tracking-[0.02em] text-on-surface">
             Referee Settlement Console
           </h1>
-          <p className="mt-2 text-sm text-on-surface-variant">
-            Referee-only: drag or use keyboard buttons to assign {slots.length} ranked winners.
+          <p className="mt-2 text-xs text-on-surface-variant">
+            Assign {slots.length} ranked winners by drag-and-drop or keyboard.
           </p>
 
           <div className="mt-6">
@@ -261,9 +261,9 @@ export function SettlementConsole({
           className="glass-panel rounded-xl p-6 lg:col-span-4"
           aria-label="Candidate participants"
         >
-          <p className="label-caps text-on-surface-variant">Candidates</p>
+          <h2 className="text-lg font-semibold text-on-surface">Candidates</h2>
           <p className="mt-1 text-xs text-on-surface-variant">
-            Drag a card onto a slot, or use the Assign buttons.
+            Drag a player to a rank or use Assign.
           </p>
           <div className="mt-4 flex flex-col gap-3" role="list" aria-label="Participants">
             {participants.map((p) => (

@@ -573,7 +573,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
 
   const fieldClass =
     "w-full rounded-xl bg-surface-container-low border border-outline-variant px-4 py-3 text-on-surface focus:border-electric-violet-strong focus:outline focus:outline-1 focus:outline-electric-violet-strong transition-all focus:scale-[1.01]";
-  const labelClass = "label-caps block mb-2 text-on-surface-variant";
+  const labelClass = "mb-2 block text-sm font-medium text-on-surface";
   const monoFieldClass = `${fieldClass} data-mono text-acid-yellow`;
 
   const isSubmittable =
@@ -639,10 +639,8 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
       </div>
       {restored && hasDraft && (
         <div className="mt-4 rounded-xl border border-outline-variant p-4">
-          <p className="text-sm text-on-surface">
-            This browser saves and restores only non-wallet public tournament fields. The connected
-            organizer wallet, referee wallet, uploaded cover, and secret data are never stored in
-            the draft.
+          <p className="text-xs leading-relaxed text-on-surface-variant">
+            Draft restored. Wallets, cover images, and secrets are never stored.
           </p>
           <button
             type="button"
@@ -767,8 +765,8 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
           required
           aria-describedby="settlement-deadline-help"
         />
-        <p id="settlement-deadline-help" className="mt-1 text-sm text-on-surface-variant">
-          Local time; stored on-chain as UTC. Choose 1 hour to 90 days ahead.
+        <p id="settlement-deadline-help" className="mt-1 text-xs text-on-surface-variant">
+          Stored on-chain as UTC. Choose 1 hour to 90 days ahead.
         </p>
       </div>
 
@@ -789,8 +787,8 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
             <option value="descending">Descending ranked</option>
             <option value="custom">Custom</option>
           </select>
-          <p className="mt-1 text-sm text-on-surface-variant">
-            Equal and Descending update lower ranks; edit one to use Custom.
+          <p className="mt-1 text-xs text-on-surface-variant">
+            Editing a calculated rank switches the payout to Custom.
           </p>
           <div className="mt-3 flex flex-wrap gap-2" aria-label="Payout presets">
             {PAYOUT_PRESETS.map((preset) => (
@@ -878,7 +876,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
           </div>
         )}
         {splits.length === 1 && (
-          <p className="mt-1 text-sm text-on-surface-variant">
+          <p className="mt-1 text-xs leading-relaxed text-on-surface-variant">
             Adding a second payout rank starts both ranks at 50%. You can adjust first place
             afterward.
           </p>
@@ -947,27 +945,26 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
         <h2 id="tournament-preview-title" className="mt-1 text-2xl font-bold text-on-surface">
           Public tournament preview
         </h2>
-        <p className="mt-2 text-sm text-on-surface-variant">
-          Review what players will use before asking Freighter to sign. The safeguards and final
-          validation below still apply.
+        <p className="mt-2 text-xs text-on-surface-variant">
+          Confirm these details before signing in Freighter.
         </p>
         <dl className="mt-5 grid gap-4 sm:grid-cols-2">
           <div>
-            <dt className="label-caps text-on-surface-variant">Tournament</dt>
+            <dt className="text-sm font-medium text-on-surface-variant">Tournament</dt>
             <dd className="mt-1 text-on-surface">{name || "Not set"}</dd>
           </div>
           <div>
-            <dt className="label-caps text-on-surface-variant">Game</dt>
+            <dt className="text-sm font-medium text-on-surface-variant">Game</dt>
             <dd className="mt-1 text-on-surface">{gameTitle || "Not set"}</dd>
           </div>
           <div>
-            <dt className="label-caps text-on-surface-variant">Entry fee</dt>
+            <dt className="text-sm font-medium text-on-surface-variant">Entry fee</dt>
             <dd className="data-mono mt-1 text-on-surface">
               {entryFee ? `${entryFee} ${asset}` : "Not set"}
             </dd>
           </div>
           <div>
-            <dt className="label-caps text-on-surface-variant">Deadline</dt>
+            <dt className="text-sm font-medium text-on-surface-variant">Deadline</dt>
             <dd className="mt-1 text-on-surface">
               {settlementDeadline
                 ? `${settlementDeadline.replace("T", " ")} local time`
@@ -975,13 +972,13 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
             </dd>
           </div>
           <div className="sm:col-span-2">
-            <dt className="label-caps text-on-surface-variant">Referee</dt>
+            <dt className="text-sm font-medium text-on-surface-variant">Referee</dt>
             <dd className="data-mono mt-1 break-all text-on-surface">
               {refereeAddress || "Not set"}
             </dd>
           </div>
           <div>
-            <dt className="label-caps text-on-surface-variant">Payout ranks</dt>
+            <dt className="text-sm font-medium text-on-surface-variant">Payout ranks</dt>
             <dd className="mt-1 text-on-surface">
               {splitValid
                 ? splits.map((split, index) => `#${index + 1} ${split}%`).join(" · ")
@@ -989,7 +986,7 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
             </dd>
           </div>
           <div>
-            <dt className="label-caps text-on-surface-variant">Cover</dt>
+            <dt className="text-sm font-medium text-on-surface-variant">Cover</dt>
             <dd className="mt-1 text-on-surface">
               {coverUploadStatus === "complete"
                 ? "Uploaded and ready"

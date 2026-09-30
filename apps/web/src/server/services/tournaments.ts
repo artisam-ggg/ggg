@@ -431,6 +431,7 @@ export async function listTournaments(userId: string, q: ListQueryInput) {
       totalRefunded: totalRefunded.toString(),
       participantCount: t._count.participants,
       refundClaimedCount: refundClaimedPlayers.filter((player) => participants.has(player)).length,
+      coverImageUrl: t.coverImageKey ? `/api/tournaments/${encodeURIComponent(t.id)}/cover` : null,
     };
   });
 

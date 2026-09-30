@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
-import { TournamentListRow } from "./TournamentListRow";
+import { TournamentListRow, type ListItem } from "./TournamentListRow";
 
 vi.mock("next/link", () => ({
   default: ({
@@ -22,6 +22,7 @@ describe("TournamentListRow", () => {
   it("shows name, status chip, mono pool and participant count, linking to detail", () => {
     render(
       <TournamentListRow
+        featured
         t={{
           id: "t_1",
           name: "Cup",
@@ -36,6 +37,7 @@ describe("TournamentListRow", () => {
           totalRefunded: "0",
           participantCount: 3,
           refundClaimedCount: 0,
+          coverImageUrl: "/api/tournaments/t_1/cover",
         }}
       />,
     );
@@ -48,6 +50,9 @@ describe("TournamentListRow", () => {
     expect(pool).toHaveClass("data-mono");
 
     expect(screen.getByRole("link")).toHaveAttribute("href", "/tournaments/t_1");
+    expect(screen.getByTestId("featured-card-visual").firstElementChild).toHaveStyle({
+      backgroundImage: 'url("/api/tournaments/t_1/cover")',
+    });
   });
 
   it("does not contain a heading element inside the link", () => {
@@ -96,12 +101,69 @@ describe("TournamentListRow", () => {
       />,
     );
 
-    expect(screen.getAllByText(/0\.0000000 USDC/)).toHaveLength(1);
-    expect(screen.queryByText("Total collected")).not.toBeInTheDocument();
+    expect(screen.getAllByText(/0\.0000000 USDC/)).toHaveLength(3);
+    expect(screen.getByText("Total collected")).toBeInTheDocument();
+    expect(screen.getByText("Total paid out")).toBeInTheDocument();
     expect(screen.getByText("PREPARING")).toBeInTheDocument();
   });
 
-  it("shows the game title with label-caps", () => {
+  it("keeps the bento card's core summary fields in dedicated slots", () => {
+    const draft: ListItem = {
+      id: "t_slots",
+      name: "Empty Cup",
+      gameTitle: "SF6",
+      status: "DRAFT",
+      displayStatus: "DRAFT",
+      asset: "XLM",
+      entryFee: "0",
+      pool: "0",
+      totalCollected: "0",
+      totalPaidOut: "0",
+      totalRefunded: "0",
+      participantCount: 0,
+      refundClaimedCount: 0,
+    };
+    const { rerender } = render(<TournamentListRow t={draft} />);
+
+    const summary = screen.getByRole("group", { name: "Tournament summary" });
+    const draftSlots = Array.from(summary.querySelectorAll("[data-summary-slot]")).map((slot) =>
+      slot.getAttribute("data-summary-slot"),
+    );
+
+    expect(draftSlots).toEqual([
+      "pool",
+      "collected",
+      "paid-out",
+      "participants",
+      "refunds",
+      "refunded",
+    ]);
+    expect(summary.querySelector('[data-summary-slot="collected"]')).not.toBeEmptyDOMElement();
+    expect(screen.getByLabelText("Refunds not applicable")).toHaveTextContent("—");
+    expect(screen.getByLabelText("Total refunded not applicable")).toHaveTextContent("—");
+    expect(screen.getByText("PREPARING").closest('[data-summary-slot="status"]')).not.toBeNull();
+
+    rerender(
+      <TournamentListRow
+        t={{
+          ...draft,
+          id: "t_refunds",
+          status: "ACTIVE",
+          displayStatus: "REFUNDS_OPEN",
+          totalRefunded: "10000000",
+          participantCount: 2,
+          refundClaimedCount: 1,
+        }}
+      />,
+    );
+    const refundSummary = screen.getByRole("group", { name: "Tournament summary" });
+    const refundSlots = Array.from(refundSummary.querySelectorAll("[data-summary-slot]")).map(
+      (slot) => slot.getAttribute("data-summary-slot"),
+    );
+    expect(refundSlots).toEqual(draftSlots);
+  });
+
+  it("shows the game title as secondary sentence-case text", () => {
     render(
       <TournamentListRow
         t={{
@@ -123,7 +185,8 @@ describe("TournamentListRow", () => {
     );
 
     const gameTitle = screen.getByText("Tekken 8");
-    expect(gameTitle).toHaveClass("label-caps");
+    expect(gameTitle).toHaveClass("text-sm", "text-on-surface-variant");
+    expect(gameTitle).not.toHaveClass("label-caps");
   });
 
   it("shows confirmed refund progress with the derived lifecycle label", () => {
@@ -148,7 +211,7 @@ describe("TournamentListRow", () => {
     );
 
     expect(screen.getByText("REFUNDS AVAILABLE")).toBeInTheDocument();
-    expect(screen.getByLabelText("1 of 2 refunds claimed")).toHaveTextContent("1/2 refunds");
+    expect(screen.getByLabelText("1 of 2 refunds claimed")).toHaveTextContent("1/2 claimed");
   });
 
   it("labels remaining, collected, paid-out, and refunded totals", () => {

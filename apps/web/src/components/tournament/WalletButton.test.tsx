@@ -27,7 +27,7 @@ describe("WalletButton", () => {
     const btn = screen.getByRole("button", { name: /connect wallet/i });
     expect(btn).toBeInTheDocument();
     expect(btn).toHaveClass("label-caps");
-    expect(screen.getByText(/disconnected.*configured stellar network/i)).toBeInTheDocument();
+    expect(screen.getByText(/connect on the configured stellar network/i)).toBeInTheDocument();
   });
 
   it("shows the required network and public-address boundary", () => {
@@ -35,8 +35,8 @@ describe("WalletButton", () => {
       <WalletButton onConnected={vi.fn()} expectedPassphrase="Test SDF Network ; September 2015" />,
     );
 
-    expect(screen.getByText(/required network: stellar testnet/i)).toHaveTextContent(
-      /shares your public address only.*does not approve a transaction/i,
+    expect(screen.getByText(/connect on stellar testnet/i)).toHaveTextContent(
+      /shares your public address.*does not approve a transaction/i,
     );
   });
 
@@ -61,6 +61,7 @@ describe("WalletButton", () => {
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     // GABCDEFGHIJABCDEFGHIJ → slice(0,6)=GABCDE, slice(-5)=FGHIJ
     await waitFor(() => expect(screen.getByText(/GABCDE…FGHIJ/)).toBeInTheDocument());
+    expect(screen.queryByText(/connected on/i)).not.toBeInTheDocument();
   });
 
   it("connected chip has aria-label with full address", async () => {
@@ -126,7 +127,7 @@ describe("WalletButton", () => {
     fireEvent.click(recheck);
 
     await waitFor(() => expect(onConnected).toHaveBeenLastCalledWith("GABCDEFGHIJABCDEFGHIJ"));
-    expect(screen.getByText(/connected for the configured stellar network/i)).toBeInTheDocument();
+    expect(screen.queryByText(/wallet is not verified/i)).not.toBeInTheDocument();
   });
 
   it("acknowledges a re-check when the wallet is unchanged", async () => {
