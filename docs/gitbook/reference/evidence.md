@@ -13,6 +13,30 @@ The Epic 3 release completed on 24 September 2026 from public revision
 | Public CI | [`develop` run 35977199117](https://github.com/artisam-ggg/ggg/actions/runs/35977199117) · [`staging` run 35977199084](https://github.com/artisam-ggg/ggg/actions/runs/35977199084) | App and contract jobs passed against the exact public release revision |
 | Demo | [Edited full-flow video](https://drive.google.com/file/d/1NvTigSXywA8Uk5PpIhEwdjDpWx_DfKmd/view?usp=sharing) · [Focused 3–5 minute backup](https://drive.google.com/file/d/1JZzdBZbKMkwqt4xU2s-6N3WKPCHwFAge/view?usp=sharing) ([#347](https://github.com/webnxt-2030/ggg/issues/347)) | The original reviewer-facing recording covers the deployed Testnet flows and has verified anonymous access. The backup share page returned HTTP 200 without authentication on 30 September 2026. The recording author reviewed the finished video and confirmed it follows the final #347 script: create → three joins → referee settlement → payout. |
 
+### Focused backup recording
+
+The recording author identified Testnet contract
+[`CCMC…ZNSG`](https://stellar.expert/explorer/testnet/contract/CCMCCNILFZPYR3Q5PPGWIKXG4KFUEX7PSBJTG4GWZQ6ZQRGP2YGWZNSG)
+as the tournament used in the focused #347 recording. Its public history records
+exactly five successful invocations on 30 September 2026:
+
+- [Deploy and constructor](https://stellar.expert/explorer/testnet/tx/ca281afb7cfdc05b6f001f8a6d37e22c8b1265f209b7377e7b7e78d7668fd0ba)
+  at `07:56:32Z`.
+- [Join 1](https://stellar.expert/explorer/testnet/tx/5ef764e4984603da420c785e715e633d9eac86aecde2d82204e30cdc72083577)
+  at `07:56:57Z`.
+- [Join 2](https://stellar.expert/explorer/testnet/tx/2905fb5abec8251be12ecf381f0615999e843073496177d1373c8366b0d3d5ec)
+  at `07:57:17Z`.
+- [Join 3](https://stellar.expert/explorer/testnet/tx/4863b5a265467c6e7c61b053fac8f79dfa359c877e4cc75d8743b18a34e8216d)
+  at `07:57:37Z`.
+- [Referee finalization and payout](https://stellar.expert/explorer/testnet/tx/9361ff095b62040041a27a2ef2c14f7ce93f934d5200c12bd111b3573f980490)
+  at `07:58:22Z`.
+
+The contract event trail contains three `registered` events followed by one
+`finalized` event. This independently anchors the recording author's stated
+create → three joins → referee settlement → payout flow to public Testnet
+transactions; it does not by itself identify the deployed app revision or the
+archive file format.
+
 ### Ranked settlement
 
 Contract [`CBY7…OK3B`](https://stellar.expert/explorer/testnet/contract/CBY7HPZHB3LNCZOB6LP6HAL5YF6DI3VZCACLI6H5K72ETI6ZFKDKOK3B):
