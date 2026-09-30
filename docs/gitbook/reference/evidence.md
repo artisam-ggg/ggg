@@ -34,8 +34,15 @@ exactly five successful invocations on 30 September 2026:
 The contract event trail contains three `registered` events followed by one
 `finalized` event. This independently anchors the recording author's stated
 create → three joins → referee settlement → payout flow to public Testnet
-transactions; it does not by itself identify the deployed app revision or the
-archive file format.
+transactions. The recording used the public `staging` deployment at revision
+[`1021738`](https://github.com/webnxt-2030/ggg/commit/10217383f84acda7ef0084b05fc63890da05cf7a),
+the latest commit on that branch when the transactions were confirmed. Later
+UI/UX additions were intentionally absent and are outside the SOW demo scope.
+
+The recording author confirmed that the linked Google Drive file is the MP4
+archival copy and will remain hosted. The wallets and authenticated sessions
+were prepared before recording, so no wallet setup, secrets, recovery material,
+credentials, or signed XDR were shown.
 
 ### Ranked settlement
 
