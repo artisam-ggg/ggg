@@ -59,7 +59,7 @@ describe("RefereePanel", () => {
     expect(screen.getByRole("dialog", { name: "Finalize payouts" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /read the full guide/i })).toHaveAttribute(
       "href",
-      "https://goodgameguild.gitbook.io/ggg/role-guides/referee-guide",
+      "https://goodgameguild.gitbook.io/ggg/guides/referee",
     );
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 

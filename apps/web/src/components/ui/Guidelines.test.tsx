@@ -8,25 +8,25 @@ describe("Guidelines", () => {
       "organizer",
       "Create a tournament",
       /set the entry fee/i,
-      "https://goodgameguild.gitbook.io/ggg/role-guides/organizer-guide",
+      "https://goodgameguild.gitbook.io/ggg/guides/organizer",
     ],
     [
       "player",
       "Join a tournament",
       /public tournament page/i,
-      "https://goodgameguild.gitbook.io/ggg/role-guides/player-guide",
+      "https://goodgameguild.gitbook.io/ggg/guides/player",
     ],
     [
       "referee",
       "Finalize payouts",
       /exact referee wallet/i,
-      "https://goodgameguild.gitbook.io/ggg/role-guides/referee-guide",
+      "https://goodgameguild.gitbook.io/ggg/guides/referee",
     ],
     [
       "refund",
       "Claim a refund",
       /wallet that joined/i,
-      "https://goodgameguild.gitbook.io/ggg/role-guides/player-guide",
+      "https://goodgameguild.gitbook.io/ggg/guides/player",
     ],
   ] as const)("opens %s guidance and links to its full guide", (journey, title, step, href) => {
     render(<Guidelines journey={journey} />);

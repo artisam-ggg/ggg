@@ -129,7 +129,7 @@ describe("JoinCard", () => {
     expect(screen.getByText(/approve the join transaction/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /read the full guide/i })).toHaveAttribute(
       "href",
-      "https://goodgameguild.gitbook.io/ggg/role-guides/player-guide",
+      "https://goodgameguild.gitbook.io/ggg/guides/player",
     );
   });
 

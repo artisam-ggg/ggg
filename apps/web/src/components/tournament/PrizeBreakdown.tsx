@@ -47,7 +47,7 @@ export function PrizeBreakdown({
   return (
     <section
       aria-labelledby="prize-breakdown-heading"
-      className="rounded-xl bg-surface-container p-5"
+      className="rounded-xl border border-primary/35 bg-surface-container-high p-5 shadow-[0_0_24px_rgba(255,190,46,0.07)]"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 id="prize-breakdown-heading" className="text-base font-semibold text-on-surface">
