@@ -24,7 +24,7 @@ const guides: Record<Journey, GuideContent> = {
       "Set the entry fee, referee wallet, deadline, and payout ranks.",
       "Connect Freighter and approve one deployment transaction.",
     ],
-    guideUrl: "https://goodgameguild.gitbook.io/ggg/role-guides/organizer-guide",
+    guideUrl: "https://goodgameguild.gitbook.io/ggg/guides/organizer",
   },
   player: {
     title: "Join a tournament",
@@ -32,7 +32,7 @@ const guides: Record<Journey, GuideContent> = {
       "Review the entry fee and deadline on the public tournament page.",
       "Connect Freighter, then approve the join transaction.",
     ],
-    guideUrl: "https://goodgameguild.gitbook.io/ggg/role-guides/player-guide",
+    guideUrl: "https://goodgameguild.gitbook.io/ggg/guides/player",
   },
   referee: {
     title: "Finalize payouts",
@@ -40,7 +40,7 @@ const guides: Record<Journey, GuideContent> = {
       "Verify the exact referee wallet selected by the organizer.",
       "Assign a distinct participant to each rank, then approve finalization.",
     ],
-    guideUrl: "https://goodgameguild.gitbook.io/ggg/role-guides/referee-guide",
+    guideUrl: "https://goodgameguild.gitbook.io/ggg/guides/referee",
   },
   refund: {
     title: "Claim a refund",
@@ -48,7 +48,7 @@ const guides: Record<Journey, GuideContent> = {
       "Connect the wallet that joined the tournament.",
       "Submit once, then wait for the confirmed refund status.",
     ],
-    guideUrl: "https://goodgameguild.gitbook.io/ggg/role-guides/player-guide",
+    guideUrl: "https://goodgameguild.gitbook.io/ggg/guides/player",
   },
 };
 

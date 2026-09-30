@@ -238,7 +238,7 @@ describe("CreateTournamentForm", () => {
     fireEvent.change(screen.getByLabelText(/cover image/i), {
       target: { files: [new File(["img"], "cover.png", { type: "image/png" })] },
     });
-    await screen.findByText("Uploaded: covers/img.png");
+    await screen.findByText("Cover uploaded and ready.");
 
     localStorage.setItem(
       "ggg:tournament-create-draft",
@@ -255,7 +255,7 @@ describe("CreateTournamentForm", () => {
     window.dispatchEvent(new StorageEvent("storage", { key: "ggg:tournament-create-draft" }));
 
     expect(screen.getByLabelText(`Wallet ${MOCK_ORGANIZER}`)).toBeInTheDocument();
-    expect(screen.getByText("Uploaded: covers/img.png")).toBeInTheDocument();
+    expect(screen.getByText("Cover uploaded and ready.")).toBeInTheDocument();
     vi.unstubAllGlobals();
   });
 
@@ -345,7 +345,7 @@ describe("CreateTournamentForm", () => {
     expect(screen.getByRole("dialog", { name: "Create a tournament" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /read the full guide/i })).toHaveAttribute(
       "href",
-      "https://goodgameguild.gitbook.io/ggg/role-guides/organizer-guide",
+      "https://goodgameguild.gitbook.io/ggg/guides/organizer",
     );
   });
 
@@ -353,7 +353,8 @@ describe("CreateTournamentForm", () => {
     render(<CreateTournamentForm expectedPassphrase="P" />);
     const calculation = screen.getByLabelText(/payout calculation/i);
     expect(calculation).toHaveValue("equal");
-    expect(calculation.parentElement).toHaveClass("w-full", "max-w-[24rem]");
+    expect(calculation.parentElement).toHaveClass("w-full");
+    expect(calculation.parentElement).not.toHaveClass("max-w-[24rem]");
     expect(
       screen.getByText(/editing a calculated rank switches the payout to custom/i),
     ).toBeInTheDocument();
@@ -429,9 +430,10 @@ describe("CreateTournamentForm", () => {
     const remove = screen.getByRole("button", { name: "Remove last rank" });
 
     expect(add).toHaveAttribute("data-variant", "default");
-    expect(remove).toHaveAttribute("data-variant", "destructive");
-    expect(add).toHaveClass("h-11", "w-full", "sm:w-auto");
-    expect(remove).toHaveClass("h-11", "w-full", "sm:w-auto");
+    expect(remove).toHaveAttribute("data-variant", "outline");
+    expect(add.parentElement).toHaveClass("grid", "sm:grid-cols-2");
+    expect(add).toHaveClass("h-11", "w-full");
+    expect(remove).toHaveClass("h-11", "w-full");
     expect(add.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
     expect(remove.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
     add.focus();

@@ -624,17 +624,17 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
 
   return (
     <form
-      className="kinetic-glass rounded-2xl p-8"
+      className="kinetic-glass rounded-2xl p-6 lg:p-8"
       onSubmit={(e) => {
         e.preventDefault();
         handleDeploy();
       }}
       aria-label="Create tournament"
     >
-      <h1 className="text-[32px] font-bold -tracking-[0.02em] text-on-surface">
-        Create Tournament
-      </h1>
-      <div className="mt-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <h1 className="text-[32px] font-bold -tracking-[0.02em] text-on-surface">
+          Create Tournament
+        </h1>
         <Guidelines journey="organizer" />
       </div>
       {restored && hasDraft && (
@@ -651,434 +651,446 @@ export function CreateTournamentForm({ expectedPassphrase }: CreateTournamentFor
           </button>
         </div>
       )}
-      {/* Tournament Name */}
-      <div className="mt-8">
-        <label className={labelClass} htmlFor="name">
-          Tournament Name
-        </label>
-        <input
-          id="name"
-          type="text"
-          className={fieldClass}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-          maxLength={120}
-          aria-describedby={undefined}
-        />
-      </div>
-
-      {/* Game Title */}
-      <div className="mt-6">
-        <label className={labelClass} htmlFor="gameTitle">
-          Game Title
-        </label>
-        <input
-          id="gameTitle"
-          type="text"
-          className={fieldClass}
-          value={gameTitle}
-          onChange={(e) => setGameTitle(e.target.value)}
-          required
-          maxLength={120}
-        />
-      </div>
-
-      {/* Entry Fee + Asset */}
-      <div className="mt-6 grid grid-cols-3 gap-4">
-        <div className="col-span-2">
-          <label className={labelClass} htmlFor="entryFee">
-            Entry Fee ({asset})
-          </label>
-          <input
-            id="entryFee"
-            type="text"
-            inputMode="decimal"
-            className={monoFieldClass}
-            value={entryFee}
-            onChange={(e) => {
-              setEntryFee(e.target.value);
-              setEntryFeeError(null);
-            }}
-            placeholder="0.0000000"
-            aria-describedby={entryFeeError ? "entry-fee-error" : undefined}
-          />
-          {entryFeeError && (
-            <p id="entry-fee-error" role="alert" className="mt-1 text-sm text-error">
-              {entryFeeError}
-            </p>
-          )}
-        </div>
+      <div
+        className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,3fr)_minmax(22rem,2fr)]"
+        data-testid="create-tournament-grid"
+      >
         <div>
-          <label className={labelClass} htmlFor="asset">
-            Asset
-          </label>
-          <select
-            id="asset"
-            className={fieldClass}
-            value={asset}
-            onChange={(e) => setAsset(e.target.value as "XLM" | "USDC")}
-          >
-            <option value="XLM">XLM</option>
-            <option value="USDC">USDC</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Referee Address */}
-      <div className="mt-6">
-        <label className={labelClass} htmlFor="refereeAddress">
-          Referee Wallet Address
-        </label>
-        <input
-          id="refereeAddress"
-          type="text"
-          className={`${monoFieldClass}${refereeError ? " border-error" : ""}`}
-          value={refereeAddress}
-          onChange={(e) => {
-            setRefereeAddress(e.target.value);
-            setRefereeError(null);
-          }}
-          placeholder="G…"
-          required
-          aria-invalid={refereeError ? true : undefined}
-          aria-describedby={refereeError ? "referee-address-error" : undefined}
-        />
-        {refereeError && (
-          <p id="referee-address-error" role="alert" className="mt-1 text-sm text-error">
-            {refereeError}
-          </p>
-        )}
-      </div>
-
-      {/* Settlement Deadline */}
-      <div className="mt-6">
-        <label className={labelClass} htmlFor="settlementDeadline">
-          Settlement Deadline (your local time)
-        </label>
-        <input
-          id="settlementDeadline"
-          type="datetime-local"
-          className={fieldClass}
-          value={settlementDeadline}
-          onChange={(e) => setSettlementDeadline(e.target.value)}
-          required
-          aria-describedby="settlement-deadline-help"
-        />
-        <p id="settlement-deadline-help" className="mt-1 text-xs text-on-surface-variant">
-          Stored on-chain as UTC. Choose 1 hour to 90 days ahead.
-        </p>
-      </div>
-
-      {/* Prize Split */}
-      <fieldset className="mt-6">
-        <legend className={labelClass}>Prize Split (%)</legend>
-        <div className="mb-4 w-full max-w-[24rem]">
-          <label className={labelClass} htmlFor="distributionMode">
-            Payout calculation
-          </label>
-          <select
-            id="distributionMode"
-            className={fieldClass}
-            value={distributionMode}
-            onChange={(event) => changeDistributionMode(event.target.value as DistributionMode)}
-          >
-            <option value="equal">Equal remainder</option>
-            <option value="descending">Descending ranked</option>
-            <option value="custom">Custom</option>
-          </select>
-          <p className="mt-1 text-xs text-on-surface-variant">
-            Editing a calculated rank switches the payout to Custom.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2" aria-label="Payout presets">
-            {PAYOUT_PRESETS.map((preset) => (
-              <Button
-                key={preset.label}
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => applyPayoutPreset(preset)}
-              >
-                {preset.label}
-              </Button>
-            ))}
-          </div>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-3">
-          {splits.map((split, i) => (
-            <div key={i}>
-              <label className={labelClass} htmlFor={`split-${i}`}>
-                {["1st", "2nd", "3rd"][i] ?? `Rank ${i + 1}`} %
-              </label>
-              <input
-                id={`split-${i}`}
-                type="number"
-                min={0.01}
-                max={100}
-                step={0.01}
-                className={monoFieldClass}
-                value={split}
-                disabled={splits.length === 1}
-                onChange={(e) => {
-                  if (i === 0) {
-                    changeFirstPlace(e.target.valueAsNumber);
-                    return;
-                  }
-                  const next = [...splits];
-                  next[i] = Number(e.target.value);
-                  setSplits(next);
-                  setDistributionMode("custom");
-                }}
-                aria-describedby={
-                  i === 0 && firstPlaceError
-                    ? "first-place-error"
-                    : !splitValid
-                      ? "split-error"
-                      : undefined
-                }
-              />
-            </div>
-          ))}
-        </div>
-        <div className="mt-3 flex flex-col gap-3 sm:flex-row">
-          <Button
-            type="button"
-            size="lg"
-            className="h-11 w-full sm:w-auto"
-            disabled={splits.length >= 10}
-            onClick={() => changeWinnerCount(splits.length + 1)}
-          >
-            <Plus aria-hidden="true" />
-            Add payout rank
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            size="lg"
-            className="h-11 w-full sm:w-auto"
-            disabled={splits.length <= 1}
-            onClick={() => changeWinnerCount(splits.length - 1)}
-          >
-            <Minus aria-hidden="true" />
-            Remove last rank
-          </Button>
-        </div>
-        <p className="data-mono mt-3 text-sm text-on-surface-variant" aria-live="polite">
-          {bps.join(" / ")} bps
-        </p>
-        {splitValid && (
-          <div className="mt-4">
-            <PrizeBreakdown
-              distributionBps={bps}
-              asset={asset}
-              heading="Configured prize breakdown"
+          {/* Tournament Name */}
+          <div>
+            <label className={labelClass} htmlFor="name">
+              Tournament Name
+            </label>
+            <input
+              id="name"
+              type="text"
+              className={fieldClass}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              maxLength={120}
+              aria-describedby={undefined}
             />
           </div>
-        )}
-        {splits.length === 1 && (
-          <p className="mt-1 text-xs leading-relaxed text-on-surface-variant">
-            Adding a second payout rank starts both ranks at 50%. You can adjust first place
-            afterward.
-          </p>
-        )}
-        {firstPlaceError && (
-          <p id="first-place-error" role="alert" className="mt-1 text-sm text-error">
-            {firstPlaceError}
-          </p>
-        )}
-        {!splitValid && (
-          <p id="split-error" role="alert" className="mt-1 text-sm text-error">
-            Split must sum to 100 using hundredths of a percent (currently {splitSum})
-          </p>
-        )}
-      </fieldset>
 
-      {/* Cover Image (optional) */}
-      <div className="mt-6">
-        <label className={labelClass} htmlFor="coverImage">
-          Cover Image (optional)
-        </label>
-        <input
-          id="coverImage"
-          type="file"
-          ref={coverImageInput}
-          accept="image/png,image/jpeg,image/webp"
-          className={fieldClass}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) {
-              void handleCoverUpload(file);
-            }
-          }}
-        />
-        {coverImageKey && (
-          <p className="data-mono mt-1 text-xs text-on-surface-variant">
-            Uploaded: {coverImageKey}
-          </p>
-        )}
-        {coverPreviewUrl && (
-          <Image
-            src={coverPreviewUrl}
-            alt="Tournament cover preview"
-            width={640}
-            height={240}
-            unoptimized
-            className="mt-3 aspect-[8/3] w-full rounded-xl object-cover"
-          />
-        )}
-        {coverUploadStatus !== "idle" && (
-          <button
-            type="button"
-            onClick={removeCoverImage}
-            className="label-caps mt-2 text-sm text-on-surface-variant underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
-          >
-            Remove cover image
-          </button>
-        )}
-      </div>
+          {/* Game Title */}
+          <div className="mt-6">
+            <label className={labelClass} htmlFor="gameTitle">
+              Game Title
+            </label>
+            <input
+              id="gameTitle"
+              type="text"
+              className={fieldClass}
+              value={gameTitle}
+              onChange={(e) => setGameTitle(e.target.value)}
+              required
+              maxLength={120}
+            />
+          </div>
 
-      <section
-        className="mt-8 rounded-xl border border-outline-variant bg-surface-container-low p-6"
-        aria-labelledby="tournament-preview-title"
-      >
-        <p className="label-caps text-primary">Pre-deployment review</p>
-        <h2 id="tournament-preview-title" className="mt-1 text-2xl font-bold text-on-surface">
-          Public tournament preview
-        </h2>
-        <p className="mt-2 text-xs text-on-surface-variant">
-          Confirm these details before signing in Freighter.
-        </p>
-        <dl className="mt-5 grid gap-4 sm:grid-cols-2">
-          <div>
-            <dt className="text-sm font-medium text-on-surface-variant">Tournament</dt>
-            <dd className="mt-1 text-on-surface">{name || "Not set"}</dd>
+          {/* Entry Fee + Asset */}
+          <div className="mt-6 grid grid-cols-3 gap-4">
+            <div className="col-span-2">
+              <label className={labelClass} htmlFor="entryFee">
+                Entry Fee ({asset})
+              </label>
+              <input
+                id="entryFee"
+                type="text"
+                inputMode="decimal"
+                className={monoFieldClass}
+                value={entryFee}
+                onChange={(e) => {
+                  setEntryFee(e.target.value);
+                  setEntryFeeError(null);
+                }}
+                placeholder="0.0000000"
+                aria-describedby={entryFeeError ? "entry-fee-error" : undefined}
+              />
+              {entryFeeError && (
+                <p id="entry-fee-error" role="alert" className="mt-1 text-sm text-error">
+                  {entryFeeError}
+                </p>
+              )}
+            </div>
+            <div>
+              <label className={labelClass} htmlFor="asset">
+                Asset
+              </label>
+              <select
+                id="asset"
+                className={fieldClass}
+                value={asset}
+                onChange={(e) => setAsset(e.target.value as "XLM" | "USDC")}
+              >
+                <option value="XLM">XLM</option>
+                <option value="USDC">USDC</option>
+              </select>
+            </div>
           </div>
-          <div>
-            <dt className="text-sm font-medium text-on-surface-variant">Game</dt>
-            <dd className="mt-1 text-on-surface">{gameTitle || "Not set"}</dd>
-          </div>
-          <div>
-            <dt className="text-sm font-medium text-on-surface-variant">Entry fee</dt>
-            <dd className="data-mono mt-1 text-on-surface">
-              {entryFee ? `${entryFee} ${asset}` : "Not set"}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-sm font-medium text-on-surface-variant">Deadline</dt>
-            <dd className="mt-1 text-on-surface">
-              {settlementDeadline
-                ? `${settlementDeadline.replace("T", " ")} local time`
-                : "Not set"}
-            </dd>
-          </div>
-          <div className="sm:col-span-2">
-            <dt className="text-sm font-medium text-on-surface-variant">Referee</dt>
-            <dd className="data-mono mt-1 break-all text-on-surface">
-              {refereeAddress || "Not set"}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-sm font-medium text-on-surface-variant">Payout ranks</dt>
-            <dd className="mt-1 text-on-surface">
-              {splitValid
-                ? splits.map((split, index) => `#${index + 1} ${split}%`).join(" · ")
-                : "Resolve the payout validation above"}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-sm font-medium text-on-surface-variant">Cover</dt>
-            <dd className="mt-1 text-on-surface">
-              {coverUploadStatus === "complete"
-                ? "Uploaded and ready"
-                : coverUploadStatus === "uploading"
-                  ? "Uploading"
-                  : coverUploadStatus === "failed"
-                    ? "Upload needs attention"
-                    : "Default tournament cover"}
-            </dd>
-          </div>
-        </dl>
-      </section>
 
-      {/* Wallet + Deploy */}
-      <div className="mt-8">
-        <WalletActionNotice expectedPassphrase={expectedPassphrase}>
-          Deploying creates the tournament escrow from the reviewed settings above.
-        </WalletActionNotice>
-      </div>
-      <div className="mt-8 flex flex-wrap items-center gap-4">
-        <WalletButton
-          expectedPassphrase={expectedPassphrase}
-          onConnected={(address) => setOrganizerAddress(address ?? "")}
-        />
-        <button
-          type="submit"
-          disabled={!isSubmittable}
-          className="brutalist-border label-caps bg-electric-violet-strong px-8 py-4 uppercase italic text-background transition-transform hover:-translate-y-0.5 active:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-acid-yellow"
-        >
-          Deploy Soroban Contract
-        </button>
-      </div>
+          {/* Referee Address */}
+          <div className="mt-6">
+            <label className={labelClass} htmlFor="refereeAddress">
+              Referee Wallet Address
+            </label>
+            <input
+              id="refereeAddress"
+              type="text"
+              className={`${monoFieldClass}${refereeError ? " border-error" : ""}`}
+              value={refereeAddress}
+              onChange={(e) => {
+                setRefereeAddress(e.target.value);
+                setRefereeError(null);
+              }}
+              placeholder="G…"
+              required
+              aria-invalid={refereeError ? true : undefined}
+              aria-describedby={refereeError ? "referee-address-error" : undefined}
+            />
+            {refereeError && (
+              <p id="referee-address-error" role="alert" className="mt-1 text-sm text-error">
+                {refereeError}
+              </p>
+            )}
+          </div>
 
-      {/* Inline error */}
-      {error && (
-        <div role="alert" className="mt-4 text-sm text-error" aria-live="assertive">
-          <p>{error}</p>
-          {errorTxHash && (
-            <a
-              href={transactionExplorerUrl(errorTxHash, expectedPassphrase)}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-1 inline-block underline"
-            >
-              View transaction
-            </a>
-          )}
-          {pendingDeployment && !awaitingConfirmation && (
-            <button
-              type="button"
-              onClick={() => void retryDeployment()}
-              disabled={preparedOrganizerMismatch}
-              className="label-caps mt-2 block text-sm underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
-            >
-              Retry deployment
-            </button>
-          )}
+          {/* Settlement Deadline */}
+          <div className="mt-6">
+            <label className={labelClass} htmlFor="settlementDeadline">
+              Settlement Deadline (your local time)
+            </label>
+            <input
+              id="settlementDeadline"
+              type="datetime-local"
+              className={fieldClass}
+              value={settlementDeadline}
+              onChange={(e) => setSettlementDeadline(e.target.value)}
+              required
+              aria-describedby="settlement-deadline-help"
+            />
+            <p id="settlement-deadline-help" className="mt-1 text-xs text-on-surface-variant">
+              Stored on-chain as UTC. Choose 1 hour to 90 days ahead.
+            </p>
+          </div>
+
+          {/* Prize Split */}
+          <fieldset className="mt-8 border-t border-outline-variant pt-6">
+            <legend className="pr-3 text-lg font-semibold text-on-surface">Prize Split (%)</legend>
+            <div className="mb-4 w-full">
+              <label className={labelClass} htmlFor="distributionMode">
+                Payout calculation
+              </label>
+              <select
+                id="distributionMode"
+                className={fieldClass}
+                value={distributionMode}
+                onChange={(event) => changeDistributionMode(event.target.value as DistributionMode)}
+              >
+                <option value="equal">Equal remainder</option>
+                <option value="descending">Descending ranked</option>
+                <option value="custom">Custom</option>
+              </select>
+              <p className="mt-1 text-xs text-on-surface-variant">
+                Editing a calculated rank switches the payout to Custom.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2" aria-label="Payout presets">
+                {PAYOUT_PRESETS.map((preset) => (
+                  <Button
+                    key={preset.label}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => applyPayoutPreset(preset)}
+                  >
+                    {preset.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              {splits.map((split, i) => (
+                <div key={i}>
+                  <label className={labelClass} htmlFor={`split-${i}`}>
+                    {["1st", "2nd", "3rd"][i] ?? `Rank ${i + 1}`} %
+                  </label>
+                  <input
+                    id={`split-${i}`}
+                    type="number"
+                    min={0.01}
+                    max={100}
+                    step={0.01}
+                    className={monoFieldClass}
+                    value={split}
+                    disabled={splits.length === 1}
+                    onChange={(e) => {
+                      if (i === 0) {
+                        changeFirstPlace(e.target.valueAsNumber);
+                        return;
+                      }
+                      const next = [...splits];
+                      next[i] = Number(e.target.value);
+                      setSplits(next);
+                      setDistributionMode("custom");
+                    }}
+                    aria-describedby={
+                      i === 0 && firstPlaceError
+                        ? "first-place-error"
+                        : !splitValid
+                          ? "split-error"
+                          : undefined
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <Button
+                type="button"
+                size="lg"
+                className="h-11 w-full"
+                disabled={splits.length >= 10}
+                onClick={() => changeWinnerCount(splits.length + 1)}
+              >
+                <Plus aria-hidden="true" />
+                Add payout rank
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="h-11 w-full border-error text-error hover:bg-error-container hover:text-on-error-container"
+                disabled={splits.length <= 1}
+                onClick={() => changeWinnerCount(splits.length - 1)}
+              >
+                <Minus aria-hidden="true" />
+                Remove last rank
+              </Button>
+            </div>
+            <p className="data-mono mt-3 text-sm text-on-surface-variant" aria-live="polite">
+              {bps.join(" / ")} bps
+            </p>
+            {splitValid && (
+              <div className="mt-4">
+                <PrizeBreakdown
+                  distributionBps={bps}
+                  asset={asset}
+                  heading="Configured prize breakdown"
+                />
+              </div>
+            )}
+            {splits.length === 1 && (
+              <p className="mt-1 text-xs leading-relaxed text-on-surface-variant">
+                Adding a second payout rank starts both ranks at 50%. You can adjust first place
+                afterward.
+              </p>
+            )}
+            {firstPlaceError && (
+              <p id="first-place-error" role="alert" className="mt-1 text-sm text-error">
+                {firstPlaceError}
+              </p>
+            )}
+            {!splitValid && (
+              <p id="split-error" role="alert" className="mt-1 text-sm text-error">
+                Split must sum to 100 using hundredths of a percent (currently {splitSum})
+              </p>
+            )}
+          </fieldset>
         </div>
-      )}
 
-      {preparedOrganizerMismatch && !awaitingConfirmation && (
-        <p className="mt-4 text-sm text-error" role="alert">
-          This deployment was prepared for a different organizer. Connect the original organizer
-          wallet before retrying.
-        </p>
-      )}
+        <aside className="space-y-6 lg:sticky lg:top-6" data-testid="deployment-sidebar">
+          {/* Cover Image (optional) */}
+          <section className="rounded-xl border border-outline-variant bg-surface-container-low p-5">
+            <label className={labelClass} htmlFor="coverImage">
+              Cover Image (optional)
+            </label>
+            <input
+              id="coverImage"
+              type="file"
+              ref={coverImageInput}
+              accept="image/png,image/jpeg,image/webp"
+              className={fieldClass}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  void handleCoverUpload(file);
+                }
+              }}
+            />
+            {coverImageKey && (
+              <p className="mt-2 text-xs text-on-surface-variant">Cover uploaded and ready.</p>
+            )}
+            {coverPreviewUrl && (
+              <Image
+                src={coverPreviewUrl}
+                alt="Tournament cover preview"
+                width={640}
+                height={240}
+                unoptimized
+                className="mt-3 aspect-[8/3] w-full rounded-xl object-cover"
+              />
+            )}
+            {coverUploadStatus !== "idle" && (
+              <button
+                type="button"
+                onClick={removeCoverImage}
+                className="label-caps mt-2 text-sm text-on-surface-variant underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+              >
+                Remove cover image
+              </button>
+            )}
+          </section>
 
-      {awaitingConfirmation && pendingDeployment && (
-        <div className="mt-4 text-sm text-on-surface-variant" role="status">
-          <p>
-            Deployment was submitted and may still confirm. Do not resubmit while its status is
-            being checked.
-          </p>
-          {errorTxHash && (
-            <a
-              href={transactionExplorerUrl(errorTxHash, expectedPassphrase)}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-1 inline-block underline"
-            >
-              View transaction
-            </a>
-          )}
-          <button
-            type="button"
-            onClick={() => void refreshDeploymentStatus()}
-            className="label-caps mt-2 block text-sm underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+          <section
+            className="rounded-xl border border-outline-variant bg-surface-container-low p-5"
+            aria-labelledby="tournament-preview-title"
           >
-            Check deployment status
-          </button>
-        </div>
-      )}
+            <p className="label-caps text-primary">Pre-deployment review</p>
+            <h2 id="tournament-preview-title" className="mt-1 text-2xl font-bold text-on-surface">
+              Public tournament preview
+            </h2>
+            <p className="mt-2 text-xs text-on-surface-variant">
+              Confirm these details before signing in Freighter.
+            </p>
+            <dl className="mt-5 grid gap-4 sm:grid-cols-2">
+              <div>
+                <dt className="text-sm font-medium text-on-surface-variant">Tournament</dt>
+                <dd className="mt-1 text-on-surface">{name || "Not set"}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-on-surface-variant">Game</dt>
+                <dd className="mt-1 text-on-surface">{gameTitle || "Not set"}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-on-surface-variant">Entry fee</dt>
+                <dd className="data-mono mt-1 text-on-surface">
+                  {entryFee ? `${entryFee} ${asset}` : "Not set"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-on-surface-variant">Deadline</dt>
+                <dd className="mt-1 text-on-surface">
+                  {settlementDeadline
+                    ? `${settlementDeadline.replace("T", " ")} local time`
+                    : "Not set"}
+                </dd>
+              </div>
+              <div className="sm:col-span-2">
+                <dt className="text-sm font-medium text-on-surface-variant">Referee</dt>
+                <dd className="data-mono mt-1 break-all text-on-surface">
+                  {refereeAddress || "Not set"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-on-surface-variant">Payout ranks</dt>
+                <dd className="mt-1 text-on-surface">
+                  {splitValid
+                    ? splits.map((split, index) => `#${index + 1} ${split}%`).join(" · ")
+                    : "Resolve the payout validation above"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-on-surface-variant">Cover</dt>
+                <dd className="mt-1 text-on-surface">
+                  {coverUploadStatus === "complete"
+                    ? "Uploaded and ready"
+                    : coverUploadStatus === "uploading"
+                      ? "Uploading"
+                      : coverUploadStatus === "failed"
+                        ? "Upload needs attention"
+                        : "Default tournament cover"}
+                </dd>
+              </div>
+            </dl>
+          </section>
+
+          {/* Wallet + Deploy */}
+          <section className="rounded-xl border border-primary/40 bg-surface-container-low p-5 shadow-[0_0_24px_rgba(255,190,46,0.06)]">
+            <p className="label-caps text-primary">Final step</p>
+            <h2 className="mt-1 text-xl font-bold text-on-surface">Review and deploy</h2>
+            <div className="mt-4">
+              <WalletActionNotice expectedPassphrase={expectedPassphrase}>
+                Deploying creates the tournament escrow from the reviewed settings above.
+              </WalletActionNotice>
+            </div>
+            <div className="mt-5 grid gap-3">
+              <WalletButton
+                expectedPassphrase={expectedPassphrase}
+                onConnected={(address) => setOrganizerAddress(address ?? "")}
+                buttonClassName="h-12 w-full"
+              />
+              <button
+                type="submit"
+                disabled={!isSubmittable}
+                className="brutalist-border label-caps h-12 w-full bg-electric-violet-strong px-6 uppercase italic text-background transition-transform hover:-translate-y-0.5 active:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-acid-yellow"
+              >
+                Deploy Soroban Contract
+              </button>
+            </div>
+
+            {/* Inline error */}
+            {error && (
+              <div role="alert" className="mt-4 text-sm text-error" aria-live="assertive">
+                <p>{error}</p>
+                {errorTxHash && (
+                  <a
+                    href={transactionExplorerUrl(errorTxHash, expectedPassphrase)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 inline-block underline"
+                  >
+                    View transaction
+                  </a>
+                )}
+                {pendingDeployment && !awaitingConfirmation && (
+                  <button
+                    type="button"
+                    onClick={() => void retryDeployment()}
+                    disabled={preparedOrganizerMismatch}
+                    className="label-caps mt-2 block text-sm underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+                  >
+                    Retry deployment
+                  </button>
+                )}
+              </div>
+            )}
+
+            {preparedOrganizerMismatch && !awaitingConfirmation && (
+              <p className="mt-4 text-sm text-error" role="alert">
+                This deployment was prepared for a different organizer. Connect the original
+                organizer wallet before retrying.
+              </p>
+            )}
+
+            {awaitingConfirmation && pendingDeployment && (
+              <div className="mt-4 text-sm text-on-surface-variant" role="status">
+                <p>
+                  Deployment was submitted and may still confirm. Do not resubmit while its status
+                  is being checked.
+                </p>
+                {errorTxHash && (
+                  <a
+                    href={transactionExplorerUrl(errorTxHash, expectedPassphrase)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 inline-block underline"
+                  >
+                    View transaction
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void refreshDeploymentStatus()}
+                  className="label-caps mt-2 block text-sm underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+                >
+                  Check deployment status
+                </button>
+              </div>
+            )}
+          </section>
+        </aside>
+      </div>
 
       {/* Progress modal */}
       <SubmitStateModal
