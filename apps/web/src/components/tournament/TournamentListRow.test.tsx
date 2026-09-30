@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
-import { TournamentListRow } from "./TournamentListRow";
+import { TournamentListRow, type ListItem } from "./TournamentListRow";
 
 vi.mock("next/link", () => ({
   default: ({
@@ -108,37 +108,62 @@ describe("TournamentListRow", () => {
   });
 
   it("keeps the bento card's core summary fields in dedicated slots", () => {
-    render(
-      <TournamentListRow
-        t={{
-          id: "t_slots",
-          name: "Empty Cup",
-          gameTitle: "SF6",
-          status: "DRAFT",
-          displayStatus: "DRAFT",
-          asset: "XLM",
-          entryFee: "0",
-          pool: "0",
-          totalCollected: "0",
-          totalPaidOut: "0",
-          totalRefunded: "0",
-          participantCount: 0,
-          refundClaimedCount: 0,
-        }}
-      />,
-    );
+    const draft: ListItem = {
+      id: "t_slots",
+      name: "Empty Cup",
+      gameTitle: "SF6",
+      status: "DRAFT",
+      displayStatus: "DRAFT",
+      asset: "XLM",
+      entryFee: "0",
+      pool: "0",
+      totalCollected: "0",
+      totalPaidOut: "0",
+      totalRefunded: "0",
+      participantCount: 0,
+      refundClaimedCount: 0,
+    };
+    const { rerender } = render(<TournamentListRow t={draft} />);
 
     const summary = screen.getByRole("group", { name: "Tournament summary" });
-    const slots = Array.from(summary.querySelectorAll("[data-summary-slot]")).map((slot) =>
+    const draftSlots = Array.from(summary.querySelectorAll("[data-summary-slot]")).map((slot) =>
       slot.getAttribute("data-summary-slot"),
     );
 
-    expect(slots).toEqual(["pool", "collected", "paid-out", "participants"]);
+    expect(draftSlots).toEqual([
+      "pool",
+      "collected",
+      "paid-out",
+      "participants",
+      "refunds",
+      "refunded",
+    ]);
     expect(summary.querySelector('[data-summary-slot="collected"]')).not.toBeEmptyDOMElement();
+    expect(screen.getByLabelText("Refunds not applicable")).toHaveTextContent("—");
+    expect(screen.getByLabelText("Total refunded not applicable")).toHaveTextContent("—");
     expect(screen.getByText("PREPARING").closest('[data-summary-slot="status"]')).not.toBeNull();
+
+    rerender(
+      <TournamentListRow
+        t={{
+          ...draft,
+          id: "t_refunds",
+          status: "ACTIVE",
+          displayStatus: "REFUNDS_OPEN",
+          totalRefunded: "10000000",
+          participantCount: 2,
+          refundClaimedCount: 1,
+        }}
+      />,
+    );
+    const refundSummary = screen.getByRole("group", { name: "Tournament summary" });
+    const refundSlots = Array.from(refundSummary.querySelectorAll("[data-summary-slot]")).map(
+      (slot) => slot.getAttribute("data-summary-slot"),
+    );
+    expect(refundSlots).toEqual(draftSlots);
   });
 
-  it("shows the game title with label-caps", () => {
+  it("shows the game title as secondary sentence-case text", () => {
     render(
       <TournamentListRow
         t={{
@@ -160,7 +185,8 @@ describe("TournamentListRow", () => {
     );
 
     const gameTitle = screen.getByText("Tekken 8");
-    expect(gameTitle).toHaveClass("label-caps");
+    expect(gameTitle).toHaveClass("text-sm", "text-on-surface-variant");
+    expect(gameTitle).not.toHaveClass("label-caps");
   });
 
   it("shows confirmed refund progress with the derived lifecycle label", () => {

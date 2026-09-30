@@ -27,10 +27,11 @@ function formatAmount(stroops: string) {
 }
 
 export function TournamentListRow({ t, featured = false }: { t: ListItem; featured?: boolean }) {
-  const showRefundProgress =
+  const hasRefundActivity =
     t.displayStatus === "REFUNDS_OPEN" ||
     t.displayStatus === "REFUNDED" ||
-    t.displayStatus === "CANCELLED";
+    t.displayStatus === "CANCELLED" ||
+    t.totalRefunded !== "0";
   const coreMetrics = [
     ["pool", "Pool remaining", t.pool],
     ["collected", "Total collected", t.totalCollected],
@@ -67,7 +68,7 @@ export function TournamentListRow({ t, featured = false }: { t: ListItem; featur
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
           <div>
             <span className="text-xl font-bold text-on-surface">{t.name}</span>
-            <p className="label-caps mt-1 text-on-surface-variant">{t.gameTitle}</p>
+            <p className="mt-1 text-sm text-on-surface-variant">{t.gameTitle}</p>
           </div>
           <div data-summary-slot="status" className="shrink-0 sm:pl-4">
             <StatusChip status={t.displayStatus} />
@@ -100,25 +101,30 @@ export function TournamentListRow({ t, featured = false }: { t: ListItem; featur
             </dl>
           </div>
 
-          {(showRefundProgress || t.totalRefunded !== "0") && (
-            <div className="mt-6 grid grid-cols-2 gap-4 border-t border-outline-variant pt-4">
-              <dl data-summary-slot="refunds">
-                <dt className="label-caps text-xs text-on-surface-variant">Refunds</dt>
-                <dd
-                  className="data-mono mt-1 text-on-surface"
-                  aria-label={`${t.refundClaimedCount} of ${t.participantCount} refunds claimed`}
-                >
-                  {t.refundClaimedCount}/{t.participantCount} claimed
-                </dd>
-              </dl>
-              <dl data-summary-slot="refunded" className="text-right">
-                <dt className="label-caps text-xs text-on-surface-variant">Total refunded</dt>
-                <dd className="data-mono mt-1 text-acid-yellow">
-                  {formatAmount(t.totalRefunded)} {t.asset}
-                </dd>
-              </dl>
-            </div>
-          )}
+          <div className="mt-6 grid grid-cols-2 gap-4 border-t border-outline-variant pt-4">
+            <dl data-summary-slot="refunds">
+              <dt className="label-caps text-xs text-on-surface-variant">Refunds</dt>
+              <dd
+                className="data-mono mt-1 text-on-surface"
+                aria-label={
+                  hasRefundActivity
+                    ? `${t.refundClaimedCount} of ${t.participantCount} refunds claimed`
+                    : "Refunds not applicable"
+                }
+              >
+                {hasRefundActivity ? `${t.refundClaimedCount}/${t.participantCount} claimed` : "—"}
+              </dd>
+            </dl>
+            <dl data-summary-slot="refunded" className="text-right">
+              <dt className="label-caps text-xs text-on-surface-variant">Total refunded</dt>
+              <dd
+                className="data-mono mt-1 text-acid-yellow"
+                aria-label={hasRefundActivity ? undefined : "Total refunded not applicable"}
+              >
+                {hasRefundActivity ? `${formatAmount(t.totalRefunded)} ${t.asset}` : "—"}
+              </dd>
+            </dl>
+          </div>
         </div>
       </div>
     </Link>

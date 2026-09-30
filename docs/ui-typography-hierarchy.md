@@ -8,6 +8,7 @@ Use the existing type scale by semantic role. Do not use visual style alone to i
 | Section heading | Body font, 18–24px, weight 600–700 | Card and workflow headings |
 | Body | Body font, 16px, weight 400 | Essential explanation |
 | Field label | Body font, 14px, weight 500 | Form labels and definition terms |
+| Metadata | Body font, 14px, weight 400, muted color | Game titles and secondary identifiers |
 | Helper/caption | Body font, 12px, weight 400, muted color | Short contextual help and explanations |
 | Data value | `data-mono`, weight 500 | Amounts, addresses, IDs, timestamps |
 | Status/badge | `label-caps` | Compact state indicators only |
