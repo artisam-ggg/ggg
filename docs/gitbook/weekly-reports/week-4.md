@@ -10,7 +10,7 @@ Prepare a public demo video, integration guide, and a Testnet transaction-hash l
 
 | Required validation artifact | Final evidence |
 | --- | --- |
-| Public demo video | [Edited full-flow recording](https://drive.google.com/file/d/1NvTigSXywA8Uk5PpIhEwdjDpWx_DfKmd/view?usp=sharing) |
+| Public demo video | [Edited full-flow recording](https://drive.google.com/file/d/1NvTigSXywA8Uk5PpIhEwdjDpWx_DfKmd/view?usp=sharing) · [Focused 3–5 minute backup recording](https://drive.google.com/file/d/1JZzdBZbKMkwqt4xU2s-6N3WKPCHwFAge/view?usp=sharing) ([#347](https://github.com/webnxt-2030/ggg/issues/347)) |
 | Public integration guide | [Escrow SDK integration guide](../guides/sdk-integration.md) |
 | Package and source | [npm `0.1.0`](https://www.npmjs.com/package/@goodgameguild/escrow-sdk/v/0.1.0) · [immutable source tag](https://github.com/artisam-ggg/ggg/tree/goodgameguild-escrow-sdk-v0.1.0/packages/escrow-sdk) |
 | Contract IDs and transaction list | [Evidence index](../reference/evidence.md#final-sdk-backed-release-run) |
@@ -20,3 +20,5 @@ Prepare a public demo video, integration guide, and a Testnet transaction-hash l
 | Public application health | [`https://app.ggg.quest/api/health`](https://app.ggg.quest/api/health) returned HTTP 200 after the matching deployment |
 
 The demo and transaction trail are Testnet evidence. They do not assert Mainnet deployment or an independent external security audit.
+
+The backup recording's Google Drive share page returned HTTP 200 without authentication on 30 September 2026. Its shortened create → three joins → referee settlement → payout flow is recorder-provided from the final #347 script; the video contents were not independently inspected during this documentation update.
