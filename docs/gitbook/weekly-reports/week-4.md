@@ -21,4 +21,4 @@ Prepare a public demo video, integration guide, and a Testnet transaction-hash l
 
 The demo and transaction trail are Testnet evidence. They do not assert Mainnet deployment or an independent external security audit.
 
-The backup recording's Google Drive share page returned HTTP 200 without authentication on 30 September 2026. Its shortened create → three joins → referee settlement → payout flow is recorder-provided from the final #347 script; the video contents were not independently inspected during this documentation update.
+The backup recording's Google Drive share page returned HTTP 200 without authentication on 30 September 2026. The recording author reviewed the finished video and confirmed it follows the final #347 script: create → three joins → referee settlement → payout.
