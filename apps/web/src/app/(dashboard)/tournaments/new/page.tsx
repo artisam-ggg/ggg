@@ -8,7 +8,7 @@ export const revalidate = 0;
 export default async function NewTournamentPage() {
   await requireUser("ORGANIZER");
   return (
-    <main className="mx-auto max-w-3xl px-4 py-12 md:px-(--spacing-margin-desktop)">
+    <main className="mx-auto max-w-7xl px-4 py-12 md:px-(--spacing-margin-desktop)">
       <CreateTournamentForm expectedPassphrase={env.NETWORK_PASSPHRASE} />
     </main>
   );

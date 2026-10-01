@@ -60,6 +60,8 @@ const ACTIVE_TOURNAMENT = {
   organizerAddr: "GORG",
   organizerId: "user_org_1",
   refereeAddr: "GREF",
+  settlementDeadline: 1_800_000_000,
+  refundsClaimable: false,
   pool: "30000000",
   refundClaimedPlayers: [],
   participants: [
@@ -199,7 +201,7 @@ describe("/tournaments/[id] — public detail page", () => {
       mockGetTournamentDetail.mockResolvedValue(ACTIVE_TOURNAMENT);
       render(await Page({ params: Promise.resolve({ id: "t_1" }) }));
 
-      expect(screen.getByText("ACTIVE")).toBeInTheDocument();
+      expect(screen.getAllByText("OPEN FOR JOINING")).toHaveLength(2);
     });
 
     it("renders the PrizePoolCounter with formatted pool amount", async () => {
@@ -241,7 +243,7 @@ describe("/tournaments/[id] — public detail page", () => {
       });
       render(await Page({ params: Promise.resolve({ id: "t_1" }) }));
 
-      expect(screen.getByText("REFUNDED")).toBeInTheDocument();
+      expect(screen.getAllByText("REFUNDS COMPLETE")).toHaveLength(2);
       expect(screen.getByRole("alert")).toHaveTextContent(
         "All registered players have claimed their refunds.",
       );
@@ -287,6 +289,15 @@ describe("/tournaments/[id] — public detail page", () => {
       render(await Page({ params: Promise.resolve({ id: "t_2" }) }));
 
       expect(screen.getByText(/settlement complete/i)).toBeInTheDocument();
+      expect(screen.getByTestId("tournament-bento-grid")).toHaveClass("lg:grid-cols-12");
+      expect(screen.getByText(/settlement complete/i).parentElement).toHaveClass(
+        "high-contrast-card",
+        "acid-glow",
+        "rounded-2xl",
+      );
+      expect(screen.getByText(/settlement complete/i).parentElement?.parentElement).toHaveClass(
+        "lg:col-span-12",
+      );
     });
 
     it("renders a retryable processing state when FINISHED payouts have not synced", async () => {
@@ -296,6 +307,7 @@ describe("/tournaments/[id] — public detail page", () => {
       });
       render(await Page({ params: Promise.resolve({ id: "t_2" }) }));
 
+      expect(screen.getAllByText("PAYOUT CONFIRMATION PENDING")).toHaveLength(2);
       expect(screen.getByText(/settlement processing/i)).toBeInTheDocument();
       expect(screen.getByText(/winner and payout data is still syncing/i)).toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: /retry winner sync/i }));
@@ -321,7 +333,7 @@ describe("/tournaments/[id] — public detail page", () => {
       mockGetTournamentDetail.mockResolvedValue(FINISHED_TOURNAMENT);
       render(await Page({ params: Promise.resolve({ id: "t_2" }) }));
 
-      expect(screen.getByText("FINISHED")).toBeInTheDocument();
+      expect(screen.getAllByText("COMPLETED")).toHaveLength(2);
     });
   });
 
@@ -351,6 +363,12 @@ describe("/tournaments/[id] — public detail page", () => {
       render(await Page({ params: Promise.resolve({ id: "t_1" }) }));
 
       expect(screen.getByRole("button", { name: /cancel/i })).toBeInTheDocument();
+      expect(screen.getByTestId("tournament-operations-grid")).toHaveClass("lg:grid-cols-12");
+      const organiserActions = screen.getByRole("region", { name: "Organiser actions" });
+      expect(screen.getByTestId("tournament-tools-rail")).toHaveClass("self-start", "gap-4");
+      expect(screen.getByTestId("tournament-tools-rail")).toContainElement(organiserActions);
+      expect(organiserActions).not.toHaveClass("mt-auto");
+      expect(screen.getByText(/make player refunds available/i)).toBeInTheDocument();
     });
 
     it("does NOT render CancelButton for a non-organiser viewing an ACTIVE tournament", async () => {
@@ -389,7 +407,7 @@ describe("/tournaments/[id] — public detail page", () => {
       mockGetTournamentDetail.mockResolvedValue(CANCELLED_TOURNAMENT);
       render(await Page({ params: Promise.resolve({ id: "t_3" }) }));
 
-      expect(screen.getByText("CANCELLED")).toBeInTheDocument();
+      expect(screen.getAllByText("CANCELLED")).toHaveLength(2);
     });
 
     it("does NOT render JoinCard when CANCELLED", async () => {

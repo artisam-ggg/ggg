@@ -1,0 +1,24 @@
+{
+  admin off
+  auto_https off
+  persist_config off
+}
+
+:{$PORT:3000} {
+  root * /srv
+  encode zstd gzip
+
+  @serverConfig path /Caddyfile
+  respond @serverConfig 404
+
+  header {
+    Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; frame-src https://www.youtube-nocookie.com; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; connect-src 'self' https://beta.app.ggg.quest; form-action 'self'; upgrade-insecure-requests"
+    Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "SAMEORIGIN"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    Permissions-Policy "camera=(), geolocation=(), microphone=(), payment=(), usb=()"
+  }
+
+  file_server
+}

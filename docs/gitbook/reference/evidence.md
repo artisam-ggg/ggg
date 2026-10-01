@@ -11,7 +11,38 @@ The Epic 3 release completed on 24 September 2026 from public revision
 | Standalone consumer | [Node.js example](https://github.com/artisam-ggg/ggg/tree/goodgameguild-escrow-sdk-v0.1.0/examples/nodejs-escrow) · [recorded Testnet run](https://github.com/artisam-ggg/ggg/blob/staging/docs/verification/issue-225-node-example-testnet.md) | A consumer outside the web app uses the package for settlement and both refund paths |
 | Matching deployment | [Public app](https://app.ggg.quest/) · [health](https://app.ggg.quest/api/health) · WASM `b704f577…a46dd9` | The SDK-backed web/subscriber release was available at revision `15902cf`; health returned HTTP 200 |
 | Public CI | [`develop` run 35977199117](https://github.com/artisam-ggg/ggg/actions/runs/35977199117) · [`staging` run 35977199084](https://github.com/artisam-ggg/ggg/actions/runs/35977199084) | App and contract jobs passed against the exact public release revision |
-| Demo | [Edited full-flow video](https://drive.google.com/file/d/1NvTigSXywA8Uk5PpIhEwdjDpWx_DfKmd/view?usp=sharing) | Reviewer-facing recording of the deployed Testnet flows; anonymous access was verified |
+| Demo | [Edited full-flow video](https://drive.google.com/file/d/1NvTigSXywA8Uk5PpIhEwdjDpWx_DfKmd/view?usp=sharing) · [Focused 3–5 minute backup](https://drive.google.com/file/d/1JZzdBZbKMkwqt4xU2s-6N3WKPCHwFAge/view?usp=sharing) ([#347](https://github.com/webnxt-2030/ggg/issues/347)) | The original reviewer-facing recording covers the deployed Testnet flows and has verified anonymous access. The backup share page returned HTTP 200 without authentication on 30 September 2026. The recording author reviewed the finished video and confirmed it follows the final #347 script: create → three joins → referee settlement → payout. |
+
+### Focused backup recording
+
+The recording author identified Testnet contract
+[`CCMC…ZNSG`](https://stellar.expert/explorer/testnet/contract/CCMCCNILFZPYR3Q5PPGWIKXG4KFUEX7PSBJTG4GWZQ6ZQRGP2YGWZNSG)
+as the tournament used in the focused #347 recording. Its public history records
+exactly five successful invocations on 30 September 2026:
+
+- [Deploy and constructor](https://stellar.expert/explorer/testnet/tx/ca281afb7cfdc05b6f001f8a6d37e22c8b1265f209b7377e7b7e78d7668fd0ba)
+  at `07:56:32Z`.
+- [Join 1](https://stellar.expert/explorer/testnet/tx/5ef764e4984603da420c785e715e633d9eac86aecde2d82204e30cdc72083577)
+  at `07:56:57Z`.
+- [Join 2](https://stellar.expert/explorer/testnet/tx/2905fb5abec8251be12ecf381f0615999e843073496177d1373c8366b0d3d5ec)
+  at `07:57:17Z`.
+- [Join 3](https://stellar.expert/explorer/testnet/tx/4863b5a265467c6e7c61b053fac8f79dfa359c877e4cc75d8743b18a34e8216d)
+  at `07:57:37Z`.
+- [Referee finalization and payout](https://stellar.expert/explorer/testnet/tx/9361ff095b62040041a27a2ef2c14f7ce93f934d5200c12bd111b3573f980490)
+  at `07:58:22Z`.
+
+The contract event trail contains three `registered` events followed by one
+`finalized` event. This independently anchors the recording author's stated
+create → three joins → referee settlement → payout flow to public Testnet
+transactions. The recording used the public `staging` deployment at revision
+[`1021738`](https://github.com/webnxt-2030/ggg/commit/10217383f84acda7ef0084b05fc63890da05cf7a),
+the latest commit on that branch when the transactions were confirmed. Later
+UI/UX additions were intentionally absent and are outside the SOW demo scope.
+
+The recording author confirmed that the linked Google Drive file is the MP4
+archival copy and will remain hosted. The wallets and authenticated sessions
+were prepared before recording, so no wallet setup, secrets, recovery material,
+credentials, or signed XDR were shown.
 
 ### Ranked settlement
 

@@ -24,7 +24,7 @@ export function SettlementSyncStatus({ contractUrl }: { contractUrl: string | nu
     <section
       aria-label="Winners"
       aria-live="polite"
-      className="brutalist-border brutalist-border-active rounded-none p-6"
+      className="kinetic-glass h-full rounded-2xl p-6"
     >
       <p className="label-caps italic text-acid-yellow">
         {exhausted ? "Settlement Sync Needs Attention" : "Settlement Processing"}

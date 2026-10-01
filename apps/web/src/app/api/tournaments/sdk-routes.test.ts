@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   prepared: vi.fn(),
   forgetPrepared: vi.fn(),
   participantUpsert: vi.fn(),
+  joinSubmissionDelete: vi.fn(),
   requireCurrent: vi.fn(),
   readTournament: vi.fn(),
 }));
@@ -67,7 +68,7 @@ vi.mock("@/lib/db", () => ({
     participant: { findUnique: vi.fn(async () => null), upsert: mocks.participantUpsert },
     joinSubmission: {
       upsert: vi.fn(async () => ({ submittedAt: new Date("2026-09-22T00:00:00Z") })),
-      deleteMany: vi.fn(async () => ({})),
+      deleteMany: mocks.joinSubmissionDelete,
     },
   },
 }));
@@ -265,6 +266,40 @@ describe("SDK-backed tournament routes", () => {
     );
   });
 
+  it("clears a definitely rejected join so a fresh retry can succeed", async () => {
+    mocks.submit.mockRejectedValueOnce(
+      new EscrowSdkError("SUBMIT_REJECTED", "Stellar rejected the transaction", "hash"),
+    );
+
+    const rejected = await deployOrSubmit(
+      request(`/${tournamentId}/submit`, { ...signed, intent: "join" }),
+      ctx,
+    );
+    expect(rejected.status).toBe(422);
+    expect(mocks.joinSubmissionDelete).toHaveBeenCalledWith({ where: { txHash: "hash" } });
+
+    const retried = await deployOrSubmit(
+      request(`/${tournamentId}/submit`, { ...signed, intent: "join" }),
+      ctx,
+    );
+    expect(retried.status).toBe(200);
+    expect(mocks.participantUpsert).toHaveBeenCalledOnce();
+  });
+
+  it("retains an uncertain join submission for later reconciliation", async () => {
+    mocks.submit.mockRejectedValueOnce(
+      new EscrowSdkError("TX_TIMEOUT", "Transaction confirmation timed out", "hash"),
+    );
+
+    const response = await deployOrSubmit(
+      request(`/${tournamentId}/submit`, { ...signed, intent: "join" }),
+      ctx,
+    );
+
+    expect(response.status).toBe(504);
+    expect(mocks.joinSubmissionDelete).not.toHaveBeenCalled();
+  });
+
   it("keeps a deployment draft pending when confirmation is uncertain", async () => {
     Object.assign(mocks.row!, {
       status: "DRAFT",
@@ -386,6 +421,24 @@ describe("SDK-backed tournament routes", () => {
       "REFUNDED",
     );
     expect(getTournamentDisplayStatus({ ...base, deadlineConfirmedAt: null }, 1)).toBe("ACTIVE");
+  });
+
+  it("derives cancelled refund progress from confirmed participants and events", () => {
+    const cancelled = {
+      status: "CANCELLED" as const,
+      settlementDeadline: new Date(0),
+      deadlineConfirmedAt: new Date(0),
+      participantAddresses: [players[0]!],
+      refundClaimedPlayers: [] as string[],
+    };
+
+    expect(getTournamentDisplayStatus(cancelled, 1)).toBe("REFUNDS_OPEN");
+    expect(
+      getTournamentDisplayStatus({ ...cancelled, refundClaimedPlayers: [players[0]!] }, 1),
+    ).toBe("REFUNDED");
+    expect(getTournamentDisplayStatus({ ...cancelled, participantAddresses: [] }, 1)).toBe(
+      "CANCELLED",
+    );
   });
 
   it.each([[players[0]!], [players[0]!, players[1]!, players[2]!]])(

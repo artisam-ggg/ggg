@@ -54,6 +54,35 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Verify homepage container security headers
+        run: |
+          docker build --tag ggg-homepage-test homepage
+          docker run --detach --rm --name ggg-homepage-test --publish 127.0.0.1:8080:3000 --env PORT=3000 ggg-homepage-test
+          trap 'docker rm --force ggg-homepage-test' EXIT
+
+          for attempt in $(seq 1 10); do
+            if curl --fail --silent --output /dev/null http://127.0.0.1:8080/; then
+              break
+            fi
+            if [ "$attempt" -eq 10 ]; then
+              docker logs ggg-homepage-test
+              exit 1
+            fi
+            sleep 1
+          done
+
+          headers="$(curl --fail --silent --show-error --head http://127.0.0.1:8080/)"
+          printf '%s\n' "$headers"
+          printf '%s\n' "$headers" | grep -Fqi 'frame-src https://www.youtube-nocookie.com'
+          if printf '%s\n' "$headers" | grep -Eqi 'frame-src[^;]*\*'; then
+            echo 'Homepage frame-src must not contain a wildcard.'
+            exit 1
+          fi
+          printf '%s\n' "$headers" | grep -Fqi 'strict-transport-security:'
+          printf '%s\n' "$headers" | grep -Fqi 'x-content-type-options: nosniff'
+          printf '%s\n' "$headers" | grep -Fqi 'referrer-policy: strict-origin-when-cross-origin'
+          printf '%s\n' "$headers" | grep -Fqi 'permissions-policy:'
+
       - name: Enable corepack
         run: corepack enable
 
@@ -77,6 +106,9 @@ jobs:
           mkdir "$consumer"
           cd "$consumer"
           npm init --yes
+          # stellar-sdk v16 pins an older Axios 1.x release. Keep the supported
+          # v16 API while resolving its security-compatible patched minor.
+          npm pkg set overrides.axios=1.20.0
           npm install "$tarball"
           npm audit --omit=dev --audit-level=high
           node --input-type=module -e 'await Promise.all([import("@goodgameguild/escrow-sdk"), import("@goodgameguild/escrow-sdk/contract")])'

@@ -108,6 +108,8 @@ export type SubmitInput = z.infer<typeof submitSchema>;
 export const joinSchema = z.object({ playerAddress: stellarPublicKey });
 export type JoinInput = z.infer<typeof joinSchema>;
 
+export const participationQuerySchema = z.object({ playerAddress: stellarPublicKey });
+
 export const refundClaimSchema = z.object({
   playerAddress: stellarPublicKey,
   submitterAddress: stellarPublicKey,
