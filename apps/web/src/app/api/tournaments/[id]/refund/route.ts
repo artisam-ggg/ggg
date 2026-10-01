@@ -39,6 +39,21 @@ export async function POST(
   try {
     return ok(await buildRefundClaim(id, parsed.data.playerAddress, parsed.data.submitterAddress));
   } catch (e) {
+    if (
+      (e instanceof EscrowSdkError && e.code === "SIMULATION_FAILED") ||
+      (e instanceof StellarError && e.code === "UNKNOWN_ASSET")
+    ) {
+      console.error("Refund asset simulation failed", {
+        tournamentId: id,
+        code: e.code,
+        message: e.message,
+      });
+      return err(
+        "ASSET_MISMATCH",
+        "The refund transaction does not use the asset required by this tournament.",
+        422,
+      );
+    }
     if (e instanceof StellarError || e instanceof EscrowSdkError)
       return err("STELLAR_ERROR", e.message, 422);
     const status = (e as { status?: number }).status;

@@ -69,6 +69,7 @@ export function SubmitStateModal({ open, phase, message, onClose }: SubmitStateM
         <button
           type="button"
           onClick={onClose}
+          autoFocus
           className="label-caps mt-6 rounded-lg border-2 border-outline px-4 py-2 text-on-surface transition-colors hover:border-acid-yellow hover:text-acid-yellow focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
         >
           Close

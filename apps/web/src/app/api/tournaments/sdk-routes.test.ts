@@ -526,6 +526,37 @@ describe("SDK-backed tournament routes", () => {
     expect(mocks.built().buildClaimRefund).toHaveBeenCalledWith(players[1], players[0]);
   });
 
+  it("maps a refund asset simulation failure without exposing it to the user", async () => {
+    const diagnostic = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    mocks
+      .built()
+      .buildClaimRefund.mockRejectedValueOnce(
+        new EscrowSdkError("SIMULATION_FAILED", "Escrow simulation failed"),
+      );
+
+    const response = await refund(
+      request(`/${tournamentId}/refund`, {
+        playerAddress: players[0],
+        submitterAddress: players[0],
+      }),
+      ctx,
+    );
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({
+      ok: false,
+      error: {
+        code: "ASSET_MISMATCH",
+        message: "The refund transaction does not use the asset required by this tournament.",
+      },
+    });
+    expect(diagnostic).toHaveBeenCalledWith(
+      "Refund asset simulation failed",
+      expect.objectContaining({ code: "SIMULATION_FAILED", tournamentId }),
+    );
+    diagnostic.mockRestore();
+  });
+
   it("marks finalize and cancel only after confirmed SDK submissions", async () => {
     mocks.submitResult = { hash: "hash", status: "FAILED" };
     expect(

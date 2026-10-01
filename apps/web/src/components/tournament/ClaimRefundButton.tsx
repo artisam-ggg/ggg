@@ -38,6 +38,7 @@ export function ClaimRefundButton({
   const displayPhase = phase === "awaitingConfirmation" && alreadyClaimed ? "idle" : phase;
   const submitting = displayPhase === "signing" || displayPhase === "submitting";
   const awaitingConfirmation = displayPhase === "awaitingConfirmation";
+  const refundConfirmed = phase === "awaitingConfirmation" && alreadyClaimed;
   const refreshExhausted = refreshAttempts >= REFRESH_DELAYS_MS.length;
   const displayNotice =
     phase === "awaitingConfirmation" && alreadyClaimed
@@ -71,10 +72,15 @@ export function ClaimRefundButton({
       const built = (await response.json()) as {
         ok: boolean;
         data?: { unsignedXdr?: string };
-        error?: { message?: string } | string;
+        error?: { code?: string; message?: string } | string;
       };
       const message = typeof built.error === "string" ? built.error : built.error?.message;
       if (!response.ok || !built.ok || !built.data?.unsignedXdr) {
+        if (typeof built.error !== "string" && built.error?.code === "ASSET_MISMATCH") {
+          throw new Error(
+            `Wrong currency or asset. This tournament refunds in ${asset}. Use a wallet that supports ${asset} and try again.`,
+          );
+        }
         throw new Error(message ?? "Failed to build refund claim");
       }
 
@@ -160,9 +166,21 @@ export function ClaimRefundButton({
         </button>
       )}
       <SubmitStateModal
-        open={submitting}
-        phase={displayPhase === "awaitingConfirmation" ? "idle" : displayPhase}
-        {...(error ? { message: error } : {})}
+        open={submitting || refundConfirmed}
+        phase={
+          refundConfirmed
+            ? "success"
+            : displayPhase === "awaitingConfirmation"
+              ? "idle"
+              : displayPhase
+        }
+        {...(refundConfirmed
+          ? {
+              message: `Refund completed successfully: ${formatStroops(entryFee)} ${asset} returned.`,
+            }
+          : error
+            ? { message: error }
+            : {})}
         onClose={() => {
           setPhase("idle");
           setError(null);
