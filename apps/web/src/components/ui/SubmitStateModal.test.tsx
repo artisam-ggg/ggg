@@ -45,6 +45,7 @@ describe("SubmitStateModal", () => {
     render(<SubmitStateModal open={true} phase="success" onClose={onClose} />);
     const closeBtn = screen.getByRole("button", { name: /close/i });
     expect(closeBtn).toBeInTheDocument();
+    expect(closeBtn).toHaveFocus();
     fireEvent.click(closeBtn);
     expect(onClose).toHaveBeenCalledOnce();
   });

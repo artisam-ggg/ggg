@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { signAndSubmit, refresh, MockSubmissionError } = vi.hoisted(() => {
@@ -82,12 +82,35 @@ describe("ClaimRefundButton", () => {
       expect(screen.getByRole("status")).toHaveTextContent(/waiting for confirmed on-chain event/i),
     );
     expect(screen.getByRole("button", { name: /claim refund/i })).toBeDisabled();
-    expect(screen.queryByText("SETTLED")).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: /transaction settled/i })).not.toBeInTheDocument();
 
     rerender(<ClaimRefundButton {...baseProps} confirmedClaimedPlayers={["GPLAYER"]} />);
 
-    expect(screen.getByRole("status")).toHaveTextContent(/refund confirmed/i);
+    const successDialog = screen.getByRole("dialog", { name: /transaction settled/i });
+    expect(within(successDialog).getByRole("status")).toHaveTextContent(
+      /refund completed successfully: 1\.0000000 xlm returned/i,
+    );
+    expect(screen.getByRole("button", { name: /close/i })).toHaveFocus();
     expect(screen.getByRole("button", { name: /claim refund/i })).toBeDisabled();
+  });
+
+  it("explains a refund asset mismatch without exposing the simulation error", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          ok: false,
+          error: { code: "ASSET_MISMATCH", message: "Escrow simulation failed" },
+        }),
+        { status: 422 },
+      ),
+    );
+    render(<ClaimRefundButton {...baseProps} asset="USDC" />);
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    fireEvent.click(screen.getByRole("button", { name: /claim refund/i }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/wrong currency or asset.*refunds in usdc/i);
+    expect(alert).not.toHaveTextContent(/simulation failed/i);
   });
 
   it("refreshes canonical state with bounded backoff until confirmation arrives", async () => {
@@ -107,7 +130,7 @@ describe("ClaimRefundButton", () => {
     rerender(<ClaimRefundButton {...baseProps} confirmedClaimedPlayers={["GPLAYER"]} />);
     act(() => vi.advanceTimersByTime(60_000));
     expect(refresh).toHaveBeenCalledTimes(2);
-    expect(screen.getByRole("status")).toHaveTextContent(/refund confirmed/i);
+    expect(screen.getByText(/^refund confirmed\.$/i)).toBeInTheDocument();
   });
 
   it("stops after the bounded polling window and offers a manual status refresh", async () => {
