@@ -2,6 +2,14 @@
 
 Use this page to review the milestone record without needing access to a private repository or project account.
 
+## Post-Instawards release review
+
+For the later UX, onboarding, and developer-discovery work, use the
+[ten-minute release walkthrough](../weekly-reports/post-instawards-ux-onboarding-release.md#ten-minute-reviewer-walkthrough).
+It links the exact release and CI revisions, public app and health checks, SDK
+CTA, role manuals, Guidelines evidence, and the distinct historical Testnet
+demo trail. The completed Week 4 package below remains the SOW evidence record.
+
 ## Five-minute review path
 
 1. Read the immutable [Statement of Work](../sow.md) to understand the D1–D3 commitments and Testnet-only scope.

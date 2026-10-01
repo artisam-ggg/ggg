@@ -39,7 +39,7 @@ const passphrase = "Test SDF Network ; September 2015";
 function signedXdr(unsignedXdr: string, signer: Keypair): { xdr: string; hash: string } {
   const tx = TransactionBuilder.fromXDR(unsignedXdr, passphrase);
   tx.sign(signer);
-  return { xdr: tx.toXDR(), hash: tx.hash().toString("hex") };
+  return { xdr: tx.toXDR(), hash: Buffer.from(tx.hash()).toString("hex") };
 }
 
 function confirm(hash: string) {
@@ -135,16 +135,18 @@ beforeEach(async () => {
     entries: [
       {
         val: {
-          contractData: () => ({
-            val: () => ({
-              instance: () => ({
-                executable: () => ({
-                  switch: () => ({ name: "contractExecutableWasm" }),
-                  wasmHash: () => Buffer.from(CURRENT_ESCROW_WASM_HASH, "hex"),
-                }),
-              }),
-            }),
-          }),
+          type: "contractData",
+          contractData: {
+            val: {
+              type: "scvContractInstance",
+              instance: {
+                executable: {
+                  type: "contractExecutableWasm",
+                  wasmHash: { value: Buffer.from(CURRENT_ESCROW_WASM_HASH, "hex") },
+                },
+              },
+            },
+          },
         },
       },
     ],
@@ -237,16 +239,18 @@ describe("SDK-backed tournament route integration", () => {
       entries: [
         {
           val: {
-            contractData: () => ({
-              val: () => ({
-                instance: () => ({
-                  executable: () => ({
-                    switch: () => ({ name: "contractExecutableWasm" }),
-                    wasmHash: () => Buffer.alloc(32, 1),
-                  }),
-                }),
-              }),
-            }),
+            type: "contractData",
+            contractData: {
+              val: {
+                type: "scvContractInstance",
+                instance: {
+                  executable: {
+                    type: "contractExecutableWasm",
+                    wasmHash: { value: Buffer.alloc(32, 1) },
+                  },
+                },
+              },
+            },
           },
         },
       ],
@@ -341,7 +345,7 @@ describe("SDK-backed tournament route integration", () => {
       rpcUrl: "https://rpc.example",
       networkPassphrase: passphrase,
     }).spec;
-    const outputType = spec.getFunc("get_tournament").outputs()[0]!;
+    const outputType = spec.getFunc("get_tournament").outputs[0]!;
     const tournamentInfo = {
       cancelled: false,
       distribution_bps: distributionBps,
@@ -355,10 +359,10 @@ describe("SDK-backed tournament route integration", () => {
       winners: [],
     };
     vi.spyOn(rpc.Server.prototype, "simulateTransaction").mockImplementation(async (tx) => {
-      const op = tx.operations[0] as {
-        func: { value(): { functionName(): { toString(): string } } };
-      };
-      const method = op.func.value().functionName().toString();
+      const op = tx.operations[0];
+      if (op?.type !== "invokeHostFunction" || op.func.type !== "hostFunctionTypeInvokeContract")
+        throw new Error("Expected contract invocation");
+      const method = op.func.invokeContract.functionName.toString();
       return {
         _parsed: true,
         transactionData: new SorobanDataBuilder(),
@@ -390,10 +394,10 @@ describe("SDK-backed tournament route integration", () => {
     expect(
       await prisma.tournament.findUnique({ where: { id: draftId }, select: { status: true } }),
     ).toMatchObject({ status: "DRAFT" });
-    const operation = TransactionBuilder.fromXDR(unsignedXdr, passphrase).operations[0] as {
-      func: { switch(): { name: string } };
-    };
-    expect(operation.func.switch().name).toBe("hostFunctionTypeCreateContractV2");
+    const operation = TransactionBuilder.fromXDR(unsignedXdr, passphrase).operations[0];
+    expect(operation?.type).toBe("invokeHostFunction");
+    if (operation?.type !== "invokeHostFunction") throw new Error("Expected deployment operation");
+    expect(operation.func.type).toBe("hostFunctionTypeCreateContractV2");
     const { xdr: signed, hash } = signedXdr(unsignedXdr, organizer);
     const deployedContractId = StrKey.encodeContract(Keypair.random().rawPublicKey());
     vi.spyOn(rpc.Server.prototype, "sendTransaction").mockResolvedValue({

@@ -127,16 +127,15 @@ describe("configuration and validation", () => {
       entries: [
         {
           val: {
-            contractData: () => ({
-              val: () => ({
-                instance: () => ({
-                  executable: () => ({
-                    switch: () => ({ name: "contractExecutableWasm" }),
-                    wasmHash: () => hash,
-                  }),
-                }),
-              }),
-            }),
+            type: "contractData",
+            contractData: {
+              val: {
+                type: "scvContractInstance",
+                instance: {
+                  executable: { type: "contractExecutableWasm", wasmHash: { value: hash } },
+                },
+              },
+            },
           },
         },
       ],
@@ -155,16 +154,18 @@ describe("configuration and validation", () => {
       entries: [
         {
           val: {
-            contractData: () => ({
-              val: () => ({
-                instance: () => ({
-                  executable: () => ({
-                    switch: () => ({ name: "contractExecutableWasm" }),
-                    wasmHash: () => new Uint8Array(31),
-                  }),
-                }),
-              }),
-            }),
+            type: "contractData",
+            contractData: {
+              val: {
+                type: "scvContractInstance",
+                instance: {
+                  executable: {
+                    type: "contractExecutableWasm",
+                    wasmHash: { value: new Uint8Array(31) },
+                  },
+                },
+              },
+            },
           },
         },
       ],
@@ -304,9 +305,9 @@ describe("public transaction and read paths", () => {
       settlementDeadline: 1_800_000_000n,
       salt,
     });
-    expect(sdk.validateSignedXdr(signed(built.xdr), built, network).hash().toString("hex")).toBe(
-      built.hash,
-    );
+    expect(
+      Buffer.from(sdk.validateSignedXdr(signed(built.xdr), built, network).hash()).toString("hex"),
+    ).toBe(built.hash);
     expect(() =>
       new EscrowSdk({ ...config, wasmHash: "02".repeat(32) }).validateSignedXdr(
         signed(built.xdr),

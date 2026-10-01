@@ -2,6 +2,10 @@
 
 Running log of shipped features (append one entry per change), per the auto-dev workflow.
 
+## Issue #351 - Post-Instawards release report
+
+Added a dated GitBook release record for the UX, onboarding, and developer-discovery promotion. It maps the SDK CTA, simplified creation copy, Guidelines, role manuals, role-journey smoke coverage, related layout refinements, CI, public endpoints, and the separate historical #347 Testnet evidence. The completed Week 4 validation package remains unchanged as the canonical SOW record.
+
 ## Issue #363 - Player participation confidence and follow-through
 
 Confirmed joins now produce a persistent registration summary with the public tournament link,
