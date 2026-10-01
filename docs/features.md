@@ -2,6 +2,55 @@
 
 Running log of shipped features (append one entry per change), per the auto-dev workflow.
 
+## Issue #363 - Player participation confidence and follow-through
+
+Confirmed joins now produce a persistent registration summary with the public tournament link,
+Stellar transaction receipt, settlement deadline, and explicit notice that the entry fee is held
+by the tournament's Soroban escrow rather than GGG. A public My Tournaments view lets a connected
+wallet find its confirmed registrations, payouts, and refund eligibility without an app login,
+signature, stored wallet claim, or personal profile. Pending and failed transactions remain
+distinct from confirmed participation, with safe explorer receipts and recovery guidance.
+
+## Issue #360 - Wallet status, network recovery, and transaction guidance
+
+Create, join, referee, settlement, and refund journeys now share a compact wallet status that
+identifies the required Stellar network and supports re-checking after an account or network
+change. Each signing boundary explains what the transaction does and confirms that GGG cannot
+access private keys or sign for users. Wrong-network, rejected connection, rejected signature,
+wrong-wallet, pending, and confirmed states retain the existing server and contract authorization
+boundaries while offering clearer recovery guidance.
+
+## Issue #357 - Public tournament lifecycle clarity
+
+Public tournament pages now summarize confirmed lifecycle state in plain language and explain
+when joining, settlement, or refunds are available, complete, syncing, read-only, or temporarily
+paused. Dashboard status chips use the same lifecycle wording, while Join, Referee, and Refund
+controls explain their wallet and confirmation boundaries without changing authorization or
+contract behavior.
+
+## Issue #350 - Role-journey smoke coverage
+
+Focused local smoke tests now protect the public SDK CTA and organizer, player,
+referee, refund, and keyboard guidance paths. A companion verification record
+defines a repeatable desktop/mobile manual QA matrix without sending a wallet
+transaction, changing an authentication boundary, or repeating Testnet evidence.
+
+## Issue #349 - Role-based operating guides
+
+GitBook now has separate Testnet-only organizer, player, and referee guides, with prerequisites, numbered steps, expected results, wallet/login boundaries, and troubleshooting for pending transactions, wrong wallets, deadlines, and delayed status updates. The future concise in-app Guidelines modal in #348 can link to these canonical manuals rather than repeat them.
+
+## Issue #346 - Simplify Create Tournament copy
+
+The Create Tournament form now removes its redundant introductory sentence and condenses the deadline and payout-calculation helper copy. The form still identifies local-time input, on-chain UTC storage, the allowed one-hour-to-90-day window, automatic payout recalculation, and the Custom fallback; labels, validation, wallet signing, and deployment behavior are unchanged.
+
+## Issue #345 - Homepage SDK call-to-action
+
+The public marketing homepage presents a compact, developer-focused hero CTA alongside the primary app action, with supporting detail in the Features grid. Both links safely lead to the canonical `@goodgameguild/escrow-sdk` npm package page, explain that it is a reusable Stellar escrow SDK, and remain usable across responsive layouts without affecting wallets, sessions, contracts, or payouts.
+
+## Homepage hero cover image
+
+The supplied GGG cover image now replaces the public marketing homepage hero placeholder and provides the app landing-page hero background. Both keep contrast-preserving overlays so the tournament-creation copy and primary action remain readable.
+
 ## Issue #337 — Refresh refund status automatically
 
 After a cancellation or deadline refund is submitted, the claim UI now keeps the action disabled while it refreshes the canonical server snapshot with bounded exponential backoff. Confirmed subscriber data ends the refresh cycle and updates the refund view without a manual browser reload. A transaction with a retryable confirmation error and known hash remains in the non-resubmittable pending state, while a definite submission failure is labeled separately and can be retried. After the automatic window expires, the page reports that processing is still underway and offers an explicit status-only refresh; timers are cleaned up on navigation and no refresh path prepares, signs, or submits another transaction.
@@ -274,3 +323,13 @@ The static homepage includes an aggregate-only App pageviews metric for the last
 ## Issue #222 — Publishable escrow SDK package and bindings
 
 Added `@goodgameguild/escrow-sdk@0.1.0` as a public MIT-licensed workspace package with a built root entry point, a separate generated-contract export, declarations, and a restricted publication tarball. The finalized constructor, 1–10 winner vector, read helpers, deadline, and refund ABI now live in the SDK; the web app imports those bindings from the workspace package. CI checks the binding against freshly built contract WASM, and package tests cover the current ABI. Higher-level transaction APIs and app migration remain tracked in #223 and #224; npm publication remains in #226.
+## Issue #348 - Contextual platform guidelines
+
+The organizer, player, referee, and refund interfaces now include a shared
+keyboard-accessible Guidelines modal. Each entry point offers concise,
+role-specific steps, a link to the relevant full GitBook guide, Escape-to-close,
+and focus management that returns people to the control that opened the modal.
+
+## Issue #362 - Organizer preparation, preview, and post-create guidance
+
+Tournament creation now includes payout-rank presets backed by the existing distribution calculations and a pre-deployment review of the public title, game, entry fee, deadline, referee, payout ranks, and cover status. Browser draft guidance makes clear that only non-wallet public fields are restored; organizer and referee wallets, uploaded covers, and secret data are not persisted. After deployment confirmation, organizers receive a concise checklist and safe links to the public tournament and organizer dashboard instead of being redirected before they can review the next steps.

@@ -35,7 +35,7 @@ export default async function AdminUserDetailPage({ params }: PageProps) {
 
       <div className="mt-8 grid gap-8 md:grid-cols-2">
         <section className="glass-panel rounded-xl p-6">
-          <h2 className="label-caps mb-4 text-on-surface-variant">Details</h2>
+          <h2 className="mb-4 text-lg font-semibold text-on-surface">Details</h2>
           <dl className="space-y-3">
             <div>
               <dt className="label-caps text-on-surface-variant">ID</dt>
@@ -57,7 +57,7 @@ export default async function AdminUserDetailPage({ params }: PageProps) {
         </section>
 
         <section className="glass-panel rounded-xl p-6">
-          <h2 className="label-caps mb-4 text-on-surface-variant">Actions</h2>
+          <h2 className="mb-4 text-lg font-semibold text-on-surface">Actions</h2>
           <div className="space-y-4">
             <UserRoleForm userId={user.id} currentRole={user.role} disabled={isSelf} />
             <ResetPasswordButton userId={user.id} />
@@ -67,7 +67,7 @@ export default async function AdminUserDetailPage({ params }: PageProps) {
       </div>
 
       <section aria-label="User tournaments" className="mt-8">
-        <h2 className="label-caps mb-4 text-on-surface-variant">Tournaments</h2>
+        <h2 className="mb-4 text-lg font-semibold text-on-surface">Tournaments</h2>
         {user.tournaments.length === 0 ? (
           <p className="text-on-surface-variant">No tournaments.</p>
         ) : (

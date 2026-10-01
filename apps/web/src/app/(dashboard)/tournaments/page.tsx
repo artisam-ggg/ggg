@@ -54,13 +54,13 @@ export default async function TournamentsPage({ searchParams }: PageProps) {
           </Link>
         </div>
       ) : (
-        <ol className="mt-8 flex flex-col gap-4" aria-label="Tournament list">
-          {items.map((t) => (
+        <ol className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3" aria-label="Tournament list">
+          {items.map((t, index) => (
             <li
               key={t.id}
-              className="industrial-border rounded-xl bg-surface-container-low p-1 shadow-sm transition hover:border-primary/30"
+              className="industrial-border h-full rounded-xl bg-surface-container-low p-1 shadow-sm transition first:md:col-span-2 first:xl:col-span-2 hover:border-primary/30"
             >
-              <TournamentListRow t={t} />
+              <TournamentListRow t={t} featured={index === 0} />
             </li>
           ))}
         </ol>

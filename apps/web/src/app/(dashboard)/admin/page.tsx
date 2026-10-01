@@ -38,7 +38,7 @@ export default async function AdminPage() {
 
       <section aria-label="Recent users" className="mt-10">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="label-caps text-on-surface-variant">Recent Users</h2>
+          <h2 className="text-lg font-semibold text-on-surface">Recent users</h2>
           <Link
             href="/admin/users"
             className="label-caps text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-acid-yellow"

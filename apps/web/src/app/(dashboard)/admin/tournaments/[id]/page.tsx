@@ -32,7 +32,7 @@ export default async function AdminTournamentDetailPage({ params }: PageProps) {
 
       <div className="mt-8 grid gap-8 md:grid-cols-2">
         <section className="glass-panel rounded-xl p-6">
-          <h2 className="label-caps mb-4 text-on-surface-variant">Details</h2>
+          <h2 className="mb-4 text-lg font-semibold text-on-surface">Details</h2>
           <dl className="space-y-3">
             <div>
               <dt className="label-caps text-on-surface-variant">ID</dt>
@@ -67,7 +67,7 @@ export default async function AdminTournamentDetailPage({ params }: PageProps) {
         </section>
 
         <section className="glass-panel rounded-xl p-6">
-          <h2 className="label-caps mb-4 text-on-surface-variant">Actions</h2>
+          <h2 className="mb-4 text-lg font-semibold text-on-surface">Actions</h2>
           <div className="space-y-4">
             <TournamentEditForm
               tournamentId={tournament.id}

@@ -27,6 +27,17 @@ describe("WalletButton", () => {
     const btn = screen.getByRole("button", { name: /connect wallet/i });
     expect(btn).toBeInTheDocument();
     expect(btn).toHaveClass("label-caps");
+    expect(screen.getByText(/connect on the configured stellar network/i)).toBeInTheDocument();
+  });
+
+  it("shows the required network and public-address boundary", () => {
+    render(
+      <WalletButton onConnected={vi.fn()} expectedPassphrase="Test SDF Network ; September 2015" />,
+    );
+
+    expect(screen.getByText(/connect on stellar testnet/i)).toHaveTextContent(
+      /shares your public address.*does not approve a transaction/i,
+    );
   });
 
   it("calls ensureWallet with the provided expectedPassphrase on click", async () => {
@@ -50,6 +61,7 @@ describe("WalletButton", () => {
     fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
     // GABCDEFGHIJABCDEFGHIJ → slice(0,6)=GABCDE, slice(-5)=FGHIJ
     await waitFor(() => expect(screen.getByText(/GABCDE…FGHIJ/)).toBeInTheDocument());
+    expect(screen.queryByText(/connected on/i)).not.toBeInTheDocument();
   });
 
   it("connected chip has aria-label with full address", async () => {
@@ -76,7 +88,7 @@ describe("WalletButton", () => {
     expect(screen.getByLabelText("Wallet GNEWADDRESSNEWADDRESS")).toBeInTheDocument();
   });
 
-  it("keeps the current wallet and shows an error when re-checking fails", async () => {
+  it("keeps the address for display but revokes authorization when re-checking fails", async () => {
     const onConnected = vi.fn();
     mockedEnsureWallet
       .mockResolvedValueOnce("GABCDEFGHIJABCDEFGHIJ")
@@ -89,6 +101,33 @@ describe("WalletButton", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Freighter access denied");
     expect(screen.getByLabelText("Wallet GABCDEFGHIJABCDEFGHIJ")).toBeInTheDocument();
+    expect(screen.getByText(/wallet is not verified/i)).toBeInTheDocument();
+    expect(onConnected).toHaveBeenLastCalledWith(null);
+  });
+
+  it("disables a stale wallet until a wrong-network re-check succeeds", async () => {
+    const onConnected = vi.fn();
+    mockedEnsureWallet.mockResolvedValueOnce("GABCDEFGHIJABCDEFGHIJ").mockRejectedValueOnce(
+      Object.assign(new Error("Wrong network"), {
+        details: { code: "NETWORK_MISMATCH" },
+      }),
+    );
+    render(<WalletButton onConnected={onConnected} expectedPassphrase="P" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /connect wallet/i }));
+    await screen.findByRole("button", { name: /re-check wallet/i });
+    fireEvent.click(screen.getByRole("button", { name: /re-check wallet/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Wrong network");
+    expect(onConnected).toHaveBeenLastCalledWith(null);
+    expect(screen.getByText(/wallet is not verified/i)).toBeInTheDocument();
+    const recheck = screen.getByRole("button", { name: /re-check wallet/i });
+
+    mockedEnsureWallet.mockResolvedValueOnce("GABCDEFGHIJABCDEFGHIJ");
+    fireEvent.click(recheck);
+
+    await waitFor(() => expect(onConnected).toHaveBeenLastCalledWith("GABCDEFGHIJABCDEFGHIJ"));
+    expect(screen.queryByText(/wallet is not verified/i)).not.toBeInTheDocument();
   });
 
   it("acknowledges a re-check when the wallet is unchanged", async () => {
