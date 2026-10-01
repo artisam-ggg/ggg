@@ -106,6 +106,9 @@ jobs:
           mkdir "$consumer"
           cd "$consumer"
           npm init --yes
+          # stellar-sdk v16 pins an older Axios 1.x release. Keep the supported
+          # v16 API while resolving its security-compatible patched minor.
+          npm pkg set overrides.axios=1.20.0
           npm install "$tarball"
           npm audit --omit=dev --audit-level=high
           node --input-type=module -e 'await Promise.all([import("@goodgameguild/escrow-sdk"), import("@goodgameguild/escrow-sdk/contract")])'

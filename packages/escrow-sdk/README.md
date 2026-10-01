@@ -6,6 +6,11 @@ The published baseline is `0.1.0`. The workspace source is now `0.2.0`, adding d
 
 Version `0.1.0` distributes the finalized contract ABI from issues #215–#220 and the keyless transaction APIs from #223. npm publication is tracked in #226.
 
+`@stellar/stellar-sdk` v16 currently pins an older Axios 1.x release. Until its
+security update is published, npm consumers should resolve the compatible
+patched minor at the application root with
+`npm pkg set overrides.axios=1.20.0`.
+
 ## Build, sign, submit, reconcile
 
 ```ts
