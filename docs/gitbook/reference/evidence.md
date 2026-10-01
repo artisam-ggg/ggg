@@ -1,5 +1,16 @@
 # Evidence Index
 
+## Post-Instawards UX, onboarding, and developer-discovery release
+
+The dated [post-Instawards release report](../weekly-reports/post-instawards-ux-onboarding-release.md)
+is the canonical index for the `staging` promotion at
+[`1e58426`](https://github.com/webnxt-2030/ggg/commit/1e58426c0711188398670f8314f2820db7860a64).
+It links the successful source CI run, public services, SDK CTA, role manuals,
+Guidelines interaction tests, and the separate historical Testnet demo record.
+The completed [Week 4 validation package](../weekly-reports/week-4.md) remains
+the canonical SOW/Testnet evidence and is not reinterpreted by this release
+index.
+
 ## Final SDK-backed release run
 
 The Epic 3 release completed on 24 September 2026 from public revision

@@ -8,6 +8,7 @@
   - [Week 2 — Single-sig, N-winner, and TTL](weekly-reports/week-2.md)
   - [Week 3 — SDK extraction and Testnet redeploy](weekly-reports/week-3.md)
   - [Week 4 — Validation package](weekly-reports/week-4.md)
+  - [Post-Instawards UX, onboarding, and developer-discovery release](weekly-reports/post-instawards-ux-onboarding-release.md)
 - [Deliverables](deliverables/README.md)
   - [D1 — Deadline-enforced escrow](deliverables/d1.md)
   - [D2 — Single-sig, N-winner, and TTL](deliverables/d2.md)

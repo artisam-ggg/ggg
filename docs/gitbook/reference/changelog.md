@@ -1,5 +1,15 @@
 # Documentation Changelog
 
+## 1 October 2026 - Post-Instawards UX, onboarding, and developer-discovery release
+
+- Added the dated [release report](../weekly-reports/post-instawards-ux-onboarding-release.md)
+  for the `staging` promotion at `1e58426`.
+- Indexed the SDK CTA, concise tournament-creation copy, contextual Guidelines,
+  role manuals, role-journey smoke coverage, related UX refinements, and the
+  separate historical #347 Testnet demo evidence.
+- Preserved the completed Week 4 validation package as its own historical
+  record, including its Testnet and no-audit boundaries.
+
 ## 24 September 2026 — Epic 3 SDK and live-reference closeout
 
 - Added the developer-facing SDK integration guide using the published
