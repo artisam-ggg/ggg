@@ -135,16 +135,18 @@ beforeEach(async () => {
     entries: [
       {
         val: {
-          contractData: () => ({
-            val: () => ({
-              instance: () => ({
-                executable: () => ({
-                  switch: () => ({ name: "contractExecutableWasm" }),
-                  wasmHash: () => Buffer.from(CURRENT_ESCROW_WASM_HASH, "hex"),
-                }),
-              }),
-            }),
-          }),
+          type: "contractData",
+          contractData: {
+            val: {
+              type: "scvContractInstance",
+              instance: {
+                executable: {
+                  type: "contractExecutableWasm",
+                  wasmHash: { value: Buffer.from(CURRENT_ESCROW_WASM_HASH, "hex") },
+                },
+              },
+            },
+          },
         },
       },
     ],
@@ -237,16 +239,18 @@ describe("SDK-backed tournament route integration", () => {
       entries: [
         {
           val: {
-            contractData: () => ({
-              val: () => ({
-                instance: () => ({
-                  executable: () => ({
-                    switch: () => ({ name: "contractExecutableWasm" }),
-                    wasmHash: () => Buffer.alloc(32, 1),
-                  }),
-                }),
-              }),
-            }),
+            type: "contractData",
+            contractData: {
+              val: {
+                type: "scvContractInstance",
+                instance: {
+                  executable: {
+                    type: "contractExecutableWasm",
+                    wasmHash: { value: Buffer.alloc(32, 1) },
+                  },
+                },
+              },
+            },
           },
         },
       ],

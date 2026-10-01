@@ -131,7 +131,9 @@ describe("configuration and validation", () => {
             contractData: {
               val: {
                 type: "scvContractInstance",
-                instance: { executable: { type: "contractExecutableWasm", wasmHash: hash } },
+                instance: {
+                  executable: { type: "contractExecutableWasm", wasmHash: { value: hash } },
+                },
               },
             },
           },
@@ -157,7 +159,10 @@ describe("configuration and validation", () => {
               val: {
                 type: "scvContractInstance",
                 instance: {
-                  executable: { type: "contractExecutableWasm", wasmHash: new Uint8Array(31) },
+                  executable: {
+                    type: "contractExecutableWasm",
+                    wasmHash: { value: new Uint8Array(31) },
+                  },
                 },
               },
             },

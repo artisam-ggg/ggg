@@ -116,7 +116,7 @@ export async function getEscrowWasmHash(rpcUrl: string, id: string): Promise<str
     const hash = z
       .instanceof(Uint8Array)
       .refine((value) => value.length === 32)
-      .parse(executable.wasmHash);
+      .parse(executable.wasmHash.value);
     return Buffer.from(hash).toString("hex");
   } catch {
     throw new EscrowSdkError("CONFIRMATION_FAILED", "Escrow version could not be determined");
