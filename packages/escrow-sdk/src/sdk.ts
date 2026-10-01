@@ -91,27 +91,10 @@ const tournamentSchema: z.ZodType<TournamentInfo> = z.object({
   token: contractIdSchema,
   winners: z.array(publicKeySchema).max(10),
 });
-const ledgerEntriesSchema = z.object({
-  entries: z
-    .array(
-      z.object({
-        val: z
-          .unknown()
-          .refine(
-            (value) =>
-              value !== null &&
-              typeof value === "object" &&
-              typeof (value as { contractData?: unknown }).contractData === "function",
-          ),
-      }),
-    )
-    .length(1),
-});
-
 export function escrowTransactionHash(xdr: string, networkPassphrase: string): string {
   input(typeof xdr === "string" && xdr.length > 0, "Malformed transaction XDR");
   try {
-    return TransactionBuilder.fromXDR(xdr, networkPassphrase).hash().toString("hex");
+    return Buffer.from(TransactionBuilder.fromXDR(xdr, networkPassphrase).hash()).toString("hex");
   } catch {
     throw new EscrowSdkError("INVALID_INPUT", "Malformed transaction XDR");
   }
@@ -123,13 +106,17 @@ export async function getEscrowWasmHash(rpcUrl: string, id: string): Promise<str
   try {
     const server = new rpc.Server(rpcUrl, { allowHttp: new URL(rpcUrl).protocol === "http:" });
     const response = await server.getLedgerEntries(new Contract(id).getFootprint());
-    ledgerEntriesSchema.parse(response);
-    const executable = response.entries[0]!.val.contractData().val().instance().executable();
-    z.literal("contractExecutableWasm").parse(executable.switch().name);
+    input(response.entries.length === 1, "Expected one contract ledger entry");
+    const entry = response.entries[0]!.val;
+    input(entry.type === "contractData", "Expected contract data");
+    const instance = entry.contractData.val;
+    input(instance.type === "scvContractInstance", "Expected contract instance");
+    const executable = instance.instance.executable;
+    input(executable.type === "contractExecutableWasm", "Expected WASM executable");
     const hash = z
       .instanceof(Uint8Array)
       .refine((value) => value.length === 32)
-      .parse(executable.wasmHash());
+      .parse(executable.wasmHash);
     return Buffer.from(hash).toString("hex");
   } catch {
     throw new EscrowSdkError("CONFIRMATION_FAILED", "Escrow version could not be determined");
@@ -238,7 +225,7 @@ export class EscrowSdk {
       const prepared = rpc.assembleTransaction(tx, sim as never).build();
       return {
         xdr: prepared.toXDR(),
-        hash: prepared.hash().toString("hex"),
+        hash: Buffer.from(prepared.hash()).toString("hex"),
         intent,
         source,
         networkPassphrase: this.config.networkPassphrase,
@@ -432,47 +419,32 @@ export class EscrowSdk {
       );
       input(tx.signatures.length > 0, "Transaction has no envelope signature");
       input(
-        tx.hash().equals(original.hash()) &&
-          original.hash().toString("hex") === built.hash &&
+        Buffer.from(tx.hash()).equals(Buffer.from(original.hash())) &&
+          Buffer.from(original.hash()).toString("hex") === built.hash &&
           tx.source === built.source,
         "Signed transaction differs from the simulated transaction",
       );
       input(tx.operations.length === 1, "Expected one escrow operation");
-      const op = tx.operations[0] as {
-        type?: string;
-        source?: string;
-        func?: {
-          switch(): { name: string };
-          value(): {
-            contractAddress(): never;
-            functionName(): { toString(): string };
-            args(): never[];
-            contractIdPreimage(): {
-              switch(): { name: string };
-              value(): { address(): never };
-            };
-            executable(): { switch(): { name: string }; value(): Buffer };
-            constructorArgs(): never[];
-          };
-        };
-      };
-      input(op.type === "invokeHostFunction" && !!op.func, "Expected a Soroban operation");
-      input(!op.source || op.source === built.source, "Unexpected operation source");
+      const op = tx.operations[0]!;
+      input(op.type === "invokeHostFunction", "Expected a Soroban operation");
+      const func = op.func;
       if (built.intent === "deploy") {
         input(
-          op.func!.switch().name === "hostFunctionTypeCreateContractV2" && !!this.config.wasmHash,
+          func.type === "hostFunctionTypeCreateContractV2" && !!this.config.wasmHash,
           "Unexpected deployment operation",
         );
-        const deployment = op.func!.value();
+        if (func.type !== "hostFunctionTypeCreateContractV2")
+          throw new EscrowSdkError("INVALID_INPUT", "Unexpected deployment operation");
+        const deployment = func.createContractV2;
         input(
-          deployment.contractIdPreimage().switch().name === "contractIdPreimageFromAddress" &&
-            Address.fromScAddress(deployment.contractIdPreimage().value().address()).toString() ===
+          deployment.contractIdPreimage.type === "contractIdPreimageFromAddress" &&
+            Address.fromScAddress(deployment.contractIdPreimage.fromAddress.address).toString() ===
               built.source &&
-            deployment.executable().switch().name === "contractExecutableWasm" &&
-            deployment.executable().value().toString("hex") ===
+            deployment.executable.type === "contractExecutableWasm" &&
+            Buffer.from(deployment.executable.wasmHash.value).toString("hex") ===
               this.config.wasmHash!.toLowerCase() &&
-            deployment.constructorArgs().length === 6 &&
-            scValToNative(deployment.constructorArgs()[0]!) === built.source,
+            deployment.constructorArgs.length === 6 &&
+            scValToNative(deployment.constructorArgs[0]!) === built.source,
           "Unexpected escrow constructor terms or WASM",
         );
       } else {
@@ -482,20 +454,19 @@ export class EscrowSdk {
           cancel: "cancel_tournament",
           claim_refund: "claim_refund",
         };
+        input(func.type === "hostFunctionTypeInvokeContract", "Unexpected contract operation");
+        if (func.type !== "hostFunctionTypeInvokeContract")
+          throw new EscrowSdkError("INVALID_INPUT", "Unexpected contract operation");
+        const invocation = func.invokeContract;
         input(
-          op.func!.switch().name === "hostFunctionTypeInvokeContract",
-          "Unexpected contract operation",
-        );
-        const invocation = op.func!.value();
-        input(
-          Address.fromScAddress(invocation.contractAddress()).toString() === this.id() &&
+          Address.fromScAddress(invocation.contractAddress).toString() === this.id() &&
             built.contractId === this.id() &&
-            invocation.functionName().toString() === methods[built.intent],
+            invocation.functionName.toString() === methods[built.intent],
           "Unexpected contract or method",
         );
         if (built.intent === "join")
           input(
-            invocation.args().length === 1 && scValToNative(invocation.args()[0]!) === built.source,
+            invocation.args.length === 1 && scValToNative(invocation.args[0]!) === built.source,
             "Join player differs from transaction source",
           );
       }
