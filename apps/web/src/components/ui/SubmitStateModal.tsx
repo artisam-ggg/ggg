@@ -30,7 +30,7 @@ const phaseAriaLabel: Record<Phase, string> = {
 export function SubmitStateModal({ open, phase, message, onClose }: SubmitStateModalProps) {
   if (!open) return null;
 
-  const label = phase === "error" ? (message ?? "FAILED") : phaseLabel[phase];
+  const label = message ?? phaseLabel[phase];
   const isDone = phase === "success" || phase === "error";
 
   return (

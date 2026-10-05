@@ -51,6 +51,11 @@ describe("/login page", () => {
   it("renders heading, username + password inputs, and submit button", () => {
     render(<LoginPage />);
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Sign in");
+    expect(screen.getByText("Username", { selector: "label" })).toHaveClass(
+      "text-sm",
+      "font-medium",
+    );
+    expect(screen.getByText("Username", { selector: "label" })).not.toHaveClass("label-caps");
     expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /sign in/i })).toBeInTheDocument();

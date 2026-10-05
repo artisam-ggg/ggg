@@ -79,6 +79,7 @@ describe("GET /api/tournaments/[id]", () => {
 
     expect(json.ok).toBe(true);
     expect(json.data).not.toHaveProperty("organizerId");
+    expect(json.data).not.toHaveProperty("pendingJoinSubmissions");
     // Other expected public fields are still present
     expect(json.data).toHaveProperty("id");
     expect(json.data).toHaveProperty("name");

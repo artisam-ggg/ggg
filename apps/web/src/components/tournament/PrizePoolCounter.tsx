@@ -92,15 +92,15 @@ export function PrizePoolCounter({
   }, [events, initialPool, participantCount, initialSet, initialRefundSet]);
 
   return (
-    <div className="high-contrast-card acid-glow rounded-none p-8">
-      <p className="label-caps text-on-surface-variant">Prize pool</p>
+    <div className="kinetic-glass h-full rounded-2xl p-6">
+      <h2 className="text-lg font-semibold text-on-surface">Prize pool</h2>
       <p className="mt-2 flex items-end gap-3">
         <span
           key={bumps}
           data-testid="pool-amount"
           aria-live="polite"
           aria-atomic="true"
-          className="data-mono text-[96px] font-extrabold leading-none text-acid-yellow motion-safe:animate-pool-pop"
+          className="data-mono text-4xl font-extrabold leading-none text-acid-yellow motion-safe:animate-pool-pop sm:text-5xl lg:text-6xl"
         >
           {formatStroops(pool.toString())}
         </span>

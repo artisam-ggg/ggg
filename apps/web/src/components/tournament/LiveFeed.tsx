@@ -31,7 +31,7 @@ export function LiveFeed() {
   const { events } = useTournamentEventContext();
 
   return (
-    <section className="kinetic-glass rounded-2xl p-6">
+    <section className="kinetic-glass h-full rounded-2xl p-6">
       <div className="flex items-center gap-3">
         {/* acid-yellow LIVE badge */}
         <span
@@ -40,7 +40,7 @@ export function LiveFeed() {
         >
           LIVE
         </span>
-        <p className="label-caps text-on-surface-variant">Live activity</p>
+        <h2 className="text-sm font-semibold text-on-surface">Live activity</h2>
       </div>
       {/* aria-live="polite" + role="log" so assistive tech announces new entries */}
       <div

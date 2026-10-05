@@ -1,17 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { CandidateCard } from "./CandidateCard";
 import { PodiumSlot } from "./PodiumSlot";
 import { SettlementModal } from "./SettlementModal";
 import { WalletButton } from "@/components/tournament/WalletButton";
+import { WalletActionNotice } from "@/components/tournament/WalletActionNotice";
 import { PrizeBreakdown } from "@/components/tournament/PrizeBreakdown";
-import { signAndSubmit } from "@/lib/wallet";
+import { fetchTournamentStatus } from "@/lib/tournament-status";
+import { signAndSubmit, SubmissionError } from "@/lib/wallet";
 import { BackButton } from "@/components/ui/BackButton";
 
-type Phase = "idle" | "submitting" | "signing" | "error";
+type Phase = "idle" | "submitting" | "signing" | "awaitingConfirmation" | "error";
+
+const REFRESH_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000];
 
 type Participant = { playerAddr: string; joinedAt: string };
 
@@ -39,6 +43,7 @@ export function SettlementConsole({
   const [slots, setSlots] = useState<(string | null)[]>(() => distributionBps.map(() => null));
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [confirmationAttempts, setConfirmationAttempts] = useState(0);
 
   const assignedSet = new Set(slots.filter((s): s is string => s !== null));
 
@@ -61,10 +66,34 @@ export function SettlementConsole({
   const isReferee = wallet !== null && wallet === refereeAddr;
   const allFilled = slots.every((s) => s !== null);
   const allDistinct = new Set(slots).size === slots.length;
-  const ready = isReferee && allFilled && allDistinct;
+  const awaitingConfirmation = phase === "awaitingConfirmation";
+  const ready = isReferee && allFilled && allDistinct && !awaitingConfirmation;
+
+  useEffect(() => {
+    if (!awaitingConfirmation || confirmationAttempts >= REFRESH_DELAYS_MS.length) return;
+
+    let cancelled = false;
+    const timeout = window.setTimeout(() => {
+      void fetchTournamentStatus(tournamentId).then((status) => {
+        if (cancelled) return;
+        if (status === "FINISHED") {
+          router.push(`/tournaments/${tournamentId}`);
+          return;
+        }
+        setConfirmationAttempts((attempts) => attempts + 1);
+      });
+    }, REFRESH_DELAYS_MS[confirmationAttempts]);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [awaitingConfirmation, confirmationAttempts, router, tournamentId]);
 
   async function finalize() {
+    if (!ready) return;
     setError(null);
+    setConfirmationAttempts(0);
     try {
       setPhase("submitting");
       const res = await fetch(`/api/tournaments/${tournamentId}/finalize`, {
@@ -94,9 +123,21 @@ export function SettlementConsole({
 
       router.push(`/tournaments/${tournamentId}`);
     } catch (e: unknown) {
+      if (e instanceof SubmissionError && e.details.retryable && e.details.txHash) {
+        setPhase("awaitingConfirmation");
+        return;
+      }
       setPhase("error");
       setError(e instanceof Error ? e.message : "Finalization failed");
     }
+  }
+
+  async function refreshSettlementStatus() {
+    if ((await fetchTournamentStatus(tournamentId)) === "FINISHED") {
+      router.push(`/tournaments/${tournamentId}`);
+      return;
+    }
+    setConfirmationAttempts((attempts) => Math.min(attempts + 1, REFRESH_DELAYS_MS.length));
   }
 
   const modalOpen = phase === "submitting" || phase === "signing";
@@ -122,8 +163,8 @@ export function SettlementConsole({
           <h1 className="text-[32px] font-bold italic -tracking-[0.02em] text-on-surface">
             Referee Settlement Console
           </h1>
-          <p className="mt-2 text-sm text-on-surface-variant">
-            Referee-only: drag or use keyboard buttons to assign {slots.length} ranked winners.
+          <p className="mt-2 text-xs text-on-surface-variant">
+            Assign {slots.length} ranked winners by drag-and-drop or keyboard.
           </p>
 
           <div className="mt-6">
@@ -155,6 +196,12 @@ export function SettlementConsole({
           </div>
 
           {/* Wallet connect + finalize */}
+          <div className="mt-8">
+            <WalletActionNotice expectedPassphrase={passphrase}>
+              Finalizing distributes the escrow pool to the ranked wallets above and cannot be
+              undone.
+            </WalletActionNotice>
+          </div>
           <div className="mt-8 flex flex-wrap items-center gap-4">
             <WalletButton expectedPassphrase={passphrase} onConnected={setWallet} />
             <button
@@ -191,6 +238,22 @@ export function SettlementConsole({
               {error}
             </p>
           )}
+
+          {awaitingConfirmation && (
+            <div className="mt-3 text-sm text-on-surface-variant" role="status">
+              <p>
+                Finalization was submitted and may still confirm. Do not resubmit while its status
+                is being checked.
+              </p>
+              <button
+                type="button"
+                onClick={() => void refreshSettlementStatus()}
+                className="label-caps mt-2 underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-electric-violet-strong"
+              >
+                Check settlement status
+              </button>
+            </div>
+          )}
         </section>
 
         {/* Candidates sidebar */}
@@ -198,9 +261,9 @@ export function SettlementConsole({
           className="glass-panel rounded-xl p-6 lg:col-span-4"
           aria-label="Candidate participants"
         >
-          <p className="label-caps text-on-surface-variant">Candidates</p>
+          <h2 className="text-lg font-semibold text-on-surface">Candidates</h2>
           <p className="mt-1 text-xs text-on-surface-variant">
-            Drag a card onto a slot, or use the Assign buttons.
+            Drag a player to a rank or use Assign.
           </p>
           <div className="mt-4 flex flex-col gap-3" role="list" aria-label="Participants">
             {participants.map((p) => (

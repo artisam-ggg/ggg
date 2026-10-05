@@ -29,6 +29,17 @@ it("uses the viewer's daylight-saving offset", () => {
   );
 });
 
+it("shows local time first and a readable UTC fallback in the stacked layout", () => {
+  vi.stubEnv("TZ", "Asia/Manila");
+  const seconds = Date.parse("2026-09-29T13:10:00.000Z") / 1000;
+  render(<SettlementDeadline seconds={seconds} stacked />);
+
+  expect(screen.getByText("Your time").nextElementSibling).toHaveTextContent(
+    "Sep 29, 2026, 9:10 PM GMT+8",
+  );
+  expect(screen.getByText("UTC").nextElementSibling).toHaveTextContent("Sep 29, 2026, 1:10 PM UTC");
+});
+
 it("hydrates UTC-only server HTML without a timezone mismatch", async () => {
   const seconds = Date.parse("2026-01-01T00:30:00.000Z") / 1000;
   const container = document.createElement("div");

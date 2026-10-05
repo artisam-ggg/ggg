@@ -239,6 +239,10 @@
         background: rgba(247, 189, 72, 0.08);
         text-decoration: none;
       }
+      .hero-actions .btn {
+        width: 195px;
+        justify-content: center;
+      }
       .btn-ghost {
         background: var(--surface-container-high);
         color: var(--on-surface);
@@ -348,6 +352,7 @@
       /* ── Hero ── */
       .hero {
         position: relative;
+        min-height: calc(100svh - 73px);
         overflow: hidden;
         border-bottom: 1px solid var(--surface-variant);
       }
@@ -371,8 +376,9 @@
             rgba(19, 19, 19, 0.95) 62%,
             rgba(19, 19, 19, 1) 100%
           ),
-          url("https://placehold.co/1600x900/0a0a0a/131313?text=+%5BHero+image+placeholder%5D%0ATitanium+Carbon+%C2%B7+bronze+glow+%C2%B7+carbon+fibre");
+          url("ggg%20cover.png");
         background-size: cover;
+        background-repeat: no-repeat;
         background-position: center;
       }
       .hero-bg::after {
@@ -476,6 +482,21 @@
       }
 
       /* ── Features ── */
+      .video-frame {
+        aspect-ratio: 16 / 9;
+        overflow: hidden;
+        border: 1px solid var(--surface-variant);
+        border-radius: var(--radius-xl);
+        background: var(--surface-container-lowest);
+        box-shadow: 0 0 28px rgba(247, 189, 72, 0.08);
+      }
+      .video-frame iframe {
+        display: block;
+        width: 100%;
+        height: 100%;
+        border: 0;
+      }
+
       .features {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
@@ -829,7 +850,7 @@
   <body>
     <!--
       ============================================================================
-      IMAGE-GENERATION PROMPTS (replace the placehold.co URLs above with real art)
+      IMAGE-GENERATION REFERENCE PROMPTS
       ----------------------------------------------------------------------------
       HERO COVER IMAGE (1280×720+):
         A cinematic technical-noir hero banner in the Titanium Carbon style — a
@@ -902,6 +923,10 @@
               <span class="mat fill" aria-hidden="true">open_in_new</span>
               Open the app
             </a>
+            <a class="btn btn-secondary" href="https://www.npmjs.com/package/@goodgameguild/escrow-sdk" target="_blank" rel="noopener noreferrer" aria-label="Get the reusable GGG Stellar escrow SDK on npm">
+              <span class="mat" aria-hidden="true">code</span>
+              Get the SDK
+            </a>
           </div>
 
           <div class="hero-meta">
@@ -919,11 +944,30 @@
             </div>
           </div>
 
-          <span class="img-caption">[ Hero image placeholder — see image-generation prompt in source ]</span>
         </div>
       </section>
 
       <!-- ── Features ───────────────────────────────────────────────────────── -->
+      <section id="explainer" class="section-pad" aria-labelledby="explainer-title">
+        <div class="container">
+          <div class="section-head">
+            <span class="eyebrow">// Quick explainer</span>
+            <h2 id="explainer-title">See how GGG settles a tournament.</h2>
+          </div>
+
+          <div class="video-frame">
+            <iframe
+              src="https://www.youtube-nocookie.com/embed/K0GpI1Xg6uk"
+              title="GGG - Quick Explainer"
+              loading="lazy"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              referrerpolicy="strict-origin-when-cross-origin"
+              allowfullscreen
+            ></iframe>
+          </div>
+        </div>
+      </section>
+
       <section id="features" class="section-pad" aria-labelledby="features-title">
         <div class="container">
           <div class="section-head">
@@ -967,6 +1011,13 @@
               <span class="ico"><span class="mat" aria-hidden="true">wallet</span></span>
               <h3>Freighter-native</h3>
               <p>Blockchain actions are signed client-side with Freighter. The server never holds a private key.</p>
+            </article>
+
+            <article class="feature">
+              <span class="ico"><span class="mat" aria-hidden="true">code</span></span>
+              <h3>Open-source escrow SDK</h3>
+              <p>Use the reusable Stellar escrow client to build your own tournament or prize-pool experience.</p>
+              <a href="https://www.npmjs.com/package/@goodgameguild/escrow-sdk" target="_blank" rel="noopener noreferrer" aria-label="View the reusable GGG Stellar escrow SDK on npm">View on npm</a>
             </article>
 
             <article class="feature wide">

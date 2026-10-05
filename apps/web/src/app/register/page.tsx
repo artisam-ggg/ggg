@@ -111,7 +111,7 @@ export default function RegisterPage() {
           )}
 
           <div className="flex flex-col gap-1.5 w-full">
-            <label htmlFor="username" className="label-caps text-on-surface-variant">
+            <label htmlFor="username" className="text-sm font-medium text-on-surface">
               Username
             </label>
             <input
@@ -134,7 +134,7 @@ export default function RegisterPage() {
           </div>
 
           <div className="flex flex-col gap-1.5 w-full">
-            <label htmlFor="password" className="label-caps text-on-surface-variant">
+            <label htmlFor="password" className="text-sm font-medium text-on-surface">
               Password
             </label>
             <input

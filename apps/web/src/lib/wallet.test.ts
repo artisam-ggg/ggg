@@ -51,6 +51,7 @@ describe("ensureWallet", () => {
     });
     await expect(ensureWallet(PASS)).rejects.toMatchObject({
       name: "SubmissionError",
+      message: "Wrong network. Switch Freighter to Stellar Testnet, then try again.",
       details: { code: "NETWORK_MISMATCH", retryable: false },
     });
   });
@@ -73,7 +74,9 @@ describe("ensureWallet", () => {
       address: "",
       error: { code: 3, message: "User rejected" },
     });
-    await expect(ensureWallet(PASS)).rejects.toThrow(/User rejected/);
+    await expect(ensureWallet(PASS)).rejects.toThrow(
+      "Wallet connection was not approved. Approve the Freighter request, then try again.",
+    );
   });
 
   it("throws when getAddress returns an error field", async () => {
@@ -81,7 +84,9 @@ describe("ensureWallet", () => {
       address: "",
       error: { code: 2, message: "Could not get address" },
     });
-    await expect(ensureWallet(PASS)).rejects.toThrow(/Could not get address/);
+    await expect(ensureWallet(PASS)).rejects.toThrow(
+      "Freighter could not read the active account. Unlock Freighter, then try again.",
+    );
   });
 
   it("rejects an invalid address returned by Freighter", async () => {
@@ -179,6 +184,29 @@ describe("signAndSubmit", () => {
     expect(posthog.capture).not.toHaveBeenCalled();
   });
 
+  it.each(["TX_BAD_AUTH", "TX_MALFORMED"])(
+    "gives a safe fresh-signature recovery for %s",
+    async (code) => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(
+          async () =>
+            new Response(
+              JSON.stringify({
+                ok: false,
+                error: { code, message: "Low-level envelope failure", retryable: false },
+              }),
+              { status: 400, headers: { "content-type": "application/json" } },
+            ),
+        ),
+      );
+
+      await expect(signAndSubmit("U", "join", "/x", PASS)).rejects.toThrow(
+        "The signed transaction is no longer valid. Re-check your wallet, then build and sign a fresh transaction.",
+      );
+    },
+  );
+
   it("throws a generic message when envelope ok:false has no error field", async () => {
     localStorage.setItem(ANALYTICS_CONSENT_KEY, "accepted");
     vi.stubGlobal(
@@ -257,7 +285,9 @@ describe("signAndSubmit", () => {
       error: { code: 4, message: "Signing rejected" },
     });
     vi.stubGlobal("fetch", vi.fn());
-    await expect(signAndSubmit("U", "finalize", "/x", PASS)).rejects.toThrow("Signing rejected");
+    await expect(signAndSubmit("U", "finalize", "/x", PASS)).rejects.toThrow(
+      "Transaction signature was not approved. Review the request in Freighter, then try again. Nothing was submitted.",
+    );
     expect(posthog.capture).not.toHaveBeenCalled();
   });
 
